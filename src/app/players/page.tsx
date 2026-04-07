@@ -54,14 +54,6 @@ export default function PlayersPage() {
 
   return (
     <>
-      {selectedPlayer?.image_link && (
-        <img
-          src={selectedPlayer.image_link}
-          alt={selectedPlayer.name}
-          className="fixed top-4 right-4 w-20 h-20 rounded-full object-cover border-2 shadow-lg"
-        />
-      )}
-
       <div className="p-6 max-w-xl">
         <h1 className="text-2xl font-bold mb-4">Player Search</h1>
 
