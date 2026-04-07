@@ -75,7 +75,7 @@ export default function PlayersPage() {
             {filtered.slice(0, 5).map((player) => (
               <div
                 key={player.player_id}
-                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                className="px-3 py-2 cursor-pointer hover:bg-gray-700 bg-gray-800 text-white"
                 onClick={() => {
                   setSelectedPlayer(player);
                   setSearch(player.name);
@@ -99,12 +99,16 @@ export default function PlayersPage() {
         {selectedPlayer && (
           <div className="mt-6 border p-4 rounded">
             <div className="flex items-center gap-4">
-              {selectedPlayer.image_link && (
-                <img
-                  src={selectedPlayer.image_link}
-                  className="w-16 h-16 rounded-full object-cover"
-                />
-              )}
+              <img
+                src={
+                  selectedPlayer?.image_link &&
+                  selectedPlayer.image_link !== "null"
+                    ? selectedPlayer.image_link
+                    : "/default-avatar.webp"
+                }
+                alt={selectedPlayer?.name || "Player"}
+                className="w-16 h-16 rounded-full object-cover"
+              />
               <div>
                 <h2 className="text-xl font-semibold">{selectedPlayer.name}</h2>
                 <p className="text-gray-600">
