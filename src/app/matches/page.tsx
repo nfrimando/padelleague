@@ -1,5 +1,6 @@
 // app/matches/page.tsx
 import { createClient } from "@supabase/supabase-js";
+import { formatMatchDate, formatMatchTime } from "@/lib/utils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -84,7 +85,8 @@ export default async function MatchesPage() {
           >
             <div className="flex justify-between mb-2 text-sm text-gray-500 dark:text-gray-400">
               <div>
-                {match.date_local || "N/A"} {match.time_local || ""}
+                {formatMatchDate(match.date_local)}{" "}
+                {formatMatchTime(match.time_local)}
               </div>
               <div>{match.venue || "N/A"}</div>
             </div>
@@ -94,55 +96,77 @@ export default async function MatchesPage() {
                 (match.type || "Match").slice(1)}
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row items-stretch justify-center gap-4">
               {/* Team 1 */}
               <div
-                className={`flex flex-col items-center w-1/2 p-2 rounded ${
+                className={`flex-1 min-w-[220px] p-4 rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900 ${
                   match.winner_team === 1
-                    ? "bg-green-100 dark:bg-green-700"
+                    ? "ring-2 ring-green-300 dark:ring-green-600"
                     : ""
                 }`}
               >
-                <div className="flex space-x-2">
+                <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
+                  Team 1
+                </div>
+                <div className="grid gap-3">
                   {[team1?.player_1, team1?.player_2].map((p, i) => (
-                    <div key={i} className="flex flex-col items-center">
+                    <div key={i} className="flex items-center gap-3">
                       <img
                         src={p?.image_link || "/default-avatar.webp"}
                         alt={p?.name || "Player"}
                         className="w-12 h-12 rounded-full object-cover"
                       />
-                      <span className="text-sm mt-1">{p?.name || "N/A"}</span>
+                      <div>
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {p?.name || "N/A"}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {p?.nickname || "Player"}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-1 text-sm">
+                <div className="mt-4 text-sm text-slate-600 dark:text-slate-300">
                   Sets Won: {team1?.sets_won ?? 0}
                 </div>
               </div>
 
-              <div className="font-bold mx-4">VS</div>
+              <div className="flex items-center justify-center px-3 text-sm font-bold text-slate-700 dark:text-slate-300">
+                VS
+              </div>
 
               {/* Team 2 */}
               <div
-                className={`flex flex-col items-center w-1/2 p-2 rounded ${
+                className={`flex-1 min-w-[220px] p-4 rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900 ${
                   match.winner_team === 2
-                    ? "bg-green-100 dark:bg-green-700"
+                    ? "ring-2 ring-green-300 dark:ring-green-600"
                     : ""
                 }`}
               >
-                <div className="flex space-x-2">
+                <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
+                  Team 2
+                </div>
+                <div className="grid gap-3">
                   {[team2?.player_1, team2?.player_2].map((p, i) => (
-                    <div key={i} className="flex flex-col items-center">
+                    <div key={i} className="flex items-center gap-3">
                       <img
                         src={p?.image_link || "/default-avatar.webp"}
                         alt={p?.name || "Player"}
                         className="w-12 h-12 rounded-full object-cover"
                       />
-                      <span className="text-sm mt-1">{p?.name || "N/A"}</span>
+                      <div>
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {p?.name || "N/A"}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {p?.nickname || "Player"}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-1 text-sm">
+                <div className="mt-4 text-sm text-slate-600 dark:text-slate-300">
                   Sets Won: {team2?.sets_won ?? 0}
                 </div>
               </div>
@@ -151,12 +175,6 @@ export default async function MatchesPage() {
             {match.is_forfeit && (
               <div className="mt-2 text-red-500 font-semibold">
                 Forfeit Match
-              </div>
-            )}
-
-            {match.winner_team && (
-              <div className="mt-2 font-bold">
-                Winner: Team {match.winner_team}
               </div>
             )}
           </div>

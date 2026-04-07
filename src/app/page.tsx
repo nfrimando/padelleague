@@ -19,7 +19,7 @@ export default function HomePage() {
           {/* Overlay for readability */}
           <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/70 flex flex-col items-center justify-center p-8 space-y-8">
             <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white text-center tracking-wide">
-              Padel League App
+              Padel League Philippines
             </h1>
 
             <div className="flex flex-col sm:flex-row gap-6">
