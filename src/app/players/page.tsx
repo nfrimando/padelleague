@@ -20,7 +20,7 @@ export default function PlayersPage() {
   // Fetch players on load
   useEffect(() => {
     async function fetchPlayers() {
-      const { data, error } = await supabase.from("dim_players").select("*");
+      const { data, error } = await supabase.from("players").select("*");
 
       if (error) {
         console.error(error);
