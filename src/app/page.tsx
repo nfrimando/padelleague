@@ -1,29 +1,44 @@
 // app/page.tsx
 import Link from "next/link";
+import Image from "next/image";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <h1 className="text-4xl font-bold mb-12 text-gray-800 dark:text-gray-100">
-        Padel League App
-      </h1>
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 font-sans">
+      {/* Hero Section */}
+      <div className="relative w-full max-w-4xl rounded-lg overflow-hidden shadow-lg">
+        {/* Background image */}
+        <div className="relative h-96 w-full">
+          <Image
+            src="/home-bg.jpg"
+            alt="Home Background"
+            fill
+            className="object-cover"
+          />
 
-      <div className="flex flex-col space-y-6 sm:flex-row sm:space-x-6 sm:space-y-0">
-        {/* Players Page Link */}
-        <Link
-          href="/players"
-          className="w-48 py-6 px-8 bg-blue-500 hover:bg-blue-600 text-white font-semibold text-center rounded-lg shadow-md transition"
-        >
-          Players
-        </Link>
+          {/* Overlay for readability */}
+          <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/70 flex flex-col items-center justify-center p-8 space-y-8">
+            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white text-center tracking-wide">
+              Padel League App
+            </h1>
 
-        {/* Matches Page Link */}
-        <Link
-          href="/matches"
-          className="w-48 py-6 px-8 bg-green-500 hover:bg-green-600 text-white font-semibold text-center rounded-lg shadow-md transition"
-        >
-          Matches
-        </Link>
+            <div className="flex flex-col sm:flex-row gap-6">
+              <Link
+                href="/players"
+                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
+              >
+                Players
+              </Link>
+
+              <Link
+                href="/matches"
+                className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
+              >
+                Matches
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
