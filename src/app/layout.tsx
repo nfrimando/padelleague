@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "Padel League",
   description: "Men's Padel League in the Philippines",
   icons: {
-    icon: "/default-avatar.webp",
+    icon: "/favicon.png",
   },
 };
 
