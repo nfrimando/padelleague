@@ -2,20 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-
-type Player = {
-  player_id: string;
-  name: string;
-  nickname: string;
-  created_at: string;
-  image_link?: string;
-};
+import MatchCard from "@/components/MatchCard";
+import { Player, MatchWithTeams } from "@/lib/types";
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState("");
   const [filtered, setFiltered] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [playerMatches, setPlayerMatches] = useState<MatchWithTeams[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(false);
 
   // Fetch players on load
   useEffect(() => {
@@ -52,9 +48,94 @@ export default function PlayersPage() {
     setFiltered(results);
   }, [search, players]);
 
+  // Fetch matches for selected player
+  useEffect(() => {
+    if (!selectedPlayer) {
+      setPlayerMatches([]);
+      return;
+    }
+
+    async function fetchPlayerMatches() {
+      setLoadingMatches(true);
+
+      try {
+        // Get all match_teams where the player is involved
+        const { data: teamsData, error: teamsError } = await supabase
+          .from("match_teams")
+          .select("match_id")
+          .or(
+            `player_1_id.eq.${selectedPlayer!.player_id},player_2_id.eq.${selectedPlayer!.player_id}`,
+          );
+
+        if (teamsError) {
+          console.error("Error fetching teams:", teamsError);
+          setPlayerMatches([]);
+          return;
+        }
+
+        if (!teamsData || teamsData.length === 0) {
+          setPlayerMatches([]);
+          return;
+        }
+
+        const matchIds = teamsData.map((t) => t.match_id);
+
+        // Get matches
+        const { data: matchesData, error: matchesError } = await supabase
+          .from("matches")
+          .select("*")
+          .in("match_id", matchIds)
+          .order("created_at", { ascending: false });
+
+        if (matchesError) {
+          console.error("Error fetching matches:", matchesError);
+          setPlayerMatches([]);
+          return;
+        }
+
+        // Get all teams for these matches
+        const { data: allTeamsData, error: allTeamsError } = await supabase
+          .from("match_teams")
+          .select(
+            "*, player_1:player_1_id(name,nickname,image_link), player_2:player_2_id(name,nickname,image_link)",
+          )
+          .in("match_id", matchIds);
+
+        if (allTeamsError) {
+          console.error("Error fetching teams:", allTeamsError);
+          setPlayerMatches([]);
+          return;
+        }
+
+        // Combine matches with teams
+        const matches: MatchWithTeams[] = (matchesData || []).map((m) => ({
+          ...m,
+          teams: (allTeamsData || [])
+            .filter((t) => t.match_id === m.match_id)
+            .map((t) => ({
+              uuid: t.uuid,
+              team_number: t.team_number,
+              sets_won: t.sets_won,
+              player_1: t.player_1 || null,
+              player_2: t.player_2 || null,
+            })),
+        }));
+
+        setPlayerMatches(matches);
+      } catch (error) {
+        console.error("Error fetching player matches:", error);
+        setPlayerMatches([]);
+      } finally {
+        setLoadingMatches(false);
+      }
+    }
+
+    fetchPlayerMatches();
+  }, [selectedPlayer]);
+
   return (
     <>
-      <div className="p-6 max-w-xl">
+      <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Player Search</h1>
 
         {/* Input */}
@@ -97,32 +178,60 @@ export default function PlayersPage() {
 
         {/* Selected Player Details */}
         {selectedPlayer && (
-          <div className="mt-6 border p-4 rounded">
-            <div className="flex items-center gap-4">
-              <img
-                src={
-                  selectedPlayer?.image_link &&
-                  selectedPlayer.image_link !== "null"
-                    ? selectedPlayer.image_link
-                    : "/default-avatar.webp"
-                }
-                alt={selectedPlayer?.name || "Player"}
-                className="w-16 h-16 rounded-full object-cover"
-              />
-              <div>
-                <h2 className="text-xl font-semibold">{selectedPlayer.name}</h2>
-                <p className="text-gray-600">
-                  Nickname: {selectedPlayer.nickname || "—"}
-                </p>
+          <>
+            <div className="mt-6 border p-4 rounded">
+              <div className="flex items-center gap-4">
+                <img
+                  src={
+                    selectedPlayer?.image_link &&
+                    selectedPlayer.image_link !== "null"
+                      ? selectedPlayer.image_link
+                      : "/default-avatar.webp"
+                  }
+                  alt={selectedPlayer?.name || "Player"}
+                  className="w-16 h-16 rounded-full object-cover"
+                />
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    {selectedPlayer.name}
+                  </h2>
+                  <p className="text-gray-600">
+                    Nickname: {selectedPlayer.nickname || "—"}
+                  </p>
+                </div>
               </div>
+              <p className="text-gray-600 text-sm">
+                Created:{" "}
+                {selectedPlayer.created_at
+                  ? new Date(selectedPlayer.created_at).toLocaleDateString()
+                  : "N/A"}
+              </p>
             </div>
-            <p className="text-gray-600 text-sm">
-              Created:{" "}
-              {new Date(selectedPlayer.created_at).toLocaleDateString()}
-            </p>
-          </div>
+          </>
         )}
       </div>
+
+      {/* Player Matches - Full Width */}
+      {selectedPlayer && (
+        <div className="mt-8">
+          <div className="max-w-xl mx-auto px-6 mb-4">
+            <h2 className="text-xl font-bold">Matches</h2>
+          </div>
+          {loadingMatches ? (
+            <div className="text-center py-8">Loading matches...</div>
+          ) : playerMatches.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No matches found for this player.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {playerMatches.map((match) => (
+                <MatchCard key={match.match_id} match={match} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
