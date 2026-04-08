@@ -1,6 +1,7 @@
 // app/matches/page.tsx
 import { createClient } from "@supabase/supabase-js";
 import MatchCard from "@/components/MatchCard";
+import BackToHome from "@/components/BackToHome";
 import { Player, TeamWithPlayers, MatchWithTeams } from "@/lib/types";
 
 const supabase = createClient(
@@ -46,11 +47,14 @@ export default async function MatchesPage() {
   const defaultAvatar = "/default-avatar.png"; // put a default avatar in public/
 
   return (
-    <div className="p-8 space-y-6">
-      <h1 className="text-2xl font-bold mb-4">Latest 10 Matches</h1>
-      {matches.map((match) => (
-        <MatchCard key={match.match_id} match={match} />
-      ))}
-    </div>
+    <>
+      <BackToHome />
+      <div className="p-8 space-y-6">
+        <h1 className="text-2xl font-bold mb-4">Latest 10 Matches</h1>
+        {matches.map((match) => (
+          <MatchCard key={match.match_id} match={match} />
+        ))}
+      </div>
+    </>
   );
 }
