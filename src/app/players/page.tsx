@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import MatchCard from "@/components/MatchCard";
+import BackToHome from "@/components/BackToHome";
 import { Player, MatchWithTeams } from "@/lib/types";
 
 export default function PlayersPage() {
@@ -135,6 +136,7 @@ export default function PlayersPage() {
 
   return (
     <>
+      <BackToHome />
       <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Player Search</h1>
 
