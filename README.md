@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Padel League Philippines
 
-## Getting Started
+A lightweight Next.js app for tracking Padel league players and matches in the Philippines.
 
-First, run the development server:
+## What it does
+
+- Home page with quick navigation to the main sections
+- Players page with player search and profile details
+- Matches page showing recent matches and team lineups
+- Shared match card component for consistent match display
+- Supports Supabase as the backend/data source
+- Includes a simple CSV transform script for importing player data
+
+## Local setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment variables into `.env.local`:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Update `.env.local` with your Supabase project credentials:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+4. Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/app/` — Next.js app routes and page components
+- `src/components/` — reusable UI components like match cards and navigation
+- `src/lib/` — helper utilities and Supabase client setup
+- `data/inputs/` — input CSV files for data transformation
+- `data/outputs/` — generated CSV output files from the transform script
+- `src/app/scripts/player_transform.py` — CSV transformer for `dim_players.csv`
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+- `npm run dev` — start the app locally
+- `npm run build` — build the production app
+- `npm run start` — start the production server after build
+- `npm run lint` — run ESLint
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## CSV import helper
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+To transform the player import CSV, place `dim_players.csv` into `data/inputs/` and run:
 
-## Deploy on Vercel
+```bash
+python3 src/app/scripts/player_transform.py
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The script writes a fixed output file to `data/outputs/dim_players_fixed.csv`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+
+- The app uses Tailwind CSS for styling and Next.js 16 for routing.
+- Match and player pages are designed for quick access and consistent UI.
+- If you want to add more pages, reuse the `MatchCard` component for the same match layout.
