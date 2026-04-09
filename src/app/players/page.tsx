@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import MatchCard from "@/components/MatchCard";
@@ -8,7 +8,7 @@ import BackToHome from "@/components/BackToHome";
 import PlayerCard from "@/components/PlayerCard";
 import { Player, MatchWithTeams } from "@/lib/types";
 
-export default function PlayersPage() {
+function PlayersPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -19,13 +19,14 @@ export default function PlayersPage() {
   const [playerMatches, setPlayerMatches] = useState<MatchWithTeams[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
-  const updatePlayerParam = (playerId: string | null) => {
+  const updatePlayerParam = (playerId: string | number | null) => {
     const params = new URLSearchParams(searchParams.toString());
 
     if (playerId) {
-      params.set("playerId", playerId);
+      params.set("playerId", String(playerId));
     } else {
       params.delete("playerId");
+      params.delete("playerid");
     }
 
     const nextUrl = params.toString()
@@ -71,12 +72,15 @@ export default function PlayersPage() {
 
   // Auto-select player from URL query param
   useEffect(() => {
-    const playerId = searchParams.get("playerId");
-    if (!playerId || players.length === 0) {
+    const playerIdParam =
+      searchParams.get("playerId") || searchParams.get("playerid");
+    if (!playerIdParam || players.length === 0) {
       return;
     }
 
-    const matchedPlayer = players.find((p) => p.player_id === playerId);
+    const matchedPlayer = players.find(
+      (p) => String(p.player_id) === String(playerIdParam),
+    );
     if (!matchedPlayer) {
       return;
     }
@@ -303,5 +307,19 @@ export default function PlayersPage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function PlayersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 max-w-xl mx-auto text-sm text-slate-500">
+          Loading players...
+        </div>
+      }
+    >
+      <PlayersPageContent />
+    </Suspense>
   );
 }
