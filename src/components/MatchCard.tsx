@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatMatchDate, formatMatchTime } from "@/lib/utils";
 import { MatchWithTeams } from "@/lib/types";
 import TeamCard from "./TeamCard";
@@ -7,6 +8,7 @@ interface MatchCardProps {
 }
 
 export default function MatchCard({ match }: MatchCardProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
   const team1 = match.teams.find((t) => t.team_number === 1);
   const team2 = match.teams.find((t) => t.team_number === 2);
 
@@ -15,12 +17,53 @@ export default function MatchCard({ match }: MatchCardProps) {
       key={match.match_id}
       className="border rounded-lg shadow p-4 bg-white dark:bg-gray-800"
     >
-      <div className="flex justify-between mb-2 text-sm text-gray-500 dark:text-gray-400">
-        <div>
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-sm text-gray-500 dark:text-gray-400">
           {formatMatchDate(match.date_local)}{" "}
           {formatMatchTime(match.time_local)}
         </div>
-        <div>{match.venue || "N/A"}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {match.venue || "N/A"}
+          </div>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            aria-label={
+              isExpanded ? "Collapse match details" : "Expand match details"
+            }
+          >
+            {isExpanded ? (
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 15l7-7 7 7"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="mb-2 font-semibold">
@@ -28,25 +71,29 @@ export default function MatchCard({ match }: MatchCardProps) {
           (match.type || "Match").slice(1)}
       </div>
 
-      <div className="flex flex-col lg:flex-row items-stretch justify-center gap-4">
-        {/* Team 1 */}
-        <TeamCard team={team1} isWinner={match.winner_team === 1} />
+      {isExpanded && (
+        <>
+          <div className="flex flex-col lg:flex-row items-stretch justify-center gap-4">
+            {/* Team 1 */}
+            <TeamCard team={team1} isWinner={match.winner_team === 1} />
 
-        <div className="flex flex-col items-center justify-center px-3">
-          <div className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
-            VS
+            <div className="flex flex-col items-center justify-center px-3">
+              <div className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
+                VS
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                {team1?.sets_won ?? 0} - {team2?.sets_won ?? 0}
+              </div>
+            </div>
+
+            {/* Team 2 */}
+            <TeamCard team={team2} isWinner={match.winner_team === 2} />
           </div>
-          <div className="text-xs text-slate-600 dark:text-slate-400">
-            {team1?.sets_won ?? 0} - {team2?.sets_won ?? 0}
-          </div>
-        </div>
 
-        {/* Team 2 */}
-        <TeamCard team={team2} isWinner={match.winner_team === 2} />
-      </div>
-
-      {match.is_forfeit && (
-        <div className="mt-2 text-red-500 font-semibold">Forfeit Match</div>
+          {match.is_forfeit && (
+            <div className="mt-2 text-red-500 font-semibold">Forfeit Match</div>
+          )}
+        </>
       )}
     </div>
   );
