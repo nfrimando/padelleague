@@ -228,51 +228,129 @@ function PlayersPageContent() {
         {selectedPlayer &&
           (() => {
             const matchCount = playerMatches.length;
+            const selectedPlayerId = String(selectedPlayer.player_id);
             const winCount = playerMatches.filter((m) => {
               const playerTeam = m.teams.find(
                 (t) =>
-                  t.player_1?.player_id === selectedPlayer.player_id ||
-                  t.player_2?.player_id === selectedPlayer.player_id,
+                  String(t.player_1?.player_id) === selectedPlayerId ||
+                  String(t.player_2?.player_id) === selectedPlayerId,
               );
               return playerTeam && m.winner_team === playerTeam.team_number;
             }).length;
+
+            const partnerCountMap = new Map<
+              string,
+              { name: string; nickname?: string; count: number }
+            >();
+
+            playerMatches.forEach((m) => {
+              const playerTeam = m.teams.find(
+                (t) =>
+                  String(t.player_1?.player_id) === selectedPlayerId ||
+                  String(t.player_2?.player_id) === selectedPlayerId,
+              );
+
+              if (!playerTeam) {
+                return;
+              }
+
+              const partner =
+                String(playerTeam.player_1?.player_id) === selectedPlayerId
+                  ? playerTeam.player_2
+                  : playerTeam.player_1;
+
+              if (!partner) {
+                return;
+              }
+
+              const partnerKey = partner.player_id
+                ? String(partner.player_id)
+                : partner.name;
+              const current = partnerCountMap.get(partnerKey);
+
+              if (current) {
+                current.count += 1;
+              } else {
+                partnerCountMap.set(partnerKey, {
+                  name: partner.name || "Unknown",
+                  nickname: partner.nickname || undefined,
+                  count: 1,
+                });
+              }
+            });
+
+            const topPartners = Array.from(partnerCountMap.values())
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 3);
 
             return (
               <div className="mt-6 border p-4 rounded">
                 <PlayerCard player={selectedPlayer} size="lg" />
                 {!loadingMatches && matchCount > 0 && (
-                  <div className="flex gap-6 mt-4 pt-3 border-t">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                        {matchCount}
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Matches
+                  <div className="mt-4 pt-3 border-t flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+                    <div className="flex-1">
+                      <div className="flex gap-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                            {matchCount}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            Matches
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                            {winCount}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            Wins
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                            {matchCount - winCount}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            Losses
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                            {Math.round((winCount / matchCount) * 100)}%
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            Win Rate
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        {winCount}
+
+                    <div className="md:w-64 md:border-l md:pl-4">
+                      <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2">
+                        Most Played Partners
                       </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Wins
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                        {matchCount - winCount}
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Losses
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {Math.round((winCount / matchCount) * 100)}%
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Win Rate
-                      </div>
+                      {topPartners.length === 0 ? (
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          No partner data available.
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          {topPartners.map((partner) => (
+                            <div
+                              key={`${partner.name}-${partner.nickname || ""}`}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span className="text-slate-700 dark:text-slate-200">
+                                {partner.name}
+                              </span>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                {partner.count} match
+                                {partner.count > 1 ? "es" : ""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
