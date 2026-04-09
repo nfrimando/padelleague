@@ -77,6 +77,9 @@ export default function MatchCard({
           {(match.type || "Match").charAt(0).toUpperCase() +
             (match.type || "Match").slice(1)}
         </span>
+        <span className="text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+          Match #{match.match_id}
+        </span>
         {match.is_forfeit && (
           <span className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-2 py-0.5 rounded-full">
             Forfeit

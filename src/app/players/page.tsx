@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import MatchCard from "@/components/MatchCard";
 import BackToHome from "@/components/BackToHome";
@@ -8,12 +9,30 @@ import PlayerCard from "@/components/PlayerCard";
 import { Player, MatchWithTeams } from "@/lib/types";
 
 export default function PlayersPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [players, setPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState("");
   const [filtered, setFiltered] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [playerMatches, setPlayerMatches] = useState<MatchWithTeams[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
+
+  const updatePlayerParam = (playerId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (playerId) {
+      params.set("playerId", playerId);
+    } else {
+      params.delete("playerId");
+    }
+
+    const nextUrl = params.toString()
+      ? `${pathname}?${params.toString()}`
+      : pathname;
+    router.replace(nextUrl, { scroll: false });
+  };
 
   // Fetch players on load
   useEffect(() => {
@@ -49,6 +68,25 @@ export default function PlayersPage() {
 
     setFiltered(results);
   }, [search, players]);
+
+  // Auto-select player from URL query param
+  useEffect(() => {
+    const playerId = searchParams.get("playerId");
+    if (!playerId || players.length === 0) {
+      return;
+    }
+
+    const matchedPlayer = players.find((p) => p.player_id === playerId);
+    if (!matchedPlayer) {
+      return;
+    }
+
+    setSelectedPlayer((current) =>
+      current?.player_id === matchedPlayer.player_id ? current : matchedPlayer,
+    );
+    setSearch(matchedPlayer.name || "");
+    setFiltered([]);
+  }, [players, searchParams]);
 
   // Fetch matches for selected player
   useEffect(() => {
@@ -151,6 +189,7 @@ export default function PlayersPage() {
           onChange={(e) => {
             setSearch(e.target.value);
             setSelectedPlayer(null);
+            updatePlayerParam(null);
           }}
         />
 
@@ -165,6 +204,7 @@ export default function PlayersPage() {
                   setSelectedPlayer(player);
                   setSearch(player.name);
                   setFiltered([]);
+                  updatePlayerParam(player.player_id);
                 }}
               >
                 <div>
