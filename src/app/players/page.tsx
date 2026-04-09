@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import MatchCard from "@/components/MatchCard";
 import BackToHome from "@/components/BackToHome";
+import PlayerCard from "@/components/PlayerCard";
 import { Player, MatchWithTeams } from "@/lib/types";
 
 export default function PlayersPage() {
@@ -181,36 +182,9 @@ export default function PlayersPage() {
 
         {/* Selected Player Details */}
         {selectedPlayer && (
-          <>
-            <div className="mt-6 border p-4 rounded">
-              <div className="flex items-center gap-4">
-                <img
-                  src={
-                    selectedPlayer?.image_link &&
-                    selectedPlayer.image_link !== "null"
-                      ? selectedPlayer.image_link
-                      : "/default-avatar.webp"
-                  }
-                  alt={selectedPlayer?.name || "Player"}
-                  className="w-16 h-16 rounded-full object-cover"
-                />
-                <div>
-                  <h2 className="text-xl font-semibold">
-                    {selectedPlayer.name}
-                  </h2>
-                  <p className="text-gray-600">
-                    Nickname: {selectedPlayer.nickname || "—"}
-                  </p>
-                </div>
-              </div>
-              <p className="text-gray-600 text-sm">
-                Created:{" "}
-                {selectedPlayer.created_at
-                  ? new Date(selectedPlayer.created_at).toLocaleDateString()
-                  : "N/A"}
-              </p>
-            </div>
-          </>
+          <div className="mt-6 border p-4 rounded">
+            <PlayerCard player={selectedPlayer} size="lg" />
+          </div>
         )}
       </div>
 
