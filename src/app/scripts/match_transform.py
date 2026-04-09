@@ -93,7 +93,7 @@ for _, row in df.iterrows():
         "venue": row.get("venue"),
         "type": row.get("type"),
         "winner_team": winner_team,
-        "is_forfeit": False
+        "is_forfeit": bool(row.get("is_forfeit")) if pd.notna(row.get("is_forfeit")) else False
     })
 
     # --- MATCH TEAMS ---
