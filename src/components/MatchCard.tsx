@@ -72,9 +72,16 @@ export default function MatchCard({
         </div>
       </div>
 
-      <div className="mb-2 font-semibold">
-        {(match.type || "Match").charAt(0).toUpperCase() +
-          (match.type || "Match").slice(1)}
+      <div className="mb-2 flex items-center gap-2">
+        <span className="font-semibold">
+          {(match.type || "Match").charAt(0).toUpperCase() +
+            (match.type || "Match").slice(1)}
+        </span>
+        {match.is_forfeit && (
+          <span className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-2 py-0.5 rounded-full">
+            Forfeit
+          </span>
+        )}
       </div>
 
       {isExpanded && (
@@ -105,7 +112,9 @@ export default function MatchCard({
           </div>
 
           {match.is_forfeit && (
-            <div className="mt-2 text-red-500 font-semibold">Forfeit Match</div>
+            <div className="mt-3 text-sm text-red-600 dark:text-red-400">
+              This match was decided by forfeit.
+            </div>
           )}
         </>
       )}

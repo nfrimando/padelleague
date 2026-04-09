@@ -87,7 +87,7 @@ export default function PlayersPage() {
           .from("matches")
           .select("*")
           .in("match_id", matchIds)
-          .order("date_local", { ascending: false })
+          .order("date_local", { ascending: false, nullsFirst: false })
           .order("time_local", { ascending: false });
 
         if (matchesError) {
@@ -181,11 +181,60 @@ export default function PlayersPage() {
         )}
 
         {/* Selected Player Details */}
-        {selectedPlayer && (
-          <div className="mt-6 border p-4 rounded">
-            <PlayerCard player={selectedPlayer} size="lg" />
-          </div>
-        )}
+        {selectedPlayer &&
+          (() => {
+            const matchCount = playerMatches.length;
+            const winCount = playerMatches.filter((m) => {
+              const playerTeam = m.teams.find(
+                (t) =>
+                  t.player_1?.player_id === selectedPlayer.player_id ||
+                  t.player_2?.player_id === selectedPlayer.player_id,
+              );
+              return playerTeam && m.winner_team === playerTeam.team_number;
+            }).length;
+
+            return (
+              <div className="mt-6 border p-4 rounded">
+                <PlayerCard player={selectedPlayer} size="lg" />
+                {!loadingMatches && matchCount > 0 && (
+                  <div className="flex gap-6 mt-4 pt-3 border-t">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                        {matchCount}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        Matches
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {winCount}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        Wins
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                        {matchCount - winCount}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        Losses
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                        {Math.round((winCount / matchCount) * 100)}%
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        Win Rate
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
       </div>
 
       {/* Player Matches - Full Width */}
