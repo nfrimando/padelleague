@@ -29,13 +29,6 @@ export default function HomePage() {
               >
                 Players
               </Link>
-
-              <Link
-                href="/matches"
-                className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
-              >
-                Matches
-              </Link>
             </div>
           </div>
         </div>

@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import MatchCard from "@/components/MatchCard";
-import BackToHome from "@/components/BackToHome";
 import PlayerCard from "@/components/PlayerCard";
 import { Player, MatchWithTeams } from "@/lib/types";
 
@@ -180,7 +179,6 @@ function PlayersPageContent() {
 
   return (
     <>
-      <BackToHome />
       <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Player Search</h1>
 
