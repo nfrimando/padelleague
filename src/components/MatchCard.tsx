@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { formatMatchDate, formatMatchTime } from "@/lib/utils";
 import { MatchWithTeams } from "@/lib/types";
@@ -5,9 +7,13 @@ import TeamCard from "./TeamCard";
 
 interface MatchCardProps {
   match: MatchWithTeams;
+  highlightPlayerId?: string;
 }
 
-export default function MatchCard({ match }: MatchCardProps) {
+export default function MatchCard({
+  match,
+  highlightPlayerId,
+}: MatchCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const team1 = match.teams.find((t) => t.team_number === 1);
   const team2 = match.teams.find((t) => t.team_number === 2);
@@ -75,19 +81,27 @@ export default function MatchCard({ match }: MatchCardProps) {
         <>
           <div className="flex flex-col lg:flex-row items-stretch justify-center gap-4">
             {/* Team 1 */}
-            <TeamCard team={team1} isWinner={match.winner_team === 1} />
+            <TeamCard
+              team={team1}
+              isWinner={match.winner_team === 1}
+              highlightPlayerId={highlightPlayerId}
+            />
 
             <div className="flex flex-col items-center justify-center px-3">
               <div className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
                 VS
               </div>
-              <div className="text-xs text-slate-600 dark:text-slate-400">
+              <div className="text-lg font-bold text-slate-700 dark:text-slate-300">
                 {team1?.sets_won ?? 0} - {team2?.sets_won ?? 0}
               </div>
             </div>
 
             {/* Team 2 */}
-            <TeamCard team={team2} isWinner={match.winner_team === 2} />
+            <TeamCard
+              team={team2}
+              isWinner={match.winner_team === 2}
+              highlightPlayerId={highlightPlayerId}
+            />
           </div>
 
           {match.is_forfeit && (
