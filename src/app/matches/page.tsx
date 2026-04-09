@@ -14,7 +14,8 @@ export default async function MatchesPage() {
   const { data: matchesData, error: matchesError } = await supabase
     .from("matches")
     .select("*")
-    .order("created_at", { ascending: false })
+    .order("date_local", { ascending: false })
+    .order("time_local", { ascending: false })
     .limit(10);
 
   if (matchesError || !matchesData) return <div>Error loading matches</div>;

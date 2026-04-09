@@ -3,12 +3,19 @@ import { Player } from "@/lib/types";
 interface PlayerCardProps {
   player: Player | null | undefined;
   size?: "sm" | "lg";
+  highlight?: boolean;
 }
 
-export default function PlayerCard({ player, size = "sm" }: PlayerCardProps) {
+export default function PlayerCard({
+  player,
+  size = "sm",
+  highlight = false,
+}: PlayerCardProps) {
   const isLg = size === "lg";
   return (
-    <div className="flex items-center gap-4 flex-1">
+    <div
+      className={`flex items-center gap-4 flex-1 rounded-lg p-1 ${highlight ? "ring-2 ring-blue-400 dark:ring-blue-500 bg-blue-50 dark:bg-blue-900/30" : ""}`}
+    >
       <img
         src={
           player?.image_link && player.image_link !== "null"

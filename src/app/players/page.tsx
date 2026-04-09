@@ -100,7 +100,7 @@ export default function PlayersPage() {
         const { data: allTeamsData, error: allTeamsError } = await supabase
           .from("match_teams")
           .select(
-            "*, player_1:player_1_id(name,nickname,image_link), player_2:player_2_id(name,nickname,image_link)",
+            "*, player_1:player_1_id(player_id,name,nickname,image_link), player_2:player_2_id(player_id,name,nickname,image_link)",
           )
           .in("match_id", matchIds);
 
@@ -203,7 +203,11 @@ export default function PlayersPage() {
           ) : (
             <div className="space-y-6">
               {playerMatches.map((match) => (
-                <MatchCard key={match.match_id} match={match} />
+                <MatchCard
+                  key={match.match_id}
+                  match={match}
+                  highlightPlayerId={selectedPlayer?.player_id}
+                />
               ))}
             </div>
           )}
