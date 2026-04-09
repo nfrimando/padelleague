@@ -86,7 +86,8 @@ export default function PlayersPage() {
           .from("matches")
           .select("*")
           .in("match_id", matchIds)
-          .order("created_at", { ascending: false });
+          .order("date_local", { ascending: false })
+          .order("time_local", { ascending: false });
 
         if (matchesError) {
           console.error("Error fetching matches:", matchesError);
