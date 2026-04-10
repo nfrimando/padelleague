@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
@@ -406,7 +407,15 @@ export default function LeaderboardPage() {
                                 }
                               />
                             ) : (
-                              row.name
+                              <Link
+                                href={`/players?playerId=${encodeURIComponent(String(row.player_id))}`}
+                                className="group inline-flex items-center gap-1 text-slate-900 dark:text-slate-100 decoration-transparent underline-offset-2 transition-colors duration-150 hover:text-sky-700 dark:hover:text-sky-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 rounded"
+                              >
+                                {row.name}
+                                <span className="text-sky-600/80 dark:text-sky-300/80 opacity-0 translate-x-[-2px] transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0">
+                                  {"->"}
+                                </span>
+                              </Link>
                             )}
                             {row.rank === 1 &&
                               selectedTypeFilter === "SEASON" && (
