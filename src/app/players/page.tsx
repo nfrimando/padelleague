@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import MatchCard from "@/components/MatchCard";
@@ -240,7 +241,12 @@ function PlayersPageContent() {
 
             const partnerCountMap = new Map<
               string,
-              { name: string; nickname?: string; count: number }
+              {
+                player_id?: string;
+                name: string;
+                nickname?: string;
+                count: number;
+              }
             >();
 
             playerMatches.forEach((m) => {
@@ -272,6 +278,9 @@ function PlayersPageContent() {
                 current.count += 1;
               } else {
                 partnerCountMap.set(partnerKey, {
+                  player_id: partner.player_id
+                    ? String(partner.player_id)
+                    : undefined,
                   name: partner.name || "Unknown",
                   nickname: partner.nickname || undefined,
                   count: 1,
@@ -361,12 +370,21 @@ function PlayersPageContent() {
                         <div className="flex flex-wrap gap-2">
                           {topPartners.map((partner) => (
                             <div
-                              key={`${partner.name}-${partner.nickname || ""}`}
+                              key={`${partner.player_id || partner.name}-${partner.nickname || ""}`}
                               className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs"
                             >
-                              <span className="text-slate-700 dark:text-slate-200">
-                                {partner.name}
-                              </span>
+                              {partner.player_id ? (
+                                <Link
+                                  href={`/players?playerId=${encodeURIComponent(partner.player_id)}`}
+                                  className="text-slate-700 dark:text-slate-200 hover:underline"
+                                >
+                                  {partner.name}
+                                </Link>
+                              ) : (
+                                <span className="text-slate-700 dark:text-slate-200">
+                                  {partner.name}
+                                </span>
+                              )}
                               <span className="text-slate-500 dark:text-slate-400">
                                 {partner.count}x
                               </span>

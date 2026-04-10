@@ -29,6 +29,13 @@ export default function HomePage() {
               >
                 Players
               </Link>
+
+              <Link
+                href="/leaderboard"
+                className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
+              >
+                Leaderboard
+              </Link>
             </div>
           </div>
         </div>
