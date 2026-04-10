@@ -358,10 +358,10 @@ function LeaderboardPageContent() {
                 >
                   <thead>
                     <tr>
-                      <th className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-left px-4 py-3 shadow-sm">
+                      <th className="sticky top-0 left-0 z-50 w-[72px] min-w-[72px] bg-slate-100 dark:bg-slate-800 text-left px-4 py-3 shadow-sm">
                         Rank
                       </th>
-                      <th className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-left px-4 py-3 shadow-sm">
+                      <th className="sticky top-0 left-[72px] z-50 min-w-[220px] bg-slate-100 dark:bg-slate-800 text-left px-4 py-3 shadow-sm">
                         Player
                       </th>
                       <th className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
@@ -391,8 +391,22 @@ function LeaderboardPageContent() {
                             : ""
                         }`}
                       >
-                        <td className="px-4 py-3 font-semibold">#{row.rank}</td>
-                        <td className="px-4 py-3">
+                        <td
+                          className={`sticky left-0 z-30 w-[72px] min-w-[72px] px-4 py-3 font-semibold shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
+                            row.rank === 1
+                              ? "bg-amber-50 dark:bg-amber-900/20"
+                              : "bg-white dark:bg-slate-900"
+                          }`}
+                        >
+                          #{row.rank}
+                        </td>
+                        <td
+                          className={`sticky left-[72px] z-30 min-w-[220px] px-4 py-3 shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
+                            row.rank === 1
+                              ? "bg-amber-50 dark:bg-amber-900/20"
+                              : "bg-white dark:bg-slate-900"
+                          }`}
+                        >
                           <div className="flex items-center gap-2">
                             {index < 10 ? (
                               <PlayerCard
