@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
 import MatchFiltersCard from "@/components/MatchFiltersCard";
 import PlayerCard from "@/components/PlayerCard";
@@ -37,6 +38,10 @@ const TYPE_FILTER_OPTIONS = [
 ] as const;
 
 export default function LeaderboardPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [topPlayersById, setTopPlayersById] = useState<Map<number, Player>>(
     new Map(),
@@ -84,6 +89,55 @@ export default function LeaderboardPage() {
 
     loadFilterOptions();
   }, []);
+
+  useEffect(() => {
+    if (seasons.length === 0) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParamsString);
+    const seasonParam = params.get("season");
+    const parsedSeason = seasonParam ? Number(seasonParam) : Number.NaN;
+
+    let nextSeason: number | typeof ALL_SEASONS = seasons[seasons.length - 1];
+    if (seasonParam === ALL_SEASONS) {
+      nextSeason = ALL_SEASONS;
+    } else if (!Number.isNaN(parsedSeason) && seasons.includes(parsedSeason)) {
+      nextSeason = parsedSeason;
+    }
+
+    const typeParam = params.get("type");
+    const nextType = TYPE_FILTER_OPTIONS.some(
+      (option) => option.value === typeParam,
+    )
+      ? (typeParam as string)
+      : ALL_TYPES;
+
+    setSeasonFilter((current) =>
+      current === nextSeason ? current : nextSeason,
+    );
+    setSelectedTypeFilter((current) =>
+      current === nextType ? current : nextType,
+    );
+  }, [seasons, searchParamsString]);
+
+  useEffect(() => {
+    if (seasonFilter === null) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParamsString);
+    params.set("season", String(seasonFilter));
+    params.set("type", selectedTypeFilter);
+
+    const nextQuery = params.toString();
+    if (nextQuery === searchParamsString) {
+      return;
+    }
+
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [pathname, router, searchParamsString, seasonFilter, selectedTypeFilter]);
 
   useEffect(() => {
     async function loadLeaderboard() {

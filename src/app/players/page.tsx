@@ -21,6 +21,7 @@ function PlayersPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const [players, setPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState("");
   const [filtered, setFiltered] = useState<Player[]>([]);
@@ -30,6 +31,47 @@ function PlayersPageContent() {
   const [selectedTypeFilter, setSelectedTypeFilter] =
     useState<string>(ALL_FILTER);
   const [loadingMatches, setLoadingMatches] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParamsString);
+    const seasonParam = params.get("season");
+    const parsedSeason = seasonParam ? Number(seasonParam) : Number.NaN;
+
+    const nextSeason: number | "ALL" =
+      seasonParam === ALL_FILTER
+        ? ALL_FILTER
+        : !Number.isNaN(parsedSeason)
+          ? parsedSeason
+          : ALL_FILTER;
+
+    const typeParam = params.get("type");
+    const nextType = TYPE_FILTER_OPTIONS.some(
+      (option) => option.value === typeParam,
+    )
+      ? (typeParam as string)
+      : ALL_FILTER;
+
+    setSeasonFilter((current) =>
+      current === nextSeason ? current : nextSeason,
+    );
+    setSelectedTypeFilter((current) =>
+      current === nextType ? current : nextType,
+    );
+  }, [searchParamsString]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParamsString);
+    params.set("season", String(seasonFilter));
+    params.set("type", selectedTypeFilter);
+
+    const nextQuery = params.toString();
+    if (nextQuery === searchParamsString) {
+      return;
+    }
+
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [pathname, router, searchParamsString, seasonFilter, selectedTypeFilter]);
 
   const seasonOptions = useMemo(() => {
     return Array.from(
@@ -146,9 +188,6 @@ function PlayersPageContent() {
       setPlayerMatches([]);
       return;
     }
-
-    setSeasonFilter(ALL_FILTER);
-    setSelectedTypeFilter(ALL_FILTER);
 
     async function fetchPlayerMatches() {
       setLoadingMatches(true);
