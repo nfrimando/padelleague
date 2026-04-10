@@ -109,8 +109,14 @@ function PlayersPageContent() {
     });
   }, [playerMatches, seasonFilter, selectedTypeFilter]);
 
+  const getPlayerProfileHref = (playerId: string | number) => {
+    const params = new URLSearchParams(searchParamsString);
+    params.set("playerId", String(playerId));
+    return `${pathname}?${params.toString()}`;
+  };
+
   const updatePlayerParam = (playerId: string | number | null) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParamsString);
 
     if (playerId) {
       params.set("playerId", String(playerId));
@@ -162,8 +168,8 @@ function PlayersPageContent() {
 
   // Auto-select player from URL query param
   useEffect(() => {
-    const playerIdParam =
-      searchParams.get("playerId") || searchParams.get("playerid");
+    const params = new URLSearchParams(searchParamsString);
+    const playerIdParam = params.get("playerId") || params.get("playerid");
     if (!playerIdParam || players.length === 0) {
       return;
     }
@@ -180,7 +186,7 @@ function PlayersPageContent() {
     );
     setSearch(matchedPlayer.name || "");
     setFiltered([]);
-  }, [players, searchParams]);
+  }, [players, searchParamsString]);
 
   // Fetch matches for selected player
   useEffect(() => {
@@ -477,7 +483,7 @@ function PlayersPageContent() {
                             >
                               {partner.player_id ? (
                                 <Link
-                                  href={`/players?playerId=${encodeURIComponent(partner.player_id)}`}
+                                  href={getPlayerProfileHref(partner.player_id)}
                                   className="text-slate-700 dark:text-slate-200 hover:underline"
                                 >
                                   {partner.name}
