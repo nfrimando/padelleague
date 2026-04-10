@@ -170,6 +170,17 @@ function PlayersPageContent() {
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
     const playerIdParam = params.get("playerId") || params.get("playerid");
+
+    if (
+      playerIdParam &&
+      selectedPlayer &&
+      String(selectedPlayer.player_id) !== String(playerIdParam)
+    ) {
+      // Clear stale profile immediately while switching to another player.
+      setSelectedPlayer(null);
+      setPlayerMatches([]);
+    }
+
     if (!playerIdParam || players.length === 0) {
       return;
     }
@@ -178,6 +189,8 @@ function PlayersPageContent() {
       (p) => String(p.player_id) === String(playerIdParam),
     );
     if (!matchedPlayer) {
+      setSelectedPlayer(null);
+      setPlayerMatches([]);
       return;
     }
 
@@ -186,7 +199,7 @@ function PlayersPageContent() {
     );
     setSearch(matchedPlayer.name || "");
     setFiltered([]);
-  }, [players, searchParamsString]);
+  }, [players, searchParamsString, selectedPlayer]);
 
   // Fetch matches for selected player
   useEffect(() => {
