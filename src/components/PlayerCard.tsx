@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Player } from "@/lib/types";
 
 interface PlayerCardProps {
@@ -12,14 +15,28 @@ export default function PlayerCard({
   size = "sm",
   highlight = false,
 }: PlayerCardProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isLg = size === "lg";
   const hasCustomImage = !!(player?.image_link && player.image_link !== "null");
   const imageSrc = hasCustomImage
     ? (player?.image_link as string)
     : "/default-avatar.webp";
-  const playerHref = player?.player_id
-    ? `/players?playerId=${encodeURIComponent(String(player.player_id))}`
-    : null;
+  const playerHref = (() => {
+    if (!player?.player_id) {
+      return null;
+    }
+
+    // Preserve active players-page filters when navigating between player profiles.
+    if (pathname === "/players") {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("playerId", String(player.player_id));
+      params.delete("playerid");
+      return `${pathname}?${params.toString()}`;
+    }
+
+    return `/players?playerId=${encodeURIComponent(String(player.player_id))}`;
+  })();
 
   return (
     <div
