@@ -45,7 +45,7 @@ export default function PlayerCard({
       {playerHref ? (
         <Link
           href={playerHref}
-          className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+          className="flex-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
         >
           <img
             src={imageSrc}
@@ -55,7 +55,7 @@ export default function PlayerCard({
                 ? "Send url image to Nigel to update this pic!"
                 : undefined
             }
-            className={`${isLg ? "w-16 h-16" : "w-12 h-12"} rounded-full object-cover cursor-pointer transition-transform duration-150 group-hover/player:scale-[1.02]`}
+            className={`${isLg ? "w-16 h-16 min-w-16 min-h-16" : "w-12 h-12 min-w-12 min-h-12"} shrink-0 aspect-square rounded-full object-cover cursor-pointer transition-transform duration-150 group-hover/player:scale-[1.02]`}
           />
         </Link>
       ) : (
@@ -67,7 +67,7 @@ export default function PlayerCard({
               ? "Send url image to Nigel to update this pic!"
               : undefined
           }
-          className={`${isLg ? "w-16 h-16" : "w-12 h-12"} rounded-full object-cover`}
+          className={`${isLg ? "w-16 h-16 min-w-16 min-h-16" : "w-12 h-12 min-w-12 min-h-12"} shrink-0 aspect-square rounded-full object-cover`}
         />
       )}
       <div>
