@@ -56,7 +56,8 @@
 - Keep changes minimal and scoped; avoid unrelated refactors.
 - Preserve null-safe handling for Supabase data.
 - After edits, check for TypeScript/compile errors.
-- On every code/content change in this repository, increment `WEBSITE_VERSION` in `src/app/page.tsx`.
+- Increment `WEBSITE_VERSION` in `src/app/page.tsx` only when there is a user-facing UI change.
+- Do not increment `WEBSITE_VERSION` for non-UI changes (scripts, SQL, docs, backend-only logic).
 
 ## Next.js Note
 

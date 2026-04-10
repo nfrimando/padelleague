@@ -425,7 +425,7 @@ function PlayersPageContent() {
               .sort((a, b) => b.count - a.count)
               .slice(0, 3);
 
-            const seasons = filteredMatches
+            const seasons = playerMatches
               .map((m) => m.season)
               .filter((s): s is number => s !== null)
               .map((s) => Number(s))
