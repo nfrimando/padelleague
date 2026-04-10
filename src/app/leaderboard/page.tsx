@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
 import MatchFiltersCard from "@/components/MatchFiltersCard";
@@ -38,7 +38,7 @@ const TYPE_FILTER_OPTIONS = [
   },
 ] as const;
 
-export default function LeaderboardPage() {
+function LeaderboardPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -490,5 +490,19 @@ export default function LeaderboardPage() {
         )}
       </div>
     </>
+  );
+}
+
+export default function LeaderboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 max-w-4xl mx-auto text-sm text-slate-500">
+          Loading leaderboard...
+        </div>
+      }
+    >
+      <LeaderboardPageContent />
+    </Suspense>
   );
 }
