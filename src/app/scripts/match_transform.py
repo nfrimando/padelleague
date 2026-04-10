@@ -88,6 +88,7 @@ for _, row in df.iterrows():
     # --- MATCHES ---
     matches.append({
         "match_id": match_id,
+        "season": row.get("season"),
         "date_local": date_local,
         "time_local": time_local,
         "venue": row.get("venue"),
