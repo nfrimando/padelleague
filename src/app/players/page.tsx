@@ -329,10 +329,20 @@ function PlayersPageContent() {
               const nextValue = e.target.value;
               setSearch(nextValue);
 
+              // If search no longer matches selected player, clear the URL param
+              if (
+                selectedPlayer &&
+                nextValue.trim().toLowerCase() !==
+                  String(selectedPlayer.name || "")
+                    .trim()
+                    .toLowerCase()
+              ) {
+                updatePlayerParam(null);
+              }
+
               // Keep current selection mounted while typing to avoid layout shifts.
               if (!nextValue.trim()) {
                 setSelectedPlayer(null);
-                updatePlayerParam(null);
               }
             }}
           />
