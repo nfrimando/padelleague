@@ -11,7 +11,6 @@
 - Keep `/` as a lightweight navigation page.
 - Use `/players` for player search, profile stats, and filtered match history.
 - Use `/leaderboard` for ranking and season/type filtering.
-- Do not reintroduce `/matches` unless explicitly requested.
 
 ## Filter and URL State
 
