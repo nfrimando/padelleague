@@ -80,7 +80,6 @@ function LeaderboardPageContent() {
 
       if (uniqueSeasons.length > 0) {
         setSeasons(uniqueSeasons);
-        setSeasonFilter(uniqueSeasons[uniqueSeasons.length - 1]);
       }
 
       if (uniqueSeasons.length === 0) {
