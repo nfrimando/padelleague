@@ -56,6 +56,7 @@
 - Keep changes minimal and scoped; avoid unrelated refactors.
 - Preserve null-safe handling for Supabase data.
 - After edits, check for TypeScript/compile errors.
+- On every code/content change in this repository, increment `WEBSITE_VERSION` in `src/app/page.tsx`.
 
 ## Next.js Note
 

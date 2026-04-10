@@ -2,6 +2,8 @@
 import Link from "next/link";
 import Image from "next/image";
 
+const WEBSITE_VERSION = "v0.0.2";
+
 export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 font-sans">
@@ -39,6 +41,10 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="fixed bottom-3 right-3 text-[11px] text-gray-500 dark:text-gray-400">
+        {WEBSITE_VERSION}
       </div>
     </div>
   );
