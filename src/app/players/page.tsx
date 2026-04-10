@@ -294,31 +294,37 @@ function PlayersPageContent() {
           />
 
           {/* Dropdown */}
-          {filtered.length > 0 && search.trim().length > 0 && (
-            <div className="absolute left-0 right-0 top-full mt-2 z-50 border rounded shadow bg-white dark:bg-slate-900">
-              {filtered.slice(0, 5).map((player) => (
-                <div
-                  key={player.player_id}
-                  className="px-3 py-2 cursor-pointer hover:bg-gray-700 bg-gray-800 text-white"
-                  onClick={() => {
-                    setSelectedPlayer(player);
-                    setSearch(player.name);
-                    setFiltered([]);
-                    updatePlayerParam(player.player_id);
-                  }}
-                >
-                  <div>
-                    <div className="font-medium">{player.name}</div>
-                    {player.nickname && (
-                      <div className="text-sm text-gray-500">
-                        {player.nickname}
-                      </div>
-                    )}
+          {filtered.length > 0 &&
+            search.trim().length > 0 &&
+            (!selectedPlayer ||
+              search.trim().toLowerCase() !==
+                String(selectedPlayer.name || "")
+                  .trim()
+                  .toLowerCase()) && (
+              <div className="absolute left-0 right-0 top-full mt-2 z-50 border rounded shadow bg-white dark:bg-slate-900">
+                {filtered.slice(0, 5).map((player) => (
+                  <div
+                    key={player.player_id}
+                    className="px-3 py-2 cursor-pointer hover:bg-gray-700 bg-gray-800 text-white"
+                    onClick={() => {
+                      setSelectedPlayer(player);
+                      setSearch(player.name);
+                      setFiltered([]);
+                      updatePlayerParam(player.player_id);
+                    }}
+                  >
+                    <div>
+                      <div className="font-medium">{player.name}</div>
+                      {player.nickname && (
+                        <div className="text-sm text-gray-500">
+                          {player.nickname}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
         </div>
 
         {/* Selected Player Details */}
