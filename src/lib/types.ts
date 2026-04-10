@@ -17,6 +17,7 @@ export type TeamWithPlayers = {
 export type MatchWithTeams = {
   match_id: number;
   created_at: string;
+  season: number | null;
   date_local: string | null;
   time_local: string | null;
   venue: string | null;

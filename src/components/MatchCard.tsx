@@ -77,6 +77,11 @@ export default function MatchCard({
           {(match.type || "Match").charAt(0).toUpperCase() +
             (match.type || "Match").slice(1)}
         </span>
+        {match.season !== null && (
+          <span className="text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 rounded-full">
+            Season {match.season}
+          </span>
+        )}
         <span className="text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
           Match #{match.match_id}
         </span>
