@@ -263,7 +263,19 @@ function PlayersPageContent() {
           return;
         }
 
-        // Combine matches with teams
+        // Get all match sets for these matches
+        const { data: matchSetsData, error: matchSetsError } = await supabase
+          .from("match_sets")
+          .select("*")
+          .in("match_id", matchIds)
+          .order("set_number", { ascending: true });
+
+        if (matchSetsError) {
+          console.error("Error fetching match sets:", matchSetsError);
+          // Continue without sets data (not critical)
+        }
+
+        // Combine matches with teams and sets
         const matches: MatchWithTeams[] = (matchesData || []).map((m) => ({
           ...m,
           teams: (allTeamsData || [])
@@ -275,6 +287,7 @@ function PlayersPageContent() {
               player_1: t.player_1 || null,
               player_2: t.player_2 || null,
             })),
+          sets: (matchSetsData || []).filter((s) => s.match_id === m.match_id),
         }));
 
         if (!isCancelled) {
