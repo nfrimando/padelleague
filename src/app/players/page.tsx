@@ -208,6 +208,8 @@ function PlayersPageContent() {
       return;
     }
 
+    let isCancelled = false;
+
     async function fetchPlayerMatches() {
       setLoadingMatches(true);
 
@@ -275,16 +277,26 @@ function PlayersPageContent() {
             })),
         }));
 
-        setPlayerMatches(matches);
+        if (!isCancelled) {
+          setPlayerMatches(matches);
+        }
       } catch (error) {
         console.error("Error fetching player matches:", error);
-        setPlayerMatches([]);
+        if (!isCancelled) {
+          setPlayerMatches([]);
+        }
       } finally {
-        setLoadingMatches(false);
+        if (!isCancelled) {
+          setLoadingMatches(false);
+        }
       }
     }
 
     fetchPlayerMatches();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [selectedPlayer]);
 
   return (
