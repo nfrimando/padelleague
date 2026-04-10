@@ -1,13 +1,21 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import MatchCard from "@/components/MatchCard";
 import BackToHome from "@/components/BackToHome";
+import MatchFiltersCard from "@/components/MatchFiltersCard";
 import PlayerCard from "@/components/PlayerCard";
 import { Player, MatchWithTeams } from "@/lib/types";
+
+const ALL_FILTER = "ALL";
+const TYPE_FILTER_OPTIONS = [
+  { value: "ALL", label: "ALL" },
+  { value: "SEASON", label: "SEASON" },
+  { value: "DUEL_KOTC", label: "DUEL/KOTC" },
+] as const;
 
 function PlayersPageContent() {
   const router = useRouter();
@@ -18,7 +26,46 @@ function PlayersPageContent() {
   const [filtered, setFiltered] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [playerMatches, setPlayerMatches] = useState<MatchWithTeams[]>([]);
+  const [seasonFilter, setSeasonFilter] = useState<number | "ALL">(ALL_FILTER);
+  const [selectedTypeFilter, setSelectedTypeFilter] =
+    useState<string>(ALL_FILTER);
   const [loadingMatches, setLoadingMatches] = useState(false);
+
+  const seasonOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        playerMatches
+          .map((match) => match.season)
+          .filter((season): season is number => season !== null)
+          .map((season) => Number(season))
+          .filter((season) => !Number.isNaN(season)),
+      ),
+    ).sort((a, b) => b - a);
+  }, [playerMatches]);
+
+  const filteredMatches = useMemo(() => {
+    return playerMatches.filter((match) => {
+      if (seasonFilter !== ALL_FILTER && match.season !== seasonFilter) {
+        return false;
+      }
+
+      if (selectedTypeFilter === "ALL") {
+        return true;
+      }
+
+      const matchType = String(match.type || "").toLowerCase();
+
+      if (selectedTypeFilter === "SEASON") {
+        return ["group", "semis", "finals"].includes(matchType);
+      }
+
+      if (selectedTypeFilter === "DUEL_KOTC") {
+        return ["duel", "kotc"].includes(matchType);
+      }
+
+      return true;
+    });
+  }, [playerMatches, seasonFilter, selectedTypeFilter]);
 
   const updatePlayerParam = (playerId: string | number | null) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -99,6 +146,9 @@ function PlayersPageContent() {
       setPlayerMatches([]);
       return;
     }
+
+    setSeasonFilter(ALL_FILTER);
+    setSelectedTypeFilter(ALL_FILTER);
 
     async function fetchPlayerMatches() {
       setLoadingMatches(true);
@@ -185,52 +235,59 @@ function PlayersPageContent() {
       <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Player Search</h1>
 
-        {/* Input */}
-        <input
-          type="text"
-          placeholder="Type player name..."
-          className="w-full border px-3 py-2 rounded"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setSelectedPlayer(null);
-            updatePlayerParam(null);
-          }}
-        />
+        <div className="relative">
+          {/* Input */}
+          <input
+            type="text"
+            placeholder="Type player name..."
+            className="w-full border px-3 py-2 rounded"
+            value={search}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setSearch(nextValue);
 
-        {/* Dropdown */}
-        {filtered.length > 0 && !selectedPlayer && (
-          <div className="border mt-2 rounded shadow bg-white">
-            {filtered.slice(0, 5).map((player) => (
-              <div
-                key={player.player_id}
-                className="px-3 py-2 cursor-pointer hover:bg-gray-700 bg-gray-800 text-white"
-                onClick={() => {
-                  setSelectedPlayer(player);
-                  setSearch(player.name);
-                  setFiltered([]);
-                  updatePlayerParam(player.player_id);
-                }}
-              >
-                <div>
-                  <div className="font-medium">{player.name}</div>
-                  {player.nickname && (
-                    <div className="text-sm text-gray-500">
-                      {player.nickname}
-                    </div>
-                  )}
+              // Keep current selection mounted while typing to avoid layout shifts.
+              if (!nextValue.trim()) {
+                setSelectedPlayer(null);
+                updatePlayerParam(null);
+              }
+            }}
+          />
+
+          {/* Dropdown */}
+          {filtered.length > 0 && search.trim().length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-2 z-50 border rounded shadow bg-white dark:bg-slate-900">
+              {filtered.slice(0, 5).map((player) => (
+                <div
+                  key={player.player_id}
+                  className="px-3 py-2 cursor-pointer hover:bg-gray-700 bg-gray-800 text-white"
+                  onClick={() => {
+                    setSelectedPlayer(player);
+                    setSearch(player.name);
+                    setFiltered([]);
+                    updatePlayerParam(player.player_id);
+                  }}
+                >
+                  <div>
+                    <div className="font-medium">{player.name}</div>
+                    {player.nickname && (
+                      <div className="text-sm text-gray-500">
+                        {player.nickname}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Selected Player Details */}
         {selectedPlayer &&
           (() => {
-            const matchCount = playerMatches.length;
+            const matchCount = filteredMatches.length;
             const selectedPlayerId = String(selectedPlayer.player_id);
-            const winCount = playerMatches.filter((m) => {
+            const winCount = filteredMatches.filter((m) => {
               const playerTeam = m.teams.find(
                 (t) =>
                   String(t.player_1?.player_id) === selectedPlayerId ||
@@ -249,7 +306,7 @@ function PlayersPageContent() {
               }
             >();
 
-            playerMatches.forEach((m) => {
+            filteredMatches.forEach((m) => {
               const playerTeam = m.teams.find(
                 (t) =>
                   String(t.player_1?.player_id) === selectedPlayerId ||
@@ -292,7 +349,7 @@ function PlayersPageContent() {
               .sort((a, b) => b.count - a.count)
               .slice(0, 3);
 
-            const seasons = playerMatches
+            const seasons = filteredMatches
               .map((m) => m.season)
               .filter((s): s is number => s !== null)
               .map((s) => Number(s))
@@ -405,24 +462,44 @@ function PlayersPageContent() {
         <div className="mt-8">
           <div className="max-w-xl mx-auto px-6 mb-4">
             <h2 className="text-xl font-bold">Matches</h2>
+            <div className="mt-3">
+              <MatchFiltersCard
+                seasonFilter={seasonFilter}
+                seasons={seasonOptions}
+                selectedTypeFilter={selectedTypeFilter}
+                typeFilterOptions={TYPE_FILTER_OPTIONS}
+                onSeasonChange={(value) => setSeasonFilter(value)}
+                onTypeChange={(value) => setSelectedTypeFilter(value)}
+              />
+            </div>
           </div>
-          {loadingMatches ? (
-            <div className="text-center py-8">Loading matches...</div>
-          ) : playerMatches.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No matches found for this player.
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {playerMatches.map((match) => (
-                <MatchCard
-                  key={match.match_id}
-                  match={match}
-                  highlightPlayerId={selectedPlayer?.player_id}
-                />
-              ))}
-            </div>
-          )}
+          <div className="relative min-h-[220px]">
+            {loadingMatches && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-[1px]">
+                <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Loading matches...
+                </div>
+              </div>
+            )}
+
+            {filteredMatches.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No matches found for this player with the selected filters.
+              </div>
+            ) : (
+              <div
+                className={`space-y-6 ${loadingMatches ? "opacity-70" : ""}`}
+              >
+                {filteredMatches.map((match) => (
+                  <MatchCard
+                    key={match.match_id}
+                    match={match}
+                    highlightPlayerId={selectedPlayer?.player_id}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </>

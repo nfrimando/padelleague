@@ -5,11 +5,12 @@ A lightweight Next.js app for tracking Padel league players and matches in the P
 ## What it does
 
 - Home page with quick navigation to the main sections
-- Players page with player search and profile details
-- Matches page showing recent matches and team lineups
+- Players page with player search, profile stats, and filtered match history
+- Leaderboard page powered by Supabase RPC (`get_leaderboard`)
 - Shared match card component for consistent match display
+- Shared `MatchFiltersCard` component used by players and leaderboard pages
 - Supports Supabase as the backend/data source
-- Includes a simple CSV transform script for importing player data
+- Includes CSV transform + refresh scripts for importing players and matches
 
 ## Local setup
 
@@ -99,5 +100,5 @@ python3 src/app/scripts/match_transform.py
 ## Notes
 
 - The app uses Tailwind CSS for styling and Next.js 16 for routing.
-- Match and player pages are designed for quick access and consistent UI.
-- If you want to add more pages, reuse the `MatchCard` component for the same match layout.
+- Players and leaderboard use shared match filters (season/type, default `ALL`).
+- Loading states are rendered as overlays to keep layouts stable while data refreshes.
