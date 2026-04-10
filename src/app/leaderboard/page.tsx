@@ -11,12 +11,15 @@ type LeaderboardRow = {
   name: string;
   matches_played: number;
   wins: number;
+  sets_won: number;
+  sets_lost: number;
   win_rate: number;
 };
 
 const ALL_TYPES = "ALL";
 const ALL_SEASONS = "ALL";
 const MIN_MATCHES = 5;
+const MAX_LEADERBOARD_ROWS = 20;
 
 export default function LeaderboardPage() {
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
@@ -106,18 +109,23 @@ export default function LeaderboardPage() {
           name: row.name || "Unknown",
           matches_played: Number(row.matches_played || 0),
           wins: Number(row.wins || 0),
+          sets_won: Number(row.sets_won || 0),
+          sets_lost: Number(row.sets_lost || 0),
           win_rate: Number(row.win_rate || 0),
         }))
         .filter((row: LeaderboardRow) => row.matches_played >= MIN_MATCHES);
 
       normalized.sort((a: LeaderboardRow, b: LeaderboardRow) => {
-        if (b.win_rate !== a.win_rate) {
-          return b.win_rate - a.win_rate;
-        }
         if (b.matches_played !== a.matches_played) {
           return b.matches_played - a.matches_played;
         }
-        return b.wins - a.wins;
+        if (b.wins !== a.wins) {
+          return b.wins - a.wins;
+        }
+        if (b.sets_won !== a.sets_won) {
+          return b.sets_won - a.sets_won;
+        }
+        return a.sets_lost - b.sets_lost;
       });
 
       const topTenIds = normalized
@@ -160,7 +168,9 @@ export default function LeaderboardPage() {
     if (
       previousRow &&
       row.matches_played === previousRow.matches_played &&
-      row.wins === previousRow.wins
+      row.wins === previousRow.wins &&
+      row.sets_won === previousRow.sets_won &&
+      row.sets_lost === previousRow.sets_lost
     ) {
       // Keep the same rank when matches and wins are tied.
     } else {
@@ -170,6 +180,25 @@ export default function LeaderboardPage() {
     previousRow = row;
     return { ...row, rank: currentRank };
   });
+
+  const rankedRowsWithTop20Ties = (() => {
+    if (rankedRows.length <= MAX_LEADERBOARD_ROWS) {
+      return rankedRows;
+    }
+
+    const baseRows = rankedRows.slice(0, MAX_LEADERBOARD_ROWS);
+    const boundary = baseRows[baseRows.length - 1];
+    const extraTies = rankedRows.slice(MAX_LEADERBOARD_ROWS).filter((row) => {
+      return (
+        row.matches_played === boundary.matches_played &&
+        row.wins === boundary.wins &&
+        row.sets_won === boundary.sets_won &&
+        row.sets_lost === boundary.sets_lost
+      );
+    });
+
+    return [...baseRows, ...extraTies];
+  })();
 
   return (
     <>
@@ -241,39 +270,47 @@ export default function LeaderboardPage() {
                   <th className="text-left px-4 py-3">Player</th>
                   <th className="text-right px-4 py-3">Matches</th>
                   <th className="text-right px-4 py-3">Wins</th>
+                  <th className="text-right px-4 py-3">Sets Won</th>
+                  <th className="text-right px-4 py-3">Sets Lost</th>
                   <th className="text-right px-4 py-3">Win Rate</th>
                 </tr>
               </thead>
               <tbody>
-                {rankedRows.map((row, index) => (
+                {rankedRowsWithTop20Ties.map((row, index) => (
                   <tr
                     key={row.player_id}
-                    className="border-t border-slate-200 dark:border-slate-700"
+                    className={`border-t border-slate-200 dark:border-slate-700 ${
+                      row.rank === 1
+                        ? "bg-amber-50 dark:bg-amber-900/20"
+                        : ""
+                    }`}
                   >
                     <td className="px-4 py-3 font-semibold">#{row.rank}</td>
                     <td className="px-4 py-3">
-                      {index < 10 ? (
-                        <PlayerCard
-                          player={
-                            topPlayersById.get(row.player_id) || {
-                              player_id: String(row.player_id),
-                              name: row.name,
-                              nickname: "-",
-                              image_link: null,
+                      <div className="flex items-center gap-2">
+                        {index < 10 ? (
+                          <PlayerCard
+                            player={
+                              topPlayersById.get(row.player_id) || {
+                                player_id: String(row.player_id),
+                                name: row.name,
+                                nickname: "-",
+                                image_link: null,
+                              }
                             }
-                          }
-                        />
-                      ) : (
-                        row.name
-                      )}
+                          />
+                        ) : (
+                          row.name
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {index < 10 ? (
-                        <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-3 py-1">
-                          <span className="text-[10px] uppercase tracking-wide opacity-70">
-                            MP
+                        <div className="inline-flex flex-col items-end leading-tight">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Matches
                           </span>
-                          <span className="text-sm font-semibold">
+                          <span className="text-base font-semibold bg-gradient-to-r from-slate-700 to-slate-500 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
                             {row.matches_played}
                           </span>
                         </div>
@@ -283,11 +320,11 @@ export default function LeaderboardPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       {index < 10 ? (
-                        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white dark:bg-emerald-500 px-3 py-1">
-                          <span className="text-[10px] uppercase tracking-wide opacity-80">
-                            W
+                        <div className="inline-flex flex-col items-end leading-tight">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Wins
                           </span>
-                          <span className="text-sm font-semibold">
+                          <span className="text-base font-semibold bg-gradient-to-r from-emerald-600 to-lime-500 dark:from-emerald-400 dark:to-lime-300 bg-clip-text text-transparent">
                             {row.wins}
                           </span>
                         </div>
@@ -295,13 +332,41 @@ export default function LeaderboardPage() {
                         row.wins
                       )}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      {index < 10 ? (
+                        <div className="inline-flex flex-col items-end leading-tight">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Sets Won
+                          </span>
+                          <span className="text-base font-semibold bg-gradient-to-r from-indigo-600 to-violet-500 dark:from-indigo-400 dark:to-violet-300 bg-clip-text text-transparent">
+                            {row.sets_won}
+                          </span>
+                        </div>
+                      ) : (
+                        row.sets_won
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {index < 10 ? (
+                        <div className="inline-flex flex-col items-end leading-tight">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Sets Lost
+                          </span>
+                          <span className="text-base font-semibold bg-gradient-to-r from-rose-600 to-orange-500 dark:from-rose-400 dark:to-orange-300 bg-clip-text text-transparent">
+                            {row.sets_lost}
+                          </span>
+                        </div>
+                      ) : (
+                        row.sets_lost
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right font-medium">
                       {index < 10 ? (
-                        <div className="inline-flex items-center gap-2 rounded-full bg-amber-500 text-slate-900 px-3 py-1">
-                          <span className="text-[10px] uppercase tracking-wide opacity-80">
-                            WR
+                        <div className="inline-flex flex-col items-end leading-tight">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Win Rate
                           </span>
-                          <span className="text-sm font-semibold">
+                          <span className="text-base font-semibold bg-gradient-to-r from-amber-500 to-yellow-400 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent">
                             {(row.win_rate * 100).toFixed(1)}%
                           </span>
                         </div>
