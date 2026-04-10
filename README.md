@@ -74,6 +74,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - `src/app/scripts/leaderboard.sql`
   - Creates/updates the `get_leaderboard(season_filter, type_filter)` SQL function in Supabase.
   - Used by the leaderboard page via Supabase RPC.
+  - Run this command to apply it:
+
+```bash
+psql "$SUPABASE_DB_URL" -f src/app/scripts/leaderboard.sql
+```
 
 ## CSV import helpers
 
