@@ -14,6 +14,13 @@ export type TeamWithPlayers = {
   player_2: Player | null;
 };
 
+export type MatchSet = {
+  match_id: number;
+  set_number: number;
+  team_1_games: number;
+  team_2_games: number;
+};
+
 export type MatchWithTeams = {
   match_id: number;
   created_at: string;
@@ -25,4 +32,5 @@ export type MatchWithTeams = {
   winner_team: number | null;
   is_forfeit: boolean;
   teams: TeamWithPlayers[];
+  sets?: MatchSet[];
 };

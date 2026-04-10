@@ -103,12 +103,20 @@ export default function MatchCard({
             />
 
             <div className="flex flex-col items-center justify-center px-3">
-              <div className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
-                VS
-              </div>
-              <div className="text-lg font-bold text-slate-700 dark:text-slate-300">
+              <div className="text-lg font-bold text-blue-600 dark:text-blue-400 mb-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 rounded">
                 {team1?.sets_won ?? 0} - {team2?.sets_won ?? 0}
               </div>
+              <div className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                VS
+              </div>
+              {/* Game Scores */}
+              {match.sets && match.sets.length > 0 && (
+                <div className="text-xs text-slate-600 dark:text-slate-400">
+                  {match.sets
+                    .map((set) => `${set.team_1_games}-${set.team_2_games}`)
+                    .join(", ")}
+                </div>
+              )}
             </div>
 
             {/* Team 2 */}
