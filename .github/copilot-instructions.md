@@ -20,6 +20,11 @@
   - Leaderboard: URL-driven, with safe fallback behavior
 - Persist filter state in query params (`season`, `type`) without dropping existing params.
 - Preserve `playerId` query behavior on `/players`.
+- Prevent URL/state races on same-route updates:
+  - Use `searchParams.toString()` as the source of truth for read/write effects.
+  - Parse query params from that string in effects instead of mixing direct `searchParams.get(...)` reads.
+  - When linking to another player on `/players`, preserve existing query params and only replace `playerId`.
+  - Do not set eager default filters that can overwrite explicit URL params during initial load.
 
 ## UX Conventions
 
