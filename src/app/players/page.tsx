@@ -283,50 +283,74 @@ function PlayersPageContent() {
               .sort((a, b) => b.count - a.count)
               .slice(0, 3);
 
+            const seasons = playerMatches
+              .map((m) => m.season)
+              .filter((s): s is number => s !== null)
+              .map((s) => Number(s))
+              .filter((s) => !Number.isNaN(s));
+
+            const firstSeason =
+              seasons.length > 0 ? Math.min(...seasons) : null;
+            const lastSeason = seasons.length > 0 ? Math.max(...seasons) : null;
+
             return (
               <div className="mt-6 border p-4 rounded">
                 <PlayerCard player={selectedPlayer} size="lg" />
                 {!loadingMatches && matchCount > 0 && (
-                  <div className="mt-4 pt-3 border-t flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
-                    <div className="flex-1">
-                      <div className="flex gap-6">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                            {matchCount}
-                          </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
-                            Matches
-                          </div>
+                  <div className="mt-4 pt-3 border-t space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                          {matchCount}
                         </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                            {winCount}
-                          </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
-                            Wins
-                          </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Matches
                         </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                            {matchCount - winCount}
-                          </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
-                            Losses
-                          </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                          {winCount}
                         </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                            {Math.round((winCount / matchCount) * 100)}%
-                          </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
-                            Win Rate
-                          </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Wins
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                          {matchCount - winCount}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Losses
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                          {Math.round((winCount / matchCount) * 100)}%
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Win Rate
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                          {firstSeason ?? "N/A"}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          First Season
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                          {lastSeason ?? "N/A"}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Last Season
                         </div>
                       </div>
                     </div>
 
-                    <div className="md:w-64 md:border-l md:pl-4">
-                      <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2">
+                    <div className="border-t pt-3">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-2">
                         Most Played Partners
                       </div>
                       {topPartners.length === 0 ? (
@@ -334,18 +358,17 @@ function PlayersPageContent() {
                           No partner data available.
                         </div>
                       ) : (
-                        <div className="space-y-1">
+                        <div className="flex flex-wrap gap-2">
                           {topPartners.map((partner) => (
                             <div
                               key={`${partner.name}-${partner.nickname || ""}`}
-                              className="flex items-center justify-between text-sm"
+                              className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs"
                             >
                               <span className="text-slate-700 dark:text-slate-200">
                                 {partner.name}
                               </span>
                               <span className="text-slate-500 dark:text-slate-400">
-                                {partner.count} match
-                                {partner.count > 1 ? "es" : ""}
+                                {partner.count}x
                               </span>
                             </div>
                           ))}
