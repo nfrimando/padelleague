@@ -45,7 +45,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - `src/lib/` — helper utilities and Supabase client setup
 - `data/inputs/` — input CSV files for data transformation
 - `data/outputs/` — generated CSV output files from the transform script
-- `src/app/scripts/player_transform.py` — CSV transformer for `dim_players.csv`
+- `src/app/scripts/` — SQL and Python scripts for data transforms and Supabase refresh
 
 ## Scripts
 
@@ -54,7 +54,28 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - `npm run start` — start the production server after build
 - `npm run lint` — run ESLint
 
-## CSV import helper
+## Data scripts
+
+- `src/app/scripts/player_transform.py`
+  - Transforms `data/inputs/dim_players.csv` into `data/outputs/dim_players_fixed.csv`.
+  - Cleans name/nickname/image fields and prepares player data for import.
+
+- `src/app/scripts/match_transform.py`
+  - Transforms `data/inputs/fact_matches.csv` into:
+    - `data/outputs/matches_fixed.csv`
+    - `data/outputs/match_teams_fixed.csv`
+  - Maps player names/nicknames to Supabase `player_id` values and formats match fields.
+
+- `src/app/scripts/refresh_supabase_from_outputs.py`
+  - Performs a full refresh of Supabase tables from the output CSV files.
+  - Reloads tables in this order: `players`, `matches`, `match_teams`.
+  - Resets identities/sequences after import.
+
+- `src/app/scripts/leaderboard.sql`
+  - Creates/updates the `get_leaderboard(season_filter, type_filter)` SQL function in Supabase.
+  - Used by the leaderboard page via Supabase RPC.
+
+## CSV import helpers
 
 To transform the player import CSV, place `dim_players.csv` into `data/inputs/` and run:
 
@@ -63,6 +84,12 @@ python3 src/app/scripts/player_transform.py
 ```
 
 The script writes a fixed output file to `data/outputs/dim_players_fixed.csv`.
+
+To transform match and match team data, run:
+
+```bash
+python3 src/app/scripts/match_transform.py
+```
 
 ## Notes
 
