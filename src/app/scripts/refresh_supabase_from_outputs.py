@@ -17,6 +17,7 @@ OUTPUT_DIR = BASE_DIR / "data" / "outputs"
 PLAYERS_CSV = OUTPUT_DIR / "dim_players_fixed.csv"
 MATCHES_CSV = OUTPUT_DIR / "matches_fixed.csv"
 MATCH_TEAMS_CSV = OUTPUT_DIR / "match_teams_fixed.csv"
+MATCH_SETS_CSV = OUTPUT_DIR / "match_sets_fixed.csv"
 
 
 def log(message: str) -> None:
@@ -62,7 +63,7 @@ def ensure_files_exist() -> None:
     log("Checking required output CSV files")
     missing = [
         str(path)
-        for path in (PLAYERS_CSV, MATCHES_CSV, MATCH_TEAMS_CSV)
+        for path in (PLAYERS_CSV, MATCHES_CSV, MATCH_TEAMS_CSV, MATCH_SETS_CSV)
         if not path.exists()
     ]
     if missing:
@@ -166,6 +167,31 @@ def read_match_teams() -> list[tuple[int, int, int | None, int | None, int | Non
     return rows
 
 
+def read_match_sets() -> list[tuple[int, int, int, int]]:
+    log(f"Reading match sets CSV: {MATCH_SETS_CSV}")
+    rows: list[tuple[int, int, int, int]] = []
+    with MATCH_SETS_CSV.open("r", encoding="utf-8", newline="") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            match_id = clean_int(row.get("match_id"))
+            set_number = clean_int(row.get("set_number"))
+            team_1_games = clean_int(row.get("team_1_games"))
+            team_2_games = clean_int(row.get("team_2_games"))
+
+            if (
+                match_id is None
+                or set_number is None
+                or team_1_games is None
+                or team_2_games is None
+            ):
+                continue
+
+            rows.append((match_id, set_number, team_1_games, team_2_games))
+
+    log(f"Prepared {len(rows)} match_set rows")
+    return rows
+
+
 def reset_sequences(cursor) -> None:
     log("Resetting sequences for players.player_id and matches.match_id")
     cursor.execute(
@@ -195,15 +221,16 @@ def main() -> None:
     players = read_players()
     matches = read_matches()
     match_teams = read_match_teams()
+    match_sets = read_match_sets()
 
     database_url = get_database_url()
 
     log("Connecting to database")
     with psycopg.connect(database_url) as conn:
         with conn.cursor() as cursor:
-            log("Truncating tables: match_teams, matches, players")
+            log("Truncating tables: match_sets, match_teams, matches, players")
             cursor.execute(
-                "TRUNCATE TABLE match_teams, matches, players RESTART IDENTITY CASCADE"
+                "TRUNCATE TABLE match_sets, match_teams, matches, players RESTART IDENTITY CASCADE"
             )
 
             log("Inserting players rows")
@@ -248,6 +275,20 @@ def main() -> None:
                 match_teams,
             )
 
+            log("Inserting match_sets rows")
+            cursor.executemany(
+                """
+                INSERT INTO match_sets (
+                    match_id,
+                    set_number,
+                    team_1_games,
+                    team_2_games
+                )
+                VALUES (%s, %s, %s, %s)
+                """,
+                match_sets,
+            )
+
             reset_sequences(cursor)
 
         log("Committing transaction")
@@ -257,6 +298,7 @@ def main() -> None:
     log(f"Players loaded: {len(players)}")
     log(f"Matches loaded: {len(matches)}")
     log(f"Match teams loaded: {len(match_teams)}")
+    log(f"Match sets loaded: {len(match_sets)}")
 
 
 if __name__ == "__main__":
