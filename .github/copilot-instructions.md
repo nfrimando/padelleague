@@ -41,6 +41,20 @@
 - Keep top-level page files focused on data fetching/state orchestration.
 - Extract reusable UI into `src/components`.
 
+## Shared Hooks And Domain Logic
+
+- When the same player or match behavior is used in more than one place, prefer extracting a shared hook or helper in `src/lib` rather than duplicating page-local effects.
+- Reuse the existing shared search/fetch patterns before writing new ones:
+  - `src/components/PlayerSearchBox.tsx`
+  - `src/lib/usePlayerSearch.ts`
+  - `src/lib/usePlayers.ts`
+- Reuse the existing shared match-domain patterns before adding page-local match logic:
+  - `src/lib/matches.ts`
+  - `src/lib/usePlayerMatches.ts`
+  - `src/lib/useMatchSeasons.ts`
+  - `src/lib/useLeaderboardData.ts`
+- Prefer top-level pages to orchestrate URL state and rendering while shared hooks own Supabase fetch, aggregation, and normalization logic.
+
 ## Data and Scripts
 
 - CSV/data scripts live in `src/app/scripts/`.
