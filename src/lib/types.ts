@@ -9,6 +9,7 @@ export type Player = {
   latest_rating_formula?: string | null;
   latest_match_date?: string | null;
   created_at?: string;
+  updated_at?: string;
 };
 
 export type TeamWithPlayers = {
