@@ -140,9 +140,16 @@ function PlayersPageContent() {
 
     if (playerId) {
       params.set("playerId", String(playerId));
+      // Clear legacy player-name query params so URL state stays canonical.
+      params.delete("name");
+      params.delete("playerName");
+      params.delete("playername");
     } else {
       params.delete("playerId");
       params.delete("playerid");
+      params.delete("name");
+      params.delete("playerName");
+      params.delete("playername");
     }
 
     const nextUrl = params.toString()
@@ -229,7 +236,7 @@ function PlayersPageContent() {
     );
     setSearch(matchedPlayer.name || "");
     setFiltered([]);
-  }, [players, searchParamsString, selectedPlayer]);
+  }, [players, searchParamsString]);
 
   // Fetch matches for selected player
   useEffect(() => {
