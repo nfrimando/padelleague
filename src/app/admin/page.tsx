@@ -1,20 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import BackToHome from "@/components/BackToHome";
+import PlayerSearchBox from "@/components/PlayerSearchBox";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
+import { usePlayerSearch } from "@/lib/usePlayerSearch";
+import { usePlayers } from "@/lib/usePlayers";
 
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [playersLoading, setPlayersLoading] = useState(false);
-  const [playersError, setPlayersError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [filtered, setFiltered] = useState<Player[]>([]);
-  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [editName, setEditName] = useState("");
   const [editNickname, setEditNickname] = useState("");
@@ -24,6 +23,13 @@ export default function AdminPage() {
   const [savePlayerSuccess, setSavePlayerSuccess] = useState<string | null>(
     null,
   );
+  const {
+    players,
+    setPlayers,
+    loading: playersLoading,
+    error: playersError,
+  } = usePlayers({ enabled: isAdmin, orderByName: true });
+  const filtered = usePlayerSearch(players, search);
 
   useEffect(() => {
     let isMounted = true;
@@ -48,17 +54,24 @@ export default function AdminPage() {
 
     async function initSession() {
       const { data } = await supabase.auth.getUser();
+
       if (!isMounted) {
         return;
       }
 
       const nextEmail = data.user?.email ?? null;
+      const nextAvatarUrl =
+        (data.user?.user_metadata?.picture as string | undefined) ||
+        (data.user?.user_metadata?.avatar_url as string | undefined) ||
+        null;
       const nextIsAdmin = await resolveAdminStatus(data.user?.id);
+
       if (!isMounted) {
         return;
       }
 
       setEmail(nextEmail);
+      setAvatarUrl(nextAvatarUrl);
       setIsAdmin(nextIsAdmin);
       setLoading(false);
     }
@@ -68,18 +81,23 @@ export default function AdminPage() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
+      void (async () => {
         if (!isMounted) {
           return;
         }
 
         const nextEmail = session?.user?.email ?? null;
+        const nextAvatarUrl =
+          (session?.user?.user_metadata?.picture as string | undefined) ||
+          (session?.user?.user_metadata?.avatar_url as string | undefined) ||
+          null;
         const nextIsAdmin = await resolveAdminStatus(session?.user?.id);
         if (!isMounted) {
           return;
         }
 
         setEmail(nextEmail);
+        setAvatarUrl(nextAvatarUrl);
         setIsAdmin(nextIsAdmin);
         setLoading(false);
       })();
@@ -93,85 +111,17 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!isAdmin) {
-      setPlayers([]);
-      setFiltered([]);
       setSelectedPlayer(null);
       setSearch("");
-      setPlayersError(null);
+      setSavePlayerError(null);
+      setSavePlayerSuccess(null);
       return;
     }
-
-    let isMounted = true;
-
-    async function fetchPlayers() {
-      setPlayersLoading(true);
-      setPlayersError(null);
-
-      const { data, error } = await supabase
-        .from("players")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (error) {
-        setPlayersError(error.message || "Failed to load players");
-        setPlayers([]);
-      } else {
-        setPlayers(data || []);
-      }
-
-      setPlayersLoading(false);
-    }
-
-    fetchPlayers();
-
-    return () => {
-      isMounted = false;
-    };
   }, [isAdmin]);
-
-  useEffect(() => {
-    if (!search.trim()) {
-      setFiltered([]);
-      setActiveSuggestionIndex(-1);
-      return;
-    }
-
-    const query = search.trim().toLowerCase();
-    const next = players.filter((p) => {
-      return (
-        String(p.name || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(p.nickname || "")
-          .toLowerCase()
-          .includes(query)
-      );
-    });
-
-    setFiltered(next);
-    setActiveSuggestionIndex(-1);
-  }, [search, players]);
-
-  const visibleFiltered = useMemo(() => filtered.slice(0, 7), [filtered]);
-
-  const shouldShowDropdown =
-    search.trim().length > 0 &&
-    visibleFiltered.length > 0 &&
-    (!selectedPlayer ||
-      search.trim().toLowerCase() !==
-        String(selectedPlayer.name || "")
-          .trim()
-          .toLowerCase());
 
   const selectPlayerFromSearch = (player: Player) => {
     setSelectedPlayer(player);
     setSearch(player.name || "");
-    setFiltered([]);
-    setActiveSuggestionIndex(-1);
     setSavePlayerError(null);
     setSavePlayerSuccess(null);
   };
@@ -249,6 +199,7 @@ export default function AdminPage() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setEmail(null);
+    setAvatarUrl(null);
     setIsAdmin(false);
   };
 
@@ -268,7 +219,16 @@ export default function AdminPage() {
         ) : email ? (
           <div className="space-y-4">
             <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
-              <div>
+              <div className="flex items-center gap-3">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Google profile"
+                    className="h-10 w-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800" />
+                )}
                 <div className="text-sm text-slate-500 dark:text-slate-400">
                   Signed in as
                 </div>
@@ -287,16 +247,6 @@ export default function AdminPage() {
                 Admin: {isAdmin ? "Yes" : "No"}
               </div>
 
-              {isAdmin ? (
-                <div className="rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-                  Authenticated and authorized. You can use admin tools.
-                </div>
-              ) : (
-                <div className="rounded-md bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
-                  Authenticated but not authorized for admin tools.
-                </div>
-              )}
-
               <button
                 type="button"
                 onClick={handleSignOut}
@@ -312,87 +262,20 @@ export default function AdminPage() {
                   Player Lookup
                 </h2>
 
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search player by name or nickname..."
-                    className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-10 rounded"
-                    value={search}
-                    onKeyDown={(e) => {
-                      if (!shouldShowDropdown) {
-                        return;
-                      }
-
-                      if (e.key === "ArrowDown") {
-                        e.preventDefault();
-                        setActiveSuggestionIndex((prev) =>
-                          prev < visibleFiltered.length - 1 ? prev + 1 : 0,
-                        );
-                      }
-
-                      if (e.key === "ArrowUp") {
-                        e.preventDefault();
-                        setActiveSuggestionIndex((prev) =>
-                          prev > 0 ? prev - 1 : visibleFiltered.length - 1,
-                        );
-                      }
-
-                      if (e.key === "Enter" && activeSuggestionIndex >= 0) {
-                        e.preventDefault();
-                        const selected = visibleFiltered[activeSuggestionIndex];
-                        if (selected) {
-                          selectPlayerFromSearch(selected);
-                        }
-                      }
-                    }}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-
-                  {search.trim().length > 0 && (
-                    <button
-                      type="button"
-                      aria-label="Clear player search"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
-                      onClick={() => {
-                        setSearch("");
-                        setFiltered([]);
-                        setActiveSuggestionIndex(-1);
-                        setSelectedPlayer(null);
-                        setSavePlayerError(null);
-                        setSavePlayerSuccess(null);
-                      }}
-                    >
-                      ×
-                    </button>
-                  )}
-
-                  {shouldShowDropdown && (
-                    <div className="absolute left-0 right-0 top-full mt-2 z-50 border border-slate-200 dark:border-slate-700 rounded shadow bg-white dark:bg-slate-900">
-                      {visibleFiltered.map((player, index) => (
-                        <button
-                          key={player.player_id}
-                          type="button"
-                          className={`w-full text-left px-3 py-2 transition-colors ${
-                            index === activeSuggestionIndex
-                              ? "bg-slate-100 dark:bg-slate-800"
-                              : "hover:bg-slate-50 dark:hover:bg-slate-800/70"
-                          }`}
-                          onMouseEnter={() => setActiveSuggestionIndex(index)}
-                          onClick={() => selectPlayerFromSearch(player)}
-                        >
-                          <div className="font-medium text-slate-900 dark:text-slate-100">
-                            {player.name}
-                          </div>
-                          {player.nickname && (
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
-                              {player.nickname}
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <PlayerSearchBox
+                  value={search}
+                  suggestions={filtered}
+                  maxSuggestions={7}
+                  selectedPlayerName={selectedPlayer?.name || null}
+                  onValueChange={setSearch}
+                  onSelectPlayer={selectPlayerFromSearch}
+                  onClear={() => {
+                    setSearch("");
+                    setSelectedPlayer(null);
+                    setSavePlayerError(null);
+                    setSavePlayerSuccess(null);
+                  }}
+                />
 
                 {playersLoading && (
                   <div className="text-sm text-slate-500 dark:text-slate-400">

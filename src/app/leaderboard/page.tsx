@@ -6,43 +6,22 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
 import MatchFiltersCard from "@/components/MatchFiltersCard";
 import PlayerCard from "@/components/PlayerCard";
-import { supabase } from "@/lib/supabase";
+import {
+  ALL_MATCH_FILTER,
+  isValidMatchTypeFilter,
+  MATCH_TYPE_FILTER_OPTIONS,
+} from "@/lib/matches";
 import { Player } from "@/lib/types";
+import {
+  LeaderboardMode,
+  RankedLeaderboardRow,
+  useLeaderboardData,
+} from "@/lib/useLeaderboardData";
+import { useMatchSeasons } from "@/lib/useMatchSeasons";
 
-type LeaderboardRow = {
-  player_id: string;
-  name: string;
-  matches_played: number;
-  wins: number;
-  sets_won: number;
-  sets_lost: number;
-  win_rate: number;
-  latest_rating: number | null;
-  last_match_id: number | null;
-  last_match_date: string | null;
-};
-
-const ALL_TYPES = "ALL";
-const ALL_SEASONS = "ALL";
-const MIN_MATCHES = 5;
-const MIN_MATCHES_ALL_TYPES = 10;
-const MAX_LEADERBOARD_ROWS = 20;
 const LEADERBOARD_MODE_OPTIONS = [
   { value: "PERFORMANCE", label: "Performance" },
   { value: "RATING", label: "Rating" },
-] as const;
-const TYPE_FILTER_OPTIONS = [
-  { value: "ALL", label: "ALL", includeTypes: null as string[] | null },
-  {
-    value: "SEASON",
-    label: "SEASON",
-    includeTypes: ["group", "semis", "finals"],
-  },
-  {
-    value: "DUEL_KOTC",
-    label: "DUEL/KOTC",
-    includeTypes: ["duel", "kotc"],
-  },
 ] as const;
 
 function LeaderboardPageContent() {
@@ -50,54 +29,30 @@ function LeaderboardPageContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
-  const [rows, setRows] = useState<LeaderboardRow[]>([]);
-  const [topPlayersById, setTopPlayersById] = useState<Map<string, Player>>(
-    new Map(),
-  );
   const [seasonFilter, setSeasonFilter] = useState<
-    number | typeof ALL_SEASONS | null
+    number | typeof ALL_MATCH_FILTER | null
   >(null);
-  const [seasons, setSeasons] = useState<number[]>([]);
   const [selectedTypeFilter, setSelectedTypeFilter] =
-    useState<string>(ALL_TYPES);
-  const [selectedMode, setSelectedMode] =
-    useState<(typeof LEADERBOARD_MODE_OPTIONS)[number]["value"]>("PERFORMANCE");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadFilterOptions() {
-      const { data, error: filterError } = await supabase
-        .from("matches")
-        .select("season_id,type")
-        .not("season_id", "is", null)
-        .order("season_id", { ascending: true });
-
-      if (filterError || !data) {
-        setLoading(false);
-        setError(filterError?.message || "Failed to load filters.");
-        return;
-      }
-
-      const uniqueSeasons = Array.from(
-        new Set(
-          data
-            .map((row) => Number(row.season_id))
-            .filter((season) => !Number.isNaN(season)),
-        ),
-      );
-
-      if (uniqueSeasons.length > 0) {
-        setSeasons(uniqueSeasons);
-      }
-
-      if (uniqueSeasons.length === 0) {
-        setLoading(false);
-      }
-    }
-
-    loadFilterOptions();
-  }, []);
+    useState<string>(ALL_MATCH_FILTER);
+  const [selectedMode, setSelectedMode] = useState<LeaderboardMode>(
+    "PERFORMANCE",
+  );
+  const { seasons, loading: seasonsLoading, error: seasonsError } =
+    useMatchSeasons();
+  const {
+    rows,
+    topPlayersById,
+    loading,
+    error,
+    minMatchesRequired,
+    rankedRowsWithTopTies,
+  } = useLeaderboardData({
+    seasonFilter,
+    selectedTypeFilter,
+    selectedMode,
+    seasonsLoading,
+    seasonsError,
+  });
 
   useEffect(() => {
     if (seasons.length === 0) {
@@ -108,19 +63,17 @@ function LeaderboardPageContent() {
     const seasonParam = params.get("season");
     const parsedSeason = seasonParam ? Number(seasonParam) : Number.NaN;
 
-    let nextSeason: number | typeof ALL_SEASONS = seasons[seasons.length - 1];
-    if (seasonParam === ALL_SEASONS) {
-      nextSeason = ALL_SEASONS;
+    let nextSeason: number | typeof ALL_MATCH_FILTER = seasons[0];
+    if (seasonParam === ALL_MATCH_FILTER) {
+      nextSeason = ALL_MATCH_FILTER;
     } else if (!Number.isNaN(parsedSeason) && seasons.includes(parsedSeason)) {
       nextSeason = parsedSeason;
     }
 
     const typeParam = params.get("type");
-    const nextType = TYPE_FILTER_OPTIONS.some(
-      (option) => option.value === typeParam,
-    )
+    const nextType = isValidMatchTypeFilter(typeParam)
       ? (typeParam as string)
-      : ALL_TYPES;
+      : ALL_MATCH_FILTER;
 
     const modeParam = params.get("mode");
     const nextMode = LEADERBOARD_MODE_OPTIONS.some(
@@ -165,291 +118,6 @@ function LeaderboardPageContent() {
     selectedMode,
   ]);
 
-  useEffect(() => {
-    async function loadLeaderboard() {
-      if (seasonFilter === null) {
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      const selectedFilter = TYPE_FILTER_OPTIONS.find(
-        (option) => option.value === selectedTypeFilter,
-      );
-
-      const includeTypes = selectedFilter?.includeTypes ?? null;
-      const minMatchesRequired =
-        seasonFilter === ALL_SEASONS ? MIN_MATCHES_ALL_TYPES : MIN_MATCHES;
-
-      const rpcName =
-        selectedMode === "RATING"
-          ? "get_leaderboard_ratings"
-          : "get_leaderboard";
-
-      const buildRpcArgs = (typeFilter: string | null) => {
-        if (selectedMode === "RATING") {
-          return {
-            season_filter: seasonFilter === ALL_SEASONS ? null : seasonFilter,
-            type_filter: typeFilter,
-            formula_filter: null,
-            min_matches: minMatchesRequired,
-          };
-        }
-
-        return {
-          season_filter: seasonFilter === ALL_SEASONS ? null : seasonFilter,
-          type_filter: typeFilter,
-        };
-      };
-
-      const rpcRequests =
-        includeTypes === null
-          ? [supabase.rpc(rpcName, buildRpcArgs(null))]
-          : includeTypes.map((type) =>
-              supabase.rpc(rpcName, buildRpcArgs(type)),
-            );
-
-      const rpcResults = await Promise.all(rpcRequests);
-      const failedResult = rpcResults.find((result) => result.error);
-
-      if (failedResult?.error) {
-        setError(failedResult.error.message || "Failed to load leaderboard.");
-        setRows([]);
-        setLoading(false);
-        return;
-      }
-
-      const combinedRows = rpcResults.flatMap((result) => result.data || []);
-      const aggregatedMap = new Map<string, LeaderboardRow>();
-
-      const parseDateMs = (value: string | null) => {
-        if (!value) {
-          return Number.NEGATIVE_INFINITY;
-        }
-        const timestamp = Date.parse(value);
-        return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
-      };
-
-      const isRowMoreRecent = (
-        incomingDate: string | null,
-        incomingMatchId: number | null,
-        existingDate: string | null,
-        existingMatchId: number | null,
-      ) => {
-        const incomingDateMs = parseDateMs(incomingDate);
-        const existingDateMs = parseDateMs(existingDate);
-        if (incomingDateMs !== existingDateMs) {
-          return incomingDateMs > existingDateMs;
-        }
-
-        return (incomingMatchId ?? -1) > (existingMatchId ?? -1);
-      };
-
-      combinedRows.forEach((row: any) => {
-        const playerId = String(row.player_id ?? "");
-        if (!playerId) {
-          return;
-        }
-        const matchesPlayed = Number(row.matches_played || 0);
-        const wins = Number(row.wins || 0);
-        const setsWon = Number(row.sets_won || 0);
-        const setsLost = Number(row.sets_lost || 0);
-        const lastMatchId =
-          row.last_match_id === null || row.last_match_id === undefined
-            ? null
-            : Number(row.last_match_id);
-        const lastMatchDate =
-          row.last_match_date === null || row.last_match_date === undefined
-            ? null
-            : String(row.last_match_date);
-        const latestRating =
-          row.latest_rating === null || row.latest_rating === undefined
-            ? null
-            : Number(row.latest_rating);
-
-        const existing = aggregatedMap.get(playerId);
-        if (existing) {
-          existing.matches_played += matchesPlayed;
-          existing.wins += wins;
-          existing.sets_won += setsWon;
-          existing.sets_lost += setsLost;
-          existing.win_rate =
-            existing.matches_played > 0
-              ? existing.wins / existing.matches_played
-              : 0;
-          const incomingIsMoreRecent = isRowMoreRecent(
-            lastMatchDate,
-            Number.isFinite(lastMatchId ?? NaN) ? lastMatchId : null,
-            existing.last_match_date,
-            existing.last_match_id,
-          );
-          if (incomingIsMoreRecent) {
-            existing.last_match_id =
-              Number.isFinite(lastMatchId ?? NaN) && lastMatchId !== null
-                ? lastMatchId
-                : existing.last_match_id;
-            existing.last_match_date = lastMatchDate;
-          }
-          if (
-            latestRating !== null &&
-            Number.isFinite(latestRating) &&
-            (existing.latest_rating === null || incomingIsMoreRecent)
-          ) {
-            existing.latest_rating = latestRating;
-          }
-          return;
-        }
-
-        aggregatedMap.set(playerId, {
-          player_id: playerId,
-          name: row.name || "Unknown",
-          matches_played: matchesPlayed,
-          wins,
-          sets_won: setsWon,
-          sets_lost: setsLost,
-          win_rate: matchesPlayed > 0 ? wins / matchesPlayed : 0,
-          latest_rating:
-            latestRating !== null && Number.isFinite(latestRating)
-              ? latestRating
-              : null,
-          last_match_id:
-            Number.isFinite(lastMatchId ?? NaN) && lastMatchId !== null
-              ? lastMatchId
-              : null,
-          last_match_date: lastMatchDate,
-        });
-      });
-
-      const normalized: LeaderboardRow[] = Array.from(
-        aggregatedMap.values(),
-      ).filter(
-        (row: LeaderboardRow) => row.matches_played >= minMatchesRequired,
-      );
-
-      normalized.sort((a: LeaderboardRow, b: LeaderboardRow) => {
-        if (selectedMode === "RATING") {
-          const ratingA = a.latest_rating ?? Number.NEGATIVE_INFINITY;
-          const ratingB = b.latest_rating ?? Number.NEGATIVE_INFINITY;
-          if (ratingB !== ratingA) {
-            return ratingB - ratingA;
-          }
-          if (b.matches_played !== a.matches_played) {
-            return b.matches_played - a.matches_played;
-          }
-          if (b.wins !== a.wins) {
-            return b.wins - a.wins;
-          }
-          return a.name.localeCompare(b.name);
-        }
-
-        if (b.win_rate !== a.win_rate) {
-          return b.win_rate - a.win_rate;
-        }
-        if (b.matches_played !== a.matches_played) {
-          return b.matches_played - a.matches_played;
-        }
-        if (b.wins !== a.wins) {
-          return b.wins - a.wins;
-        }
-        if (b.sets_won !== a.sets_won) {
-          return b.sets_won - a.sets_won;
-        }
-        return a.sets_lost - b.sets_lost;
-      });
-
-      const topTenIds = normalized
-        .slice(0, 10)
-        .map((row: LeaderboardRow) => row.player_id);
-      if (topTenIds.length > 0) {
-        const { data: playersData, error: playersError } = await supabase
-          .from("players")
-          .select("player_id,name,nickname,image_link")
-          .in("player_id", topTenIds);
-
-        if (!playersError && playersData) {
-          const map = new Map<string, Player>();
-          playersData.forEach((player) => {
-            const playerId = String(player.player_id);
-            map.set(playerId, {
-              player_id: String(player.player_id),
-              name: player.name || "Unknown",
-              nickname: player.nickname || "-",
-              image_link: player.image_link || null,
-              latest_rating:
-                normalized.find((row) => row.player_id === playerId)
-                  ?.latest_rating ?? null,
-              latest_match_date:
-                normalized.find((row) => row.player_id === playerId)
-                  ?.last_match_date ?? null,
-            });
-          });
-          setTopPlayersById(map);
-        } else {
-          setTopPlayersById(new Map());
-        }
-      } else {
-        setTopPlayersById(new Map());
-      }
-
-      setRows(normalized);
-      setLoading(false);
-    }
-
-    loadLeaderboard();
-  }, [seasonFilter, selectedTypeFilter, selectedMode]);
-
-  let previousRow: LeaderboardRow | null = null;
-  let currentRank = 0;
-  const rankedRows = rows.map((row, index) => {
-    const isTie =
-      previousRow &&
-      (selectedMode === "RATING"
-        ? row.latest_rating === previousRow.latest_rating &&
-          row.matches_played === previousRow.matches_played &&
-          row.wins === previousRow.wins
-        : row.win_rate === previousRow.win_rate &&
-          row.matches_played === previousRow.matches_played &&
-          row.wins === previousRow.wins &&
-          row.sets_won === previousRow.sets_won &&
-          row.sets_lost === previousRow.sets_lost);
-
-    if (!isTie) {
-      currentRank = index + 1;
-    }
-
-    previousRow = row;
-    return { ...row, rank: currentRank };
-  });
-
-  const rankedRowsWithTop20Ties = (() => {
-    if (rankedRows.length <= MAX_LEADERBOARD_ROWS) {
-      return rankedRows;
-    }
-
-    const baseRows = rankedRows.slice(0, MAX_LEADERBOARD_ROWS);
-    const boundary = baseRows[baseRows.length - 1];
-    const extraTies = rankedRows.slice(MAX_LEADERBOARD_ROWS).filter((row) => {
-      if (selectedMode === "RATING") {
-        return (
-          row.latest_rating === boundary.latest_rating &&
-          row.matches_played === boundary.matches_played &&
-          row.wins === boundary.wins
-        );
-      }
-
-      return (
-        row.win_rate === boundary.win_rate &&
-        row.matches_played === boundary.matches_played &&
-        row.wins === boundary.wins &&
-        row.sets_won === boundary.sets_won &&
-        row.sets_lost === boundary.sets_lost
-      );
-    });
-
-    return [...baseRows, ...extraTies];
-  })();
-
   return (
     <>
       <BackToHome />
@@ -464,14 +132,16 @@ function LeaderboardPageContent() {
                 type="button"
                 onClick={() => {
                   setSelectedMode(option.value);
-                  setSelectedTypeFilter(ALL_TYPES);
+                  setSelectedTypeFilter(ALL_MATCH_FILTER);
                   if (option.value === "PERFORMANCE") {
-                    const latestSeason = seasons[seasons.length - 1];
+                    const latestSeason = seasons[0];
                     setSeasonFilter(
-                      latestSeason !== undefined ? latestSeason : ALL_SEASONS,
+                      latestSeason !== undefined
+                        ? latestSeason
+                        : ALL_MATCH_FILTER,
                     );
                   } else {
-                    setSeasonFilter(ALL_SEASONS);
+                    setSeasonFilter(ALL_MATCH_FILTER);
                   }
                 }}
                 className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
@@ -490,7 +160,7 @@ function LeaderboardPageContent() {
             ? "Rating leaderboard: ordered by latest rating. "
             : "Performance leaderboard: ordered by win rate. "}
           Only players with{" "}
-          {seasonFilter === ALL_SEASONS ? MIN_MATCHES_ALL_TYPES : MIN_MATCHES}+
+          {minMatchesRequired}+
           matches or more are included.
         </p>
         <div className="-mb-4">
@@ -498,7 +168,7 @@ function LeaderboardPageContent() {
             seasonFilter={seasonFilter}
             seasons={seasons}
             selectedTypeFilter={selectedTypeFilter}
-            typeFilterOptions={TYPE_FILTER_OPTIONS}
+            typeFilterOptions={MATCH_TYPE_FILTER_OPTIONS}
             onSeasonChange={(value) => setSeasonFilter(value)}
             onTypeChange={(value) => setSelectedTypeFilter(value)}
           />
@@ -565,7 +235,7 @@ function LeaderboardPageContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rankedRowsWithTop20Ties.map((row, index) => (
+                    {rankedRowsWithTopTies.map((row: RankedLeaderboardRow, index) => (
                       <tr
                         key={row.player_id}
                         className={`border-t border-slate-200 dark:border-slate-700 ${

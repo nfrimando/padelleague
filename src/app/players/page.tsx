@@ -3,29 +3,29 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import MatchCard from "@/components/MatchCard";
 import BackToHome from "@/components/BackToHome";
 import MatchFiltersCard from "@/components/MatchFiltersCard";
 import PlayerCard from "@/components/PlayerCard";
-import { Player, MatchWithTeams } from "@/lib/types";
-
-const ALL_FILTER = "ALL";
-const TYPE_FILTER_OPTIONS = [
-  { value: "ALL", label: "ALL" },
-  { value: "SEASON", label: "SEASON" },
-  { value: "DUEL_KOTC", label: "DUEL/KOTC" },
-] as const;
+import PlayerSearchBox from "@/components/PlayerSearchBox";
+import {
+  ALL_MATCH_FILTER,
+  filterMatchesBySeasonAndType,
+  getSeasonsFromMatches,
+  isValidMatchTypeFilter,
+  MATCH_TYPE_FILTER_OPTIONS,
+} from "@/lib/matches";
+import { usePlayerMatches } from "@/lib/usePlayerMatches";
+import { usePlayers } from "@/lib/usePlayers";
+import { usePlayerSearch } from "@/lib/usePlayerSearch";
+import { Player } from "@/lib/types";
 
 function PlayersPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
-  const [players, setPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState("");
-  const [filtered, setFiltered] = useState<Player[]>([]);
-  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [isClearingPlayerSelection, setIsClearingPlayerSelection] =
     useState(false);
@@ -35,36 +35,38 @@ function PlayersPageContent() {
   const [pendingSelectedPlayerId, setPendingSelectedPlayerId] = useState<
     string | null
   >(null);
-  const [selectedPlayerLatestRating, setSelectedPlayerLatestRating] = useState<
-    number | null
-  >(null);
-  const [playerRatingHistory, setPlayerRatingHistory] = useState<
-    Array<{ rating: number; date: string | null }>
-  >([]);
-  const [playerMatches, setPlayerMatches] = useState<MatchWithTeams[]>([]);
-  const [seasonFilter, setSeasonFilter] = useState<number | "ALL">(ALL_FILTER);
+  const [seasonFilter, setSeasonFilter] = useState<
+    number | typeof ALL_MATCH_FILTER
+  >(ALL_MATCH_FILTER);
   const [selectedTypeFilter, setSelectedTypeFilter] =
-    useState<string>(ALL_FILTER);
-  const [loadingMatches, setLoadingMatches] = useState(false);
+    useState<string>(ALL_MATCH_FILTER);
+  const { players } = usePlayers();
+  const filtered = usePlayerSearch(players, search);
+  const {
+    matches: playerMatches,
+    latestRating: selectedPlayerLatestRating,
+    ratingHistory: playerRatingHistory,
+    loading: loadingMatches,
+  } = usePlayerMatches(
+    selectedPlayer ? String(selectedPlayer.player_id) : null,
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
     const seasonParam = params.get("season");
     const parsedSeason = seasonParam ? Number(seasonParam) : Number.NaN;
 
-    const nextSeason: number | "ALL" =
-      seasonParam === ALL_FILTER
-        ? ALL_FILTER
+    const nextSeason: number | typeof ALL_MATCH_FILTER =
+      seasonParam === ALL_MATCH_FILTER
+        ? ALL_MATCH_FILTER
         : !Number.isNaN(parsedSeason)
           ? parsedSeason
-          : ALL_FILTER;
+          : ALL_MATCH_FILTER;
 
     const typeParam = params.get("type");
-    const nextType = TYPE_FILTER_OPTIONS.some(
-      (option) => option.value === typeParam,
-    )
+    const nextType = isValidMatchTypeFilter(typeParam)
       ? (typeParam as string)
-      : ALL_FILTER;
+      : ALL_MATCH_FILTER;
 
     setSeasonFilter((current) =>
       current === nextSeason ? current : nextSeason,
@@ -89,39 +91,15 @@ function PlayersPageContent() {
   }, [pathname, router, searchParamsString, seasonFilter, selectedTypeFilter]);
 
   const seasonOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        playerMatches
-          .map((match) => match.season_id)
-          .filter((season): season is number => season !== null)
-          .map((season) => Number(season))
-          .filter((season) => !Number.isNaN(season)),
-      ),
-    ).sort((a, b) => b - a);
+    return getSeasonsFromMatches(playerMatches);
   }, [playerMatches]);
 
   const filteredMatches = useMemo(() => {
-    return playerMatches.filter((match) => {
-      if (seasonFilter !== ALL_FILTER && match.season_id !== seasonFilter) {
-        return false;
-      }
-
-      if (selectedTypeFilter === "ALL") {
-        return true;
-      }
-
-      const matchType = String(match.type || "").toLowerCase();
-
-      if (selectedTypeFilter === "SEASON") {
-        return ["group", "semis", "finals"].includes(matchType);
-      }
-
-      if (selectedTypeFilter === "DUEL_KOTC") {
-        return ["duel", "kotc"].includes(matchType);
-      }
-
-      return true;
-    });
+    return filterMatchesBySeasonAndType(
+      playerMatches,
+      seasonFilter,
+      selectedTypeFilter,
+    );
   }, [playerMatches, seasonFilter, selectedTypeFilter]);
 
   const selectedPlayerLatestMatchDate = useMemo(() => {
@@ -131,21 +109,10 @@ function PlayersPageContent() {
     return latest?.date_local || null;
   }, [playerMatches]);
 
-  const visibleFiltered = useMemo(() => filtered.slice(0, 5), [filtered]);
-
   const randomPlayers = useMemo(() => {
     const shuffled = [...players].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, 8);
   }, [players]);
-
-  const shouldShowDropdown =
-    visibleFiltered.length > 0 &&
-    search.trim().length > 0 &&
-    (!selectedPlayer ||
-      search.trim().toLowerCase() !==
-        String(selectedPlayer.name || "")
-          .trim()
-          .toLowerCase());
 
   const getPlayerProfileHref = (playerId: string | number) => {
     const params = new URLSearchParams(searchParamsString);
@@ -181,47 +148,8 @@ function PlayersPageContent() {
     setPendingSelectedPlayerId(String(player.player_id));
     setSelectedPlayer(player);
     setSearch(player.name);
-    setFiltered([]);
-    setActiveSuggestionIndex(-1);
     updatePlayerParam(player.player_id);
   };
-
-  // Fetch players on load
-  useEffect(() => {
-    async function fetchPlayers() {
-      const { data, error } = await supabase.from("players").select("*");
-
-      if (error) {
-        console.error(error);
-        return;
-      }
-
-      setPlayers(data || []);
-    }
-
-    fetchPlayers();
-  }, []);
-
-  // Filter players when typing
-  useEffect(() => {
-    if (!search) {
-      setFiltered([]);
-      setActiveSuggestionIndex(-1);
-      return;
-    }
-
-    const results = players.filter((p) => {
-      const query = search.toLowerCase();
-
-      return (
-        p.name?.toLowerCase().includes(query) ||
-        p.nickname?.toLowerCase().includes(query)
-      );
-    });
-
-    setFiltered(results);
-    setActiveSuggestionIndex(-1);
-  }, [search, players]);
 
   // Auto-select player from URL query param
   useEffect(() => {
@@ -264,7 +192,6 @@ function PlayersPageContent() {
     ) {
       // Clear stale profile immediately while switching to another player.
       setSelectedPlayer(null);
-      setPlayerMatches([]);
     }
 
     if (!playerIdParam || players.length === 0) {
@@ -276,7 +203,6 @@ function PlayersPageContent() {
     );
     if (!matchedPlayer) {
       setSelectedPlayer(null);
-      setPlayerMatches([]);
       return;
     }
 
@@ -284,7 +210,6 @@ function PlayersPageContent() {
       current?.player_id === matchedPlayer.player_id ? current : matchedPlayer,
     );
     setSearch(matchedPlayer.name || "");
-    setFiltered([]);
   }, [
     players,
     searchParamsString,
@@ -293,366 +218,49 @@ function PlayersPageContent() {
     ignoredPlayerIdAfterClear,
   ]);
 
-  // Fetch matches for selected player
-  useEffect(() => {
-    if (!selectedPlayer) {
-      setPlayerMatches([]);
-      setSelectedPlayerLatestRating(null);
-      setPlayerRatingHistory([]);
-      return;
-    }
-    const selectedPlayerId = String(selectedPlayer.player_id);
-
-    let isCancelled = false;
-
-    async function fetchPlayerMatches() {
-      setLoadingMatches(true);
-
-      try {
-        // Get all match_teams where the player is involved
-        const { data: teamsData, error: teamsError } = await supabase
-          .from("match_teams")
-          .select("match_id")
-          .or(
-            `player_1_id.eq.${selectedPlayer!.player_id},player_2_id.eq.${selectedPlayer!.player_id}`,
-          );
-
-        if (teamsError) {
-          console.error("Error fetching teams:", teamsError);
-          setPlayerMatches([]);
-          setSelectedPlayerLatestRating(null);
-          return;
-        }
-
-        if (!teamsData || teamsData.length === 0) {
-          setPlayerMatches([]);
-          setSelectedPlayerLatestRating(null);
-          return;
-        }
-
-        const matchIds = teamsData.map((t) => t.match_id);
-
-        // Get matches
-        const { data: matchesData, error: matchesError } = await supabase
-          .from("matches")
-          .select("*")
-          .in("match_id", matchIds)
-          .order("date_local", { ascending: false, nullsFirst: false })
-          .order("time_local", { ascending: false });
-
-        if (matchesError) {
-          console.error("Error fetching matches:", matchesError);
-          setPlayerMatches([]);
-          setSelectedPlayerLatestRating(null);
-          return;
-        }
-
-        // Get all teams for these matches
-        const { data: allTeamsData, error: allTeamsError } = await supabase
-          .from("match_teams")
-          .select(
-            "*, player_1:player_1_id(player_id,name,nickname,image_link), player_2:player_2_id(player_id,name,nickname,image_link)",
-          )
-          .in("match_id", matchIds);
-
-        if (allTeamsError) {
-          console.error("Error fetching teams:", allTeamsError);
-          setPlayerMatches([]);
-          setSelectedPlayerLatestRating(null);
-          return;
-        }
-
-        // Get all match sets for these matches
-        const { data: matchSetsData, error: matchSetsError } = await supabase
-          .from("match_sets")
-          .select("*")
-          .in("match_id", matchIds)
-          .order("set_number", { ascending: true });
-
-        if (matchSetsError) {
-          console.error("Error fetching match sets:", matchSetsError);
-          // Continue without sets data (not critical)
-        }
-
-        // Get pre-match ratings for these matches. Prefer v3, then v2.
-        const { data: matchRatingsData, error: matchRatingsError } =
-          await supabase
-            .from("match_player_ratings")
-            .select(
-              "match_id, player_id, rating_pre, rating_post, formula_name",
-            )
-            .in("match_id", matchIds);
-
-        if (matchRatingsError) {
-          console.error(
-            "Error fetching match player ratings:",
-            matchRatingsError,
-          );
-          // Continue without ratings data (not critical)
-        }
-
-        type RatingEntry = {
-          rating: number;
-          formula: string;
-          priority: number;
-        };
-
-        const ratingLookup = new Map<string, RatingEntry>();
-        const selectedPlayerRatingPostByMatch = new Map<
-          number,
-          { ratingPost: number; priority: number }
-        >();
-        for (const row of matchRatingsData || []) {
-          const matchId = Number(row.match_id);
-          const playerId = String(row.player_id);
-          const rating = Number(row.rating_pre);
-          const ratingPost = Number(row.rating_post);
-          const formula = String(row.formula_name || "").toLowerCase();
-
-          if (
-            !Number.isFinite(matchId) ||
-            !Number.isFinite(rating) ||
-            !playerId
-          ) {
-            continue;
-          }
-
-          const priority = formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
-          const key = `${matchId}:${playerId}`;
-          const existing = ratingLookup.get(key);
-
-          if (!existing || priority >= existing.priority) {
-            ratingLookup.set(key, {
-              rating,
-              formula,
-              priority,
-            });
-          }
-
-          if (playerId === selectedPlayerId && Number.isFinite(ratingPost)) {
-            const existingPost = selectedPlayerRatingPostByMatch.get(matchId);
-            if (!existingPost || priority >= existingPost.priority) {
-              selectedPlayerRatingPostByMatch.set(matchId, {
-                ratingPost,
-                priority,
-              });
-            }
-          }
-        }
-
-        let latestRatingPost: number | null = null;
-        for (const match of matchesData || []) {
-          const matchId = Number(match.match_id);
-          const selectedPlayerPost =
-            selectedPlayerRatingPostByMatch.get(matchId);
-          if (selectedPlayerPost) {
-            latestRatingPost = selectedPlayerPost.ratingPost;
-            break;
-          }
-        }
-
-        if (!isCancelled) {
-          setSelectedPlayerLatestRating(latestRatingPost);
-        }
-
-        // Collect rating history for sparkline (up to 5 most recent, reversed to chronological)
-        const ratingHistoryItems: Array<{
-          rating: number;
-          date: string | null;
-        }> = [];
-        for (const match of matchesData || []) {
-          if (ratingHistoryItems.length >= 6) break;
-          const matchId = Number(match.match_id);
-          const post = selectedPlayerRatingPostByMatch.get(matchId);
-          if (post) {
-            ratingHistoryItems.push({
-              rating: post.ratingPost,
-              date: match.date_local || null,
-            });
-          }
-        }
-        ratingHistoryItems.reverse();
-        if (!isCancelled) {
-          setPlayerRatingHistory(ratingHistoryItems);
-        }
-
-        const attachPreMatchRating = (
-          matchId: number,
-          player: Player | null,
-        ) => {
-          if (!player) {
-            return null;
-          }
-
-          const key = `${matchId}:${String(player.player_id)}`;
-          const ratingEntry = ratingLookup.get(key);
-
-          if (!ratingEntry) {
-            return player;
-          }
-
-          return {
-            ...player,
-            pre_match_rating: ratingEntry.rating,
-            pre_match_rating_formula: ratingEntry.formula,
-          };
-        };
-
-        // Combine matches with teams and sets
-        const matches: MatchWithTeams[] = (matchesData || []).map((m) => ({
-          ...m,
-          teams: (allTeamsData || [])
-            .filter((t) => t.match_id === m.match_id)
-            .map((t) => ({
-              uuid: t.uuid,
-              team_number: t.team_number,
-              sets_won: t.sets_won,
-              player_1: attachPreMatchRating(m.match_id, t.player_1 || null),
-              player_2: attachPreMatchRating(m.match_id, t.player_2 || null),
-            })),
-          sets: (matchSetsData || []).filter((s) => s.match_id === m.match_id),
-        }));
-
-        if (!isCancelled) {
-          setPlayerMatches(matches);
-        }
-      } catch (error) {
-        console.error("Error fetching player matches:", error);
-        if (!isCancelled) {
-          setPlayerMatches([]);
-          setSelectedPlayerLatestRating(null);
-          setPlayerRatingHistory([]);
-        }
-      } finally {
-        if (!isCancelled) {
-          setLoadingMatches(false);
-        }
-      }
-    }
-
-    fetchPlayerMatches();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [selectedPlayer]);
-
   return (
     <>
       <BackToHome />
       <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Player Search</h1>
 
-        <div className="relative">
-          {/* Input */}
-          <input
-            type="text"
-            placeholder="Type player name..."
-            className="w-full border px-3 py-2 pr-10 rounded"
-            value={search}
-            onKeyDown={(e) => {
-              if (!shouldShowDropdown) {
-                return;
-              }
+        <PlayerSearchBox
+          value={search}
+          suggestions={filtered}
+          maxSuggestions={5}
+          selectedPlayerName={selectedPlayer?.name || null}
+          placeholder="Type player name..."
+          onValueChange={(nextValue) => {
+            setSearch(nextValue);
 
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setActiveSuggestionIndex((prev) =>
-                  prev < visibleFiltered.length - 1 ? prev + 1 : 0,
-                );
-              }
+            // If search no longer matches selected player, clear the URL param.
+            if (
+              selectedPlayer &&
+              nextValue.trim().toLowerCase() !==
+                String(selectedPlayer.name || "")
+                  .trim()
+                  .toLowerCase()
+            ) {
+              updatePlayerParam(null);
+            }
 
-              if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setActiveSuggestionIndex((prev) =>
-                  prev > 0 ? prev - 1 : visibleFiltered.length - 1,
-                );
-              }
-
-              if (e.key === "Enter" && activeSuggestionIndex >= 0) {
-                e.preventDefault();
-                const selected = visibleFiltered[activeSuggestionIndex];
-                if (selected) {
-                  selectPlayerFromSearch(selected);
-                }
-              }
-
-              if (e.key === "Escape") {
-                setActiveSuggestionIndex(-1);
-              }
-            }}
-            onChange={(e) => {
-              const nextValue = e.target.value;
-              setSearch(nextValue);
-
-              // If search no longer matches selected player, clear the URL param
-              if (
-                selectedPlayer &&
-                nextValue.trim().toLowerCase() !==
-                  String(selectedPlayer.name || "")
-                    .trim()
-                    .toLowerCase()
-              ) {
-                updatePlayerParam(null);
-              }
-
-              // Keep current selection mounted while typing to avoid layout shifts.
-              if (!nextValue.trim()) {
-                setSelectedPlayer(null);
-              }
-            }}
-          />
-
-          {search.trim().length > 0 && (
-            <button
-              type="button"
-              aria-label="Clear player search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
-              onClick={() => {
-                setIsClearingPlayerSelection(true);
-                setIgnoredPlayerIdAfterClear(
-                  selectedPlayer ? String(selectedPlayer.player_id) : null,
-                );
-                setPendingSelectedPlayerId(null);
-                setSearch("");
-                setFiltered([]);
-                setActiveSuggestionIndex(-1);
-                setSelectedPlayer(null);
-                setPlayerMatches([]);
-                updatePlayerParam(null);
-              }}
-            >
-              ×
-            </button>
-          )}
-
-          {/* Dropdown */}
-          {shouldShowDropdown && (
-            <div className="absolute left-0 right-0 top-full mt-2 z-50 border rounded shadow bg-white dark:bg-slate-900">
-              {visibleFiltered.map((player, index) => (
-                <div
-                  key={player.player_id}
-                  className={`px-3 py-2 cursor-pointer text-white ${
-                    index === activeSuggestionIndex
-                      ? "bg-gray-700"
-                      : "bg-gray-800 hover:bg-gray-700"
-                  }`}
-                  onMouseEnter={() => setActiveSuggestionIndex(index)}
-                  onClick={() => selectPlayerFromSearch(player)}
-                >
-                  <div>
-                    <div className="font-medium">{player.name}</div>
-                    {player.nickname && (
-                      <div className="text-sm text-gray-500">
-                        {player.nickname}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+            // Keep current selection mounted while typing to avoid layout shifts.
+            if (!nextValue.trim()) {
+              setSelectedPlayer(null);
+            }
+          }}
+          onSelectPlayer={selectPlayerFromSearch}
+          onClear={() => {
+            setIsClearingPlayerSelection(true);
+            setIgnoredPlayerIdAfterClear(
+              selectedPlayer ? String(selectedPlayer.player_id) : null,
+            );
+            setPendingSelectedPlayerId(null);
+            setSearch("");
+            setSelectedPlayer(null);
+            updatePlayerParam(null);
+          }}
+        />
 
         {!selectedPlayer &&
           search.trim().length === 0 &&
@@ -863,7 +471,7 @@ function PlayersPageContent() {
                 seasonFilter={seasonFilter}
                 seasons={seasonOptions}
                 selectedTypeFilter={selectedTypeFilter}
-                typeFilterOptions={TYPE_FILTER_OPTIONS}
+                typeFilterOptions={MATCH_TYPE_FILTER_OPTIONS}
                 onSeasonChange={(value) => setSeasonFilter(value)}
                 onTypeChange={(value) => setSelectedTypeFilter(value)}
               />
