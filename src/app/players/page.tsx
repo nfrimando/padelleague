@@ -27,6 +27,8 @@ function PlayersPageContent() {
   const [filtered, setFiltered] = useState<Player[]>([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [isClearingPlayerSelection, setIsClearingPlayerSelection] =
+    useState(false);
   const [selectedPlayerLatestRating, setSelectedPlayerLatestRating] = useState<
     number | null
   >(null);
@@ -166,6 +168,7 @@ function PlayersPageContent() {
   };
 
   const selectPlayerFromSearch = (player: Player) => {
+    setIsClearingPlayerSelection(false);
     setSelectedPlayer(player);
     setSearch(player.name);
     setFiltered([]);
@@ -215,6 +218,14 @@ function PlayersPageContent() {
     const params = new URLSearchParams(searchParamsString);
     const playerIdParam = params.get("playerId") || params.get("playerid");
 
+    if (!playerIdParam && isClearingPlayerSelection) {
+      setIsClearingPlayerSelection(false);
+    }
+
+    if (isClearingPlayerSelection) {
+      return;
+    }
+
     if (
       playerIdParam &&
       selectedPlayer &&
@@ -243,7 +254,7 @@ function PlayersPageContent() {
     );
     setSearch(matchedPlayer.name || "");
     setFiltered([]);
-  }, [players, searchParamsString]);
+  }, [players, searchParamsString, isClearingPlayerSelection]);
 
   // Fetch matches for selected player
   useEffect(() => {
@@ -538,6 +549,7 @@ function PlayersPageContent() {
               aria-label="Clear player search"
               className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
               onClick={() => {
+                setIsClearingPlayerSelection(true);
                 setSearch("");
                 setFiltered([]);
                 setActiveSuggestionIndex(-1);
