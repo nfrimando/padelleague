@@ -32,6 +32,9 @@ function PlayersPageContent() {
   const [selectedPlayerLatestRating, setSelectedPlayerLatestRating] = useState<
     number | null
   >(null);
+  const [playerRatingHistory, setPlayerRatingHistory] = useState<
+    Array<{ rating: number; date: string | null }>
+  >([]);
   const [playerMatches, setPlayerMatches] = useState<MatchWithTeams[]>([]);
   const [seasonFilter, setSeasonFilter] = useState<number | "ALL">(ALL_FILTER);
   const [selectedTypeFilter, setSelectedTypeFilter] =
@@ -261,6 +264,7 @@ function PlayersPageContent() {
     if (!selectedPlayer) {
       setPlayerMatches([]);
       setSelectedPlayerLatestRating(null);
+      setPlayerRatingHistory([]);
       return;
     }
     const selectedPlayerId = String(selectedPlayer.player_id);
@@ -417,6 +421,27 @@ function PlayersPageContent() {
           setSelectedPlayerLatestRating(latestRatingPost);
         }
 
+        // Collect rating history for sparkline (up to 5 most recent, reversed to chronological)
+        const ratingHistoryItems: Array<{
+          rating: number;
+          date: string | null;
+        }> = [];
+        for (const match of matchesData || []) {
+          if (ratingHistoryItems.length >= 6) break;
+          const matchId = Number(match.match_id);
+          const post = selectedPlayerRatingPostByMatch.get(matchId);
+          if (post) {
+            ratingHistoryItems.push({
+              rating: post.ratingPost,
+              date: match.date_local || null,
+            });
+          }
+        }
+        ratingHistoryItems.reverse();
+        if (!isCancelled) {
+          setPlayerRatingHistory(ratingHistoryItems);
+        }
+
         const attachPreMatchRating = (
           matchId: number,
           player: Player | null,
@@ -462,6 +487,7 @@ function PlayersPageContent() {
         if (!isCancelled) {
           setPlayerMatches([]);
           setSelectedPlayerLatestRating(null);
+          setPlayerRatingHistory([]);
         }
       } finally {
         if (!isCancelled) {
@@ -692,6 +718,7 @@ function PlayersPageContent() {
                   }}
                   size="lg"
                   disableLink
+                  ratingHistory={playerRatingHistory}
                 />
                 {!loadingMatches && matchCount > 0 && (
                   <div className="mt-4 pt-3 border-t space-y-4">
