@@ -555,9 +555,11 @@ function LeaderboardPageContent() {
                       <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
                         Sets Lost
                       </th>
-                      <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
-                        {selectedMode === "RATING" ? "Rating" : "Win Rate"}
-                      </th>
+                      {selectedMode !== "RATING" && (
+                        <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
+                          Win Rate
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -679,29 +681,19 @@ function LeaderboardPageContent() {
                             row.sets_lost
                           )}
                         </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-right font-medium">
-                          {selectedMode === "RATING" ? (
-                            row.latest_rating === null ? (
-                              "N/A"
-                            ) : index < 10 ? (
+                        {selectedMode !== "RATING" && (
+                          <td className="hidden md:table-cell px-4 py-3 text-right font-medium">
+                            {index < 10 ? (
                               <div className="inline-flex items-center justify-end">
-                                <span className="text-base font-semibold bg-gradient-to-r from-sky-600 to-cyan-500 dark:from-sky-300 dark:to-cyan-200 bg-clip-text text-transparent">
-                                  {row.latest_rating.toFixed(2)}
+                                <span className="text-base font-semibold bg-gradient-to-r from-amber-500 to-yellow-400 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent">
+                                  {(row.win_rate * 100).toFixed(1)}%
                                 </span>
                               </div>
                             ) : (
-                              row.latest_rating.toFixed(2)
-                            )
-                          ) : index < 10 ? (
-                            <div className="inline-flex items-center justify-end">
-                              <span className="text-base font-semibold bg-gradient-to-r from-amber-500 to-yellow-400 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent">
-                                {(row.win_rate * 100).toFixed(1)}%
-                              </span>
-                            </div>
-                          ) : (
-                            `${(row.win_rate * 100).toFixed(1)}%`
-                          )}
-                        </td>
+                              `${(row.win_rate * 100).toFixed(1)}%`
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
