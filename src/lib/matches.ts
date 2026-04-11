@@ -27,11 +27,14 @@ export function isValidMatchTypeFilter(value: string | null): boolean {
   return MATCH_TYPE_FILTER_OPTIONS.some((option) => option.value === value);
 }
 
-export function getIncludedMatchTypes(filterValue: string) {
-  return (
-    MATCH_TYPE_FILTER_OPTIONS.find((option) => option.value === filterValue)
-      ?.includeTypes ?? null
+export function getIncludedMatchTypes(
+  filterValue: string,
+): readonly string[] | null {
+  const selected = MATCH_TYPE_FILTER_OPTIONS.find(
+    (option) => option.value === filterValue,
   );
+
+  return (selected?.includeTypes as readonly string[] | null) ?? null;
 }
 
 export function getSeasonsFromMatches<T extends MatchSeasonRow>(matches: T[]) {

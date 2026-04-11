@@ -411,30 +411,6 @@ export default function AdminPage() {
                           </div>
                           <div className="grid gap-4 xl:grid-cols-2">
                             <div>
-                              <span className="text-slate-500 dark:text-slate-400">
-                                player_id:
-                              </span>{" "}
-                              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                                {selectedPlayer.player_id}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500 dark:text-slate-400">
-                                created_at:
-                              </span>{" "}
-                              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                                {selectedPlayer.created_at || "N/A"}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500 dark:text-slate-400">
-                                updated_at:
-                              </span>{" "}
-                              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                                {selectedPlayer.updated_at || "N/A"}
-                              </span>
-                            </div>
-                            <div>
                               <label className="text-slate-500 dark:text-slate-400">
                                 name:
                               </label>
@@ -471,6 +447,33 @@ export default function AdminPage() {
                                 className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                                 placeholder="https://..."
                               />
+                            </div>
+                          </div>
+
+                          <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 grid gap-3 xl:grid-cols-3">
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                player_id:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
+                                {selectedPlayer.player_id}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                updated_at:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
+                                {selectedPlayer.updated_at || "N/A"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                created_at:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
+                                {selectedPlayer.created_at || "N/A"}
+                              </span>
                             </div>
                           </div>
 
