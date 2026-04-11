@@ -2,7 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-const WEBSITE_VERSION = "v0.0.23";
+const WEBSITE_VERSION = "v0.0.24";
 
 export default function HomePage() {
   return (
