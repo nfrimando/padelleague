@@ -5,8 +5,6 @@ import BackToHome from "@/components/BackToHome";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 
-const ADMIN_EMAIL = "nfrimando@gmail.com";
-
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
@@ -18,13 +16,35 @@ export default function AdminPage() {
   const [filtered, setFiltered] = useState<Player[]>([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-
-  const checkIsAdmin = (userEmail: string | null) => {
-    return (userEmail || "").trim().toLowerCase() === ADMIN_EMAIL;
-  };
+  const [editName, setEditName] = useState("");
+  const [editNickname, setEditNickname] = useState("");
+  const [editImageLink, setEditImageLink] = useState("");
+  const [savingPlayer, setSavingPlayer] = useState(false);
+  const [savePlayerError, setSavePlayerError] = useState<string | null>(null);
+  const [savePlayerSuccess, setSavePlayerSuccess] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let isMounted = true;
+
+    async function resolveAdminStatus(userId: string | undefined) {
+      if (!userId) {
+        return false;
+      }
+
+      const { data, error } = await supabase
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        return false;
+      }
+
+      return !!data;
+    }
 
     async function initSession() {
       const { data } = await supabase.auth.getUser();
@@ -33,8 +53,13 @@ export default function AdminPage() {
       }
 
       const nextEmail = data.user?.email ?? null;
+      const nextIsAdmin = await resolveAdminStatus(data.user?.id);
+      if (!isMounted) {
+        return;
+      }
+
       setEmail(nextEmail);
-      setIsAdmin(checkIsAdmin(nextEmail));
+      setIsAdmin(nextIsAdmin);
       setLoading(false);
     }
 
@@ -43,14 +68,21 @@ export default function AdminPage() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) {
-        return;
-      }
+      (async () => {
+        if (!isMounted) {
+          return;
+        }
 
-      const nextEmail = session?.user?.email ?? null;
-      setEmail(nextEmail);
-      setIsAdmin(checkIsAdmin(nextEmail));
-      setLoading(false);
+        const nextEmail = session?.user?.email ?? null;
+        const nextIsAdmin = await resolveAdminStatus(session?.user?.id);
+        if (!isMounted) {
+          return;
+        }
+
+        setEmail(nextEmail);
+        setIsAdmin(nextIsAdmin);
+        setLoading(false);
+      })();
     });
 
     return () => {
@@ -140,6 +172,66 @@ export default function AdminPage() {
     setSearch(player.name || "");
     setFiltered([]);
     setActiveSuggestionIndex(-1);
+    setSavePlayerError(null);
+    setSavePlayerSuccess(null);
+  };
+
+  useEffect(() => {
+    setEditName(selectedPlayer?.name || "");
+    setEditNickname(selectedPlayer?.nickname || "");
+    setEditImageLink(selectedPlayer?.image_link || "");
+  }, [selectedPlayer]);
+
+  const handleSavePlayer = async () => {
+    if (!selectedPlayer) {
+      return;
+    }
+
+    setSavingPlayer(true);
+    setSavePlayerError(null);
+    setSavePlayerSuccess(null);
+
+    try {
+      const updates = {
+        name: editName.trim(),
+        nickname: editNickname.trim(),
+        image_link: editImageLink.trim() || null,
+      };
+
+      if (!updates.name || !updates.nickname) {
+        setSavePlayerError("Name and nickname cannot be empty.");
+        return;
+      }
+
+      const { data: updated, error } = await supabase
+        .from("players")
+        .update(updates)
+        .eq("player_id", selectedPlayer.player_id)
+        .select("*")
+        .maybeSingle();
+
+      if (error) {
+        setSavePlayerError(error.message || "Failed to update player.");
+        return;
+      }
+
+      if (!updated) {
+        setSavePlayerError("Player not found.");
+        return;
+      }
+
+      setSelectedPlayer(updated);
+      setPlayers((current) =>
+        current.map((p) =>
+          String(p.player_id) === String(updated.player_id) ? updated : p,
+        ),
+      );
+      setSavePlayerSuccess("Player updated successfully.");
+    } catch {
+      setSavePlayerError("Unexpected error while updating player.");
+    } finally {
+      setSavingPlayer(false);
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -266,6 +358,8 @@ export default function AdminPage() {
                         setFiltered([]);
                         setActiveSuggestionIndex(-1);
                         setSelectedPlayer(null);
+                        setSavePlayerError(null);
+                        setSavePlayerSuccess(null);
                       }}
                     >
                       ×
@@ -313,7 +407,7 @@ export default function AdminPage() {
                 )}
 
                 {selectedPlayer && (
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-2 text-sm">
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3 text-sm">
                     <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
                       Player Details
                     </div>
@@ -329,25 +423,35 @@ export default function AdminPage() {
                       <span className="text-slate-500 dark:text-slate-400">
                         name:
                       </span>{" "}
-                      <span className="font-medium text-slate-900 dark:text-slate-100">
-                        {selectedPlayer.name || "N/A"}
-                      </span>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                      />
                     </div>
                     <div>
                       <span className="text-slate-500 dark:text-slate-400">
                         nickname:
                       </span>{" "}
-                      <span className="font-medium text-slate-900 dark:text-slate-100">
-                        {selectedPlayer.nickname || "N/A"}
-                      </span>
+                      <input
+                        type="text"
+                        value={editNickname}
+                        onChange={(e) => setEditNickname(e.target.value)}
+                        className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                      />
                     </div>
                     <div>
                       <span className="text-slate-500 dark:text-slate-400">
                         image_link:
                       </span>{" "}
-                      <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                        {selectedPlayer.image_link || "N/A"}
-                      </span>
+                      <input
+                        type="text"
+                        value={editImageLink}
+                        onChange={(e) => setEditImageLink(e.target.value)}
+                        className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                        placeholder="https://..."
+                      />
                     </div>
                     <div>
                       <span className="text-slate-500 dark:text-slate-400">
@@ -356,6 +460,29 @@ export default function AdminPage() {
                       <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
                         {selectedPlayer.created_at || "N/A"}
                       </span>
+                    </div>
+
+                    {savePlayerError && (
+                      <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
+                        {savePlayerError}
+                      </div>
+                    )}
+
+                    {savePlayerSuccess && (
+                      <div className="rounded bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-2 text-emerald-700 dark:text-emerald-300">
+                        {savePlayerSuccess}
+                      </div>
+                    )}
+
+                    <div>
+                      <button
+                        type="button"
+                        onClick={handleSavePlayer}
+                        disabled={savingPlayer}
+                        className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {savingPlayer ? "Saving..." : "Save Player"}
+                      </button>
                     </div>
                   </div>
                 )}
