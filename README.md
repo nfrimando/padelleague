@@ -9,6 +9,7 @@ A lightweight Next.js app for tracking Padel league players and matches in the P
 - Leaderboard page with two modes:
   - Performance mode powered by Supabase RPC `get_leaderboard(season_filter, type_filter)`
   - Rating mode powered by Supabase RPC `get_leaderboard_ratings(season_filter, type_filter, formula_filter, min_matches)`
+- Admin page at `/admin` with Google sign-in, admin authorization, player lookup, and player editing
 - Shared match card component for consistent match display
 - Shared `MatchFiltersCard` component used by players and leaderboard pages
 - Supports Supabase as the backend/data source
@@ -195,12 +196,6 @@ To transform ratings data, run:
 python3 src/app/scripts/transform/transform_ratings.py
 ```
 
-To transform teams data, run:
-
-```bash
-python3 src/app/scripts/transform/transform_teams.py
-```
-
 To load matches with full-refresh truncation, run:
 
 ```bash
@@ -215,6 +210,51 @@ python3 src/app/scripts/load/load_match_sets_to_supabase_full_refresh.py
 python3 src/app/scripts/load/load_match_player_ratings_to_supabase_full_refresh.py
 python3 src/app/scripts/load/load_reset_matches_sequence.py
 ```
+
+## Admin page
+
+- Route: `src/app/admin/page.tsx` (`/admin`)
+- Authentication: Supabase Google OAuth (`signInWithOAuth`)
+- Authorization: `admin_users` table lookup by `auth.uid()`
+- Admin functionality currently available:
+  - player lookup by name/nickname
+  - edit `players` fields (`name`, `nickname`, `image_link`)
+
+Recommended DB setup for admin auth:
+
+```sql
+create table if not exists public.admin_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table public.admin_users enable row level security;
+
+create policy "users can read own admin row"
+on public.admin_users
+for select
+to authenticated
+using (user_id = auth.uid());
+```
+
+Google OAuth redirect configuration:
+
+1. Supabase Dashboard → Authentication → URL Configuration
+   - Site URL:
+     - local: `http://localhost:3000`
+     - production: `https://www.padelph.com`
+   - Redirect URLs (allowlist):
+     - `http://localhost:3000/**`
+     - `https://www.padelph.com/**`
+
+2. Supabase Dashboard → Authentication → Providers → Google
+   - Enable provider and set Google OAuth client ID/secret.
+
+3. Google Cloud Console → OAuth client
+   - Authorized redirect URI must include your Supabase callback:
+     - `https://<YOUR_SUPABASE_PROJECT_REF>.supabase.co/auth/v1/callback`
+
+If login redirects unexpectedly to localhost in production, verify the Supabase Site URL and Redirect URLs first.
 
 ## Notes
 
