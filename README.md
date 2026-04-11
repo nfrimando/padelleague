@@ -10,7 +10,7 @@ A lightweight Next.js app for tracking Padel league players and matches in the P
 - Shared match card component for consistent match display
 - Shared `MatchFiltersCard` component used by players and leaderboard pages
 - Supports Supabase as the backend/data source
-- Includes CSV transform + refresh scripts for importing players and matches
+- Includes Google Sheet extract, CSV transform, and full refresh scripts for importing players, matches, teams, and sets
 
 ## Local setup
 
@@ -57,20 +57,31 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Data scripts
 
-- `src/app/scripts/player_transform.py`
+- `src/app/scripts/transform_players.py`
   - Transforms `data/inputs/dim_players.csv` into `data/outputs/dim_players_fixed.csv`.
   - Cleans name/nickname/image fields and prepares player data for import.
 
-- `src/app/scripts/match_transform.py`
+- `src/app/scripts/transform_matches.py`
   - Transforms `data/inputs/fact_matches.csv` into:
     - `data/outputs/matches_fixed.csv`
     - `data/outputs/match_teams_fixed.csv`
   - Maps player names/nicknames to Supabase `player_id` values and formats match fields.
 
-- `src/app/scripts/refresh_supabase_from_outputs.py`
+- `src/app/scripts/load_all_to_supabase_full_refresh.py`
   - Performs a full refresh of Supabase tables from the output CSV files.
-  - Reloads tables in this order: `players`, `matches`, `match_teams`.
+  - Reloads tables in this order: `players`, `matches`, `match_teams`, `match_sets`.
   - Resets identities/sequences after import.
+
+- `src/app/scripts/transform_sets.py`
+  - Transforms `data/inputs/fact_sets.csv` into `data/outputs/match_sets_fixed.csv`.
+  - Normalizes set-level game scores for match set imports.
+
+- `src/app/scripts/extract_gsheet.py`
+  - Reads worksheets from the Road to Open League Google Sheet.
+  - Exports these worksheet CSVs into `data/inputs/`:
+    - `fact_matches.csv`
+    - `dim_players.csv`
+    - `fact_sets.csv`
 
 - `src/app/scripts/leaderboard.sql`
   - Creates/updates the `get_leaderboard(season_filter, type_filter)` SQL function in Supabase.
@@ -83,10 +94,16 @@ psql "$SUPABASE_DB_URL" -f src/app/scripts/leaderboard.sql
 
 ## CSV import helpers
 
-To transform the player import CSV, place `dim_players.csv` into `data/inputs/` and run:
+To pull input CSVs directly from Google Sheets, run:
 
 ```bash
-python3 src/app/scripts/player_transform.py
+python3 src/app/scripts/extract_gsheet.py
+```
+
+To transform the player import CSV in `data/inputs/`, run:
+
+```bash
+python3 src/app/scripts/transform_players.py
 ```
 
 The script writes a fixed output file to `data/outputs/dim_players_fixed.csv`.
@@ -94,7 +111,19 @@ The script writes a fixed output file to `data/outputs/dim_players_fixed.csv`.
 To transform match and match team data, run:
 
 ```bash
-python3 src/app/scripts/match_transform.py
+python3 src/app/scripts/transform_matches.py
+```
+
+To transform set-level game score data, run:
+
+```bash
+python3 src/app/scripts/transform_sets.py
+```
+
+To load all transformed outputs into Supabase with a full refresh, run:
+
+```bash
+python3 src/app/scripts/load_all_to_supabase_full_refresh.py
 ```
 
 ## Notes

@@ -2,6 +2,7 @@ import csv
 import os
 from pathlib import Path
 from datetime import datetime
+from time import perf_counter
 
 try:
     import psycopg
@@ -234,6 +235,7 @@ def main() -> None:
             )
 
             log("Inserting players rows")
+            insert_started = perf_counter()
             cursor.executemany(
                 """
                 INSERT INTO players (name, nickname, image_link)
@@ -241,8 +243,10 @@ def main() -> None:
                 """,
                 players,
             )
+            log(f"Inserted players rows in {perf_counter() - insert_started:.2f}s")
 
             log("Inserting matches rows")
+            insert_started = perf_counter()
             cursor.executemany(
                 """
                 INSERT INTO matches (
@@ -259,8 +263,10 @@ def main() -> None:
                 """,
                 matches,
             )
+            log(f"Inserted matches rows in {perf_counter() - insert_started:.2f}s")
 
             log("Inserting match_teams rows")
+            insert_started = perf_counter()
             cursor.executemany(
                 """
                 INSERT INTO match_teams (
@@ -274,8 +280,10 @@ def main() -> None:
                 """,
                 match_teams,
             )
+            log(f"Inserted match_teams rows in {perf_counter() - insert_started:.2f}s")
 
             log("Inserting match_sets rows")
+            insert_started = perf_counter()
             cursor.executemany(
                 """
                 INSERT INTO match_sets (
@@ -288,6 +296,7 @@ def main() -> None:
                 """,
                 match_sets,
             )
+            log(f"Inserted match_sets rows in {perf_counter() - insert_started:.2f}s")
 
             reset_sequences(cursor)
 
