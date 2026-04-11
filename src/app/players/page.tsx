@@ -113,6 +113,13 @@ function PlayersPageContent() {
     });
   }, [playerMatches, seasonFilter, selectedTypeFilter]);
 
+  const selectedPlayerLatestMatchDate = useMemo(() => {
+    const latest = playerMatches.find(
+      (match) => typeof match.date_local === "string" && match.date_local,
+    );
+    return latest?.date_local || null;
+  }, [playerMatches]);
+
   const visibleFiltered = useMemo(() => filtered.slice(0, 5), [filtered]);
 
   const randomPlayers = useMemo(() => {
@@ -669,6 +676,7 @@ function PlayersPageContent() {
                   player={{
                     ...selectedPlayer,
                     latest_rating: selectedPlayerLatestRating,
+                    latest_match_date: selectedPlayerLatestMatchDate,
                   }}
                   size="lg"
                 />
