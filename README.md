@@ -84,18 +84,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
   - Transforms `data/inputs/fact_sets.csv` into `data/outputs/match_sets.csv`.
   - Normalizes set-level game scores for match set imports.
 
-- `src/app/scripts/extract_gsheet.py`
-  - Reads worksheets from the Road to Open League Google Sheet.
-  - Exports these worksheet CSVs into `data/inputs/`:
-    - `fact_matches.csv`
-    - `dim_players.csv`
-    - `fact_sets.csv`
-
-- `src/app/scripts/extract_gsheet_ratings.py`
-  - Reads ratings worksheets from the same Google Sheet.
-  - Exports:
-    - `data/inputs/ratings_v2.csv`
-    - `data/inputs/ratings_v3.csv`
+- `src/app/scripts/extract.py`
+  - Runs all Google Sheets extract scripts in sequence with consolidated logs.
+  - Executes these one-sheet extractors:
+    - `extract_fact_matches.py` → `data/inputs/fact_matches.csv`
+    - `extract_dim_players.py` → `data/inputs/dim_players.csv`
+    - `extract_fact_sets.py` → `data/inputs/fact_sets.csv`
+    - `extract_dim_team.py` (`dim_team!A:G`) → `data/inputs/dim_team.csv`
+    - `extract_ratings_v2.py` (`RatingsV2!A10:I`) → `data/inputs/ratings_v2.csv`
+    - `extract_ratings_v3.py` (`RatingsV3!F9:S`) → `data/inputs/ratings_v3.csv`
 
 - `src/app/scripts/transform_ratings.py`
   - Transforms `ratings_v2.csv` and `ratings_v3.csv` into `data/outputs/match_player_ratings.csv`.
@@ -120,20 +117,14 @@ To run the entire ETL pipeline in one command, run:
 python3 src/app/scripts/ingest.py
 ```
 
-This runs all steps in order: extract from Google Sheets → transform players → load players → transform matches/sets/ratings → load everything else.
+This runs all steps in order: extract all sheets from Google Sheets → transform players → load players → transform matches/sets/ratings → load everything else.
 
 ## CSV import helpers
 
-To pull input CSVs directly from Google Sheets, run:
+To pull all input CSVs directly from Google Sheets, run:
 
 ```bash
-python3 src/app/scripts/extract_gsheet.py
-```
-
-To pull ratings CSVs directly from Google Sheets, run:
-
-```bash
-python3 src/app/scripts/extract_gsheet_ratings.py
+python3 src/app/scripts/extract.py
 ```
 
 To transform the player import CSV in `data/inputs/`, run:
