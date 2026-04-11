@@ -66,7 +66,13 @@ export default function PlayerCard({
                 ? "Send url image to Nigel to update this pic!"
                 : undefined
             }
-            className={`${isLg ? "w-16 h-16 min-w-16 min-h-16" : "w-12 h-12 min-w-12 min-h-12"} shrink-0 aspect-square rounded-full object-cover cursor-pointer transition-transform duration-150 group-hover/player:scale-[1.02]`}
+            className={`${
+              isMatchCompact
+                ? "w-9 h-9 min-w-9 min-h-9 lg:w-12 lg:h-12 lg:min-w-12 lg:min-h-12"
+                : isLg
+                  ? "w-16 h-16 min-w-16 min-h-16"
+                  : "w-12 h-12 min-w-12 min-h-12"
+            } shrink-0 aspect-square rounded-full object-cover cursor-pointer transition-transform duration-150 group-hover/player:scale-[1.02]`}
           />
         </Link>
       ) : (
@@ -78,14 +84,20 @@ export default function PlayerCard({
               ? "Send url image to Nigel to update this pic!"
               : undefined
           }
-          className={`${isLg ? "w-16 h-16 min-w-16 min-h-16" : "w-12 h-12 min-w-12 min-h-12"} shrink-0 aspect-square rounded-full object-cover`}
+          className={`${
+            isMatchCompact
+              ? "w-9 h-9 min-w-9 min-h-9 lg:w-12 lg:h-12 lg:min-w-12 lg:min-h-12"
+              : isLg
+                ? "w-16 h-16 min-w-16 min-h-16"
+                : "w-12 h-12 min-w-12 min-h-12"
+          } shrink-0 aspect-square rounded-full object-cover`}
         />
       )}
       <div className={isMatchCompact ? "text-center" : ""}>
         <div
           className={`${
             isMatchCompact
-              ? "text-xs font-semibold"
+              ? "text-[10px] lg:text-xs font-semibold"
               : isLg
                 ? "text-xl font-semibold"
                 : "text-sm font-medium"
