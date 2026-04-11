@@ -8,7 +8,7 @@ from google.oauth2.service_account import Credentials
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SPREADSHEET_ID = "1w1MK6QWPswLSxnVjoF6W92x2w6C8aBWy9nAy9IDnkPU"
 WORKSHEET_NAME = "RatingsV2"
-CELL_RANGE = "A10:H"
+CELL_RANGE = "A10:I"
 WORKSHEET_V3_NAME = "RatingsV3"
 CELL_V3_RANGE = "F9:S"
 

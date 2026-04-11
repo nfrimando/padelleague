@@ -117,7 +117,7 @@ for _, row in df.iterrows():
 # --- SAVE ---
 df_matches = pd.DataFrame(matches)
 df_matches['winner_team'] = df_matches['winner_team'].astype('Int64')
-df_matches.to_csv("data/outputs/matches_fixed.csv", index=False)
+df_matches.to_csv("data/outputs/matches.csv", index=False)
 
 df_match_teams = pd.DataFrame(match_teams)
 df_match_teams['match_id'] = df_match_teams['match_id'].astype(int)
@@ -125,6 +125,6 @@ df_match_teams['team_number'] = df_match_teams['team_number'].astype(int)
 df_match_teams['player_1_id'] = df_match_teams['player_1_id'].astype('Int64')
 df_match_teams['player_2_id'] = df_match_teams['player_2_id'].astype('Int64')
 df_match_teams['sets_won'] = df_match_teams['sets_won'].astype('Int64')
-df_match_teams.to_csv("data/outputs/match_teams_fixed.csv", index=False)
+df_match_teams.to_csv("data/outputs/match_teams.csv", index=False)
 
 print("✅ Done! Files generated.")

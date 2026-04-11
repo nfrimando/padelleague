@@ -15,10 +15,10 @@ except ImportError as exc:
 BASE_DIR = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = BASE_DIR / "data" / "outputs"
 
-PLAYERS_CSV = OUTPUT_DIR / "dim_players_fixed.csv"
-MATCHES_CSV = OUTPUT_DIR / "matches_fixed.csv"
-MATCH_TEAMS_CSV = OUTPUT_DIR / "match_teams_fixed.csv"
-MATCH_SETS_CSV = OUTPUT_DIR / "match_sets_fixed.csv"
+MATCHES_CSV = OUTPUT_DIR / "matches.csv"
+MATCH_TEAMS_CSV = OUTPUT_DIR / "match_teams.csv"
+MATCH_SETS_CSV = OUTPUT_DIR / "match_sets.csv"
+MATCH_PLAYER_RATINGS_CSV = OUTPUT_DIR / "match_player_ratings.csv"
 
 
 def log(message: str) -> None:
@@ -64,7 +64,7 @@ def ensure_files_exist() -> None:
     log("Checking required output CSV files")
     missing = [
         str(path)
-        for path in (PLAYERS_CSV, MATCHES_CSV, MATCH_TEAMS_CSV, MATCH_SETS_CSV)
+        for path in (MATCHES_CSV, MATCH_TEAMS_CSV, MATCH_SETS_CSV)
         if not path.exists()
     ]
     if missing:
@@ -98,24 +98,6 @@ def clean_bool(value: str | None) -> bool:
     if value is None:
         return False
     return value.lower() in {"true", "t", "1", "yes", "y"}
-
-
-def read_players() -> list[tuple[str, str, str | None]]:
-    log(f"Reading players CSV: {PLAYERS_CSV}")
-    rows: list[tuple[str, str, str | None]] = []
-    with PLAYERS_CSV.open("r", encoding="utf-8", newline="") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            name = clean_text(row.get("name"))
-            nickname = clean_text(row.get("nickname"))
-            image_link = clean_text(row.get("image_link"))
-
-            if not name or not nickname:
-                continue
-
-            rows.append((name, nickname, image_link))
-            log(f"Prepared {len(rows)} player rows")
-    return rows
 
 
 def read_matches() -> list[tuple[int, int | None, str | None, str | None, str | None, str | None, int | None, bool]]:
@@ -193,17 +175,36 @@ def read_match_sets() -> list[tuple[int, int, int, int]]:
     return rows
 
 
+def read_match_player_ratings() -> list[tuple[int, int, str, str, str, str]]:
+    log(f"Reading match player ratings CSV: {MATCH_PLAYER_RATINGS_CSV}")
+    rows: list[tuple[int, int, str, str, str, str]] = []
+    with MATCH_PLAYER_RATINGS_CSV.open("r", encoding="utf-8", newline="") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            player_id = clean_int(row.get("player_id"))
+            match_id = clean_int(row.get("match_id"))
+            rating_pre = clean_text(row.get("rating_pre"))
+            rating_post = clean_text(row.get("rating_post"))
+            result = clean_text(row.get("result"))
+            formula_name = clean_text(row.get("formula_name"))
+
+            if (
+                player_id is None
+                or match_id is None
+                or rating_pre is None
+                or rating_post is None
+                or result is None
+                or formula_name is None
+            ):
+                continue
+
+            rows.append((player_id, match_id, rating_pre, rating_post, result, formula_name))
+    log(f"Prepared {len(rows)} match_player_rating rows")
+    return rows
+
+
 def reset_sequences(cursor) -> None:
-    log("Resetting sequences for players.player_id and matches.match_id")
-    cursor.execute(
-        """
-        SELECT setval(
-            pg_get_serial_sequence('players', 'player_id'),
-            COALESCE((SELECT MAX(player_id) FROM players), 1),
-            COALESCE((SELECT MAX(player_id) FROM players), 0) > 0
-        )
-        """
-    )
+    log("Resetting sequence for matches.match_id")
     cursor.execute(
         """
         SELECT setval(
@@ -219,31 +220,20 @@ def main() -> None:
     log("Starting full refresh from CSV outputs")
     ensure_files_exist()
 
-    players = read_players()
     matches = read_matches()
     match_teams = read_match_teams()
     match_sets = read_match_sets()
+    match_player_ratings = read_match_player_ratings() if MATCH_PLAYER_RATINGS_CSV.exists() else []
 
     database_url = get_database_url()
 
     log("Connecting to database")
     with psycopg.connect(database_url) as conn:
         with conn.cursor() as cursor:
-            log("Truncating tables: match_sets, match_teams, matches, players")
+            log("Truncating tables: match_player_ratings, match_sets, match_teams, matches")
             cursor.execute(
-                "TRUNCATE TABLE match_sets, match_teams, matches, players RESTART IDENTITY CASCADE"
+                "TRUNCATE TABLE match_player_ratings, match_sets, match_teams, matches RESTART IDENTITY CASCADE"
             )
-
-            log("Inserting players rows")
-            insert_started = perf_counter()
-            cursor.executemany(
-                """
-                INSERT INTO players (name, nickname, image_link)
-                VALUES (%s, %s, %s)
-                """,
-                players,
-            )
-            log(f"Inserted players rows in {perf_counter() - insert_started:.2f}s")
 
             log("Inserting matches rows")
             insert_started = perf_counter()
@@ -298,16 +288,37 @@ def main() -> None:
             )
             log(f"Inserted match_sets rows in {perf_counter() - insert_started:.2f}s")
 
+            if match_player_ratings:
+                log("Inserting match_player_ratings rows")
+                insert_started = perf_counter()
+                cursor.executemany(
+                    """
+                    INSERT INTO match_player_ratings (
+                        player_id,
+                        match_id,
+                        rating_pre,
+                        rating_post,
+                        result,
+                        formula_name
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    match_player_ratings,
+                )
+                log(f"Inserted match_player_ratings rows in {perf_counter() - insert_started:.2f}s")
+            else:
+                log("Skipping match_player_ratings: CSV not found")
+
             reset_sequences(cursor)
 
         log("Committing transaction")
         conn.commit()
 
     log("Full refresh complete")
-    log(f"Players loaded: {len(players)}")
     log(f"Matches loaded: {len(matches)}")
     log(f"Match teams loaded: {len(match_teams)}")
     log(f"Match sets loaded: {len(match_sets)}")
+    log(f"Match player ratings loaded: {len(match_player_ratings)}")
 
 
 if __name__ == "__main__":

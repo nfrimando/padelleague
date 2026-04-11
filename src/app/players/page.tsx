@@ -27,6 +27,9 @@ function PlayersPageContent() {
   const [filtered, setFiltered] = useState<Player[]>([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [selectedPlayerLatestRating, setSelectedPlayerLatestRating] = useState<
+    number | null
+  >(null);
   const [playerMatches, setPlayerMatches] = useState<MatchWithTeams[]>([]);
   const [seasonFilter, setSeasonFilter] = useState<number | "ALL">(ALL_FILTER);
   const [selectedTypeFilter, setSelectedTypeFilter] =
@@ -232,8 +235,10 @@ function PlayersPageContent() {
   useEffect(() => {
     if (!selectedPlayer) {
       setPlayerMatches([]);
+      setSelectedPlayerLatestRating(null);
       return;
     }
+    const selectedPlayerId = String(selectedPlayer.player_id);
 
     let isCancelled = false;
 
@@ -252,11 +257,13 @@ function PlayersPageContent() {
         if (teamsError) {
           console.error("Error fetching teams:", teamsError);
           setPlayerMatches([]);
+          setSelectedPlayerLatestRating(null);
           return;
         }
 
         if (!teamsData || teamsData.length === 0) {
           setPlayerMatches([]);
+          setSelectedPlayerLatestRating(null);
           return;
         }
 
@@ -273,6 +280,7 @@ function PlayersPageContent() {
         if (matchesError) {
           console.error("Error fetching matches:", matchesError);
           setPlayerMatches([]);
+          setSelectedPlayerLatestRating(null);
           return;
         }
 
@@ -287,6 +295,7 @@ function PlayersPageContent() {
         if (allTeamsError) {
           console.error("Error fetching teams:", allTeamsError);
           setPlayerMatches([]);
+          setSelectedPlayerLatestRating(null);
           return;
         }
 
@@ -302,6 +311,109 @@ function PlayersPageContent() {
           // Continue without sets data (not critical)
         }
 
+        // Get pre-match ratings for these matches. Prefer v3, then v2.
+        const { data: matchRatingsData, error: matchRatingsError } =
+          await supabase
+            .from("match_player_ratings")
+            .select(
+              "match_id, player_id, rating_pre, rating_post, formula_name",
+            )
+            .in("match_id", matchIds);
+
+        if (matchRatingsError) {
+          console.error(
+            "Error fetching match player ratings:",
+            matchRatingsError,
+          );
+          // Continue without ratings data (not critical)
+        }
+
+        type RatingEntry = {
+          rating: number;
+          formula: string;
+          priority: number;
+        };
+
+        const ratingLookup = new Map<string, RatingEntry>();
+        const selectedPlayerRatingPostByMatch = new Map<
+          number,
+          { ratingPost: number; priority: number }
+        >();
+        for (const row of matchRatingsData || []) {
+          const matchId = Number(row.match_id);
+          const playerId = String(row.player_id);
+          const rating = Number(row.rating_pre);
+          const ratingPost = Number(row.rating_post);
+          const formula = String(row.formula_name || "").toLowerCase();
+
+          if (
+            !Number.isFinite(matchId) ||
+            !Number.isFinite(rating) ||
+            !playerId
+          ) {
+            continue;
+          }
+
+          const priority = formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
+          const key = `${matchId}:${playerId}`;
+          const existing = ratingLookup.get(key);
+
+          if (!existing || priority >= existing.priority) {
+            ratingLookup.set(key, {
+              rating,
+              formula,
+              priority,
+            });
+          }
+
+          if (playerId === selectedPlayerId && Number.isFinite(ratingPost)) {
+            const existingPost = selectedPlayerRatingPostByMatch.get(matchId);
+            if (!existingPost || priority >= existingPost.priority) {
+              selectedPlayerRatingPostByMatch.set(matchId, {
+                ratingPost,
+                priority,
+              });
+            }
+          }
+        }
+
+        let latestRatingPost: number | null = null;
+        for (const match of matchesData || []) {
+          const matchId = Number(match.match_id);
+          const selectedPlayerPost =
+            selectedPlayerRatingPostByMatch.get(matchId);
+          if (selectedPlayerPost) {
+            latestRatingPost = selectedPlayerPost.ratingPost;
+            break;
+          }
+        }
+
+        if (!isCancelled) {
+          setSelectedPlayerLatestRating(latestRatingPost);
+        }
+
+        const attachPreMatchRating = (
+          matchId: number,
+          player: Player | null,
+        ) => {
+          if (!player) {
+            return null;
+          }
+
+          const key = `${matchId}:${String(player.player_id)}`;
+          const ratingEntry = ratingLookup.get(key);
+
+          if (!ratingEntry) {
+            return player;
+          }
+
+          return {
+            ...player,
+            pre_match_rating: ratingEntry.rating,
+            pre_match_rating_formula: ratingEntry.formula,
+          };
+        };
+
         // Combine matches with teams and sets
         const matches: MatchWithTeams[] = (matchesData || []).map((m) => ({
           ...m,
@@ -311,8 +423,8 @@ function PlayersPageContent() {
               uuid: t.uuid,
               team_number: t.team_number,
               sets_won: t.sets_won,
-              player_1: t.player_1 || null,
-              player_2: t.player_2 || null,
+              player_1: attachPreMatchRating(m.match_id, t.player_1 || null),
+              player_2: attachPreMatchRating(m.match_id, t.player_2 || null),
             })),
           sets: (matchSetsData || []).filter((s) => s.match_id === m.match_id),
         }));
@@ -324,6 +436,7 @@ function PlayersPageContent() {
         console.error("Error fetching player matches:", error);
         if (!isCancelled) {
           setPlayerMatches([]);
+          setSelectedPlayerLatestRating(null);
         }
       } finally {
         if (!isCancelled) {
@@ -545,7 +658,13 @@ function PlayersPageContent() {
 
             return (
               <div className="mt-6 border p-4 rounded">
-                <PlayerCard player={selectedPlayer} size="lg" />
+                <PlayerCard
+                  player={{
+                    ...selectedPlayer,
+                    latest_rating: selectedPlayerLatestRating,
+                  }}
+                  size="lg"
+                />
                 {!loadingMatches && matchCount > 0 && (
                   <div className="mt-4 pt-3 border-t space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
