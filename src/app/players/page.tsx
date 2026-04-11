@@ -572,7 +572,7 @@ function PlayersPageContent() {
               />
             </div>
           </div>
-          <div className="relative min-h-[220px]">
+          <div className="relative min-h-[220px] w-full lg:max-w-[75vw] mx-auto px-6">
             {loadingMatches && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-[1px]">
                 <div className="text-sm font-medium text-slate-700 dark:text-slate-200">

@@ -94,7 +94,7 @@ export default function MatchCard({
 
       {isExpanded && (
         <>
-          <div className="flex flex-col lg:flex-row items-stretch justify-center gap-4">
+          <div className="flex items-stretch justify-center gap-3 overflow-x-auto pb-1">
             {/* Team 1 */}
             <TeamCard
               team={team1}
@@ -102,16 +102,16 @@ export default function MatchCard({
               highlightPlayerId={highlightPlayerId}
             />
 
-            <div className="flex flex-col items-center justify-center px-3">
-              <div className="text-lg font-bold text-blue-600 dark:text-blue-400 mb-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 rounded">
+            <div className="flex flex-col items-center justify-center px-2 min-w-[124px]">
+              <div className="text-base font-bold text-blue-600 dark:text-blue-400 mb-1 px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 rounded">
                 {team1?.sets_won ?? 0} - {team2?.sets_won ?? 0}
               </div>
-              <div className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-300 mb-1">
                 VS
               </div>
               {/* Game Scores */}
               {match.sets && match.sets.length > 0 && (
-                <div className="text-xs text-slate-600 dark:text-slate-400">
+                <div className="text-[11px] text-center text-slate-600 dark:text-slate-400">
                   {match.sets
                     .map((set) => `${set.team_1_games}-${set.team_2_games}`)
                     .join(", ")}
