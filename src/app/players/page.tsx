@@ -29,6 +29,9 @@ function PlayersPageContent() {
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [isClearingPlayerSelection, setIsClearingPlayerSelection] =
     useState(false);
+  const [pendingSelectedPlayerId, setPendingSelectedPlayerId] = useState<
+    string | null
+  >(null);
   const [selectedPlayerLatestRating, setSelectedPlayerLatestRating] = useState<
     number | null
   >(null);
@@ -172,6 +175,7 @@ function PlayersPageContent() {
 
   const selectPlayerFromSearch = (player: Player) => {
     setIsClearingPlayerSelection(false);
+    setPendingSelectedPlayerId(String(player.player_id));
     setSelectedPlayer(player);
     setSearch(player.name);
     setFiltered([]);
@@ -221,6 +225,14 @@ function PlayersPageContent() {
     const params = new URLSearchParams(searchParamsString);
     const playerIdParam = params.get("playerId") || params.get("playerid");
 
+    if (pendingSelectedPlayerId) {
+      if (String(playerIdParam || "") === pendingSelectedPlayerId) {
+        setPendingSelectedPlayerId(null);
+      } else {
+        return;
+      }
+    }
+
     if (!playerIdParam && isClearingPlayerSelection) {
       setIsClearingPlayerSelection(false);
     }
@@ -257,7 +269,12 @@ function PlayersPageContent() {
     );
     setSearch(matchedPlayer.name || "");
     setFiltered([]);
-  }, [players, searchParamsString, isClearingPlayerSelection]);
+  }, [
+    players,
+    searchParamsString,
+    isClearingPlayerSelection,
+    pendingSelectedPlayerId,
+  ]);
 
   // Fetch matches for selected player
   useEffect(() => {
@@ -576,6 +593,7 @@ function PlayersPageContent() {
               className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
               onClick={() => {
                 setIsClearingPlayerSelection(true);
+                setPendingSelectedPlayerId(null);
                 setSearch("");
                 setFiltered([]);
                 setActiveSuggestionIndex(-1);
