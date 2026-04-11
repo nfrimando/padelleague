@@ -25,6 +25,7 @@ function PlayersPageContent() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState("");
   const [filtered, setFiltered] = useState<Player[]>([]);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [playerMatches, setPlayerMatches] = useState<MatchWithTeams[]>([]);
   const [seasonFilter, setSeasonFilter] = useState<number | "ALL">(ALL_FILTER);
@@ -109,6 +110,22 @@ function PlayersPageContent() {
     });
   }, [playerMatches, seasonFilter, selectedTypeFilter]);
 
+  const visibleFiltered = useMemo(() => filtered.slice(0, 5), [filtered]);
+
+  const randomPlayers = useMemo(() => {
+    const shuffled = [...players].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 8);
+  }, [players]);
+
+  const shouldShowDropdown =
+    visibleFiltered.length > 0 &&
+    search.trim().length > 0 &&
+    (!selectedPlayer ||
+      search.trim().toLowerCase() !==
+        String(selectedPlayer.name || "")
+          .trim()
+          .toLowerCase());
+
   const getPlayerProfileHref = (playerId: string | number) => {
     const params = new URLSearchParams(searchParamsString);
     params.set("playerId", String(playerId));
@@ -131,6 +148,14 @@ function PlayersPageContent() {
     router.replace(nextUrl, { scroll: false });
   };
 
+  const selectPlayerFromSearch = (player: Player) => {
+    setSelectedPlayer(player);
+    setSearch(player.name);
+    setFiltered([]);
+    setActiveSuggestionIndex(-1);
+    updatePlayerParam(player.player_id);
+  };
+
   // Fetch players on load
   useEffect(() => {
     async function fetchPlayers() {
@@ -151,6 +176,7 @@ function PlayersPageContent() {
   useEffect(() => {
     if (!search) {
       setFiltered([]);
+      setActiveSuggestionIndex(-1);
       return;
     }
 
@@ -164,6 +190,7 @@ function PlayersPageContent() {
     });
 
     setFiltered(results);
+    setActiveSuggestionIndex(-1);
   }, [search, players]);
 
   // Auto-select player from URL query param
@@ -323,8 +350,39 @@ function PlayersPageContent() {
           <input
             type="text"
             placeholder="Type player name..."
-            className="w-full border px-3 py-2 rounded"
+            className="w-full border px-3 py-2 pr-10 rounded"
             value={search}
+            onKeyDown={(e) => {
+              if (!shouldShowDropdown) {
+                return;
+              }
+
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActiveSuggestionIndex((prev) =>
+                  prev < visibleFiltered.length - 1 ? prev + 1 : 0,
+                );
+              }
+
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActiveSuggestionIndex((prev) =>
+                  prev > 0 ? prev - 1 : visibleFiltered.length - 1,
+                );
+              }
+
+              if (e.key === "Enter" && activeSuggestionIndex >= 0) {
+                e.preventDefault();
+                const selected = visibleFiltered[activeSuggestionIndex];
+                if (selected) {
+                  selectPlayerFromSearch(selected);
+                }
+              }
+
+              if (e.key === "Escape") {
+                setActiveSuggestionIndex(-1);
+              }
+            }}
             onChange={(e) => {
               const nextValue = e.target.value;
               setSearch(nextValue);
@@ -347,39 +405,66 @@ function PlayersPageContent() {
             }}
           />
 
+          {search.trim().length > 0 && (
+            <button
+              type="button"
+              aria-label="Clear player search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+              onClick={() => {
+                setSearch("");
+                setFiltered([]);
+                setActiveSuggestionIndex(-1);
+                setSelectedPlayer(null);
+                setPlayerMatches([]);
+                updatePlayerParam(null);
+              }}
+            >
+              ×
+            </button>
+          )}
+
           {/* Dropdown */}
-          {filtered.length > 0 &&
-            search.trim().length > 0 &&
-            (!selectedPlayer ||
-              search.trim().toLowerCase() !==
-                String(selectedPlayer.name || "")
-                  .trim()
-                  .toLowerCase()) && (
-              <div className="absolute left-0 right-0 top-full mt-2 z-50 border rounded shadow bg-white dark:bg-slate-900">
-                {filtered.slice(0, 5).map((player) => (
-                  <div
-                    key={player.player_id}
-                    className="px-3 py-2 cursor-pointer hover:bg-gray-700 bg-gray-800 text-white"
-                    onClick={() => {
-                      setSelectedPlayer(player);
-                      setSearch(player.name);
-                      setFiltered([]);
-                      updatePlayerParam(player.player_id);
-                    }}
-                  >
-                    <div>
-                      <div className="font-medium">{player.name}</div>
-                      {player.nickname && (
-                        <div className="text-sm text-gray-500">
-                          {player.nickname}
-                        </div>
-                      )}
-                    </div>
+          {shouldShowDropdown && (
+            <div className="absolute left-0 right-0 top-full mt-2 z-50 border rounded shadow bg-white dark:bg-slate-900">
+              {visibleFiltered.map((player, index) => (
+                <div
+                  key={player.player_id}
+                  className={`px-3 py-2 cursor-pointer text-white ${
+                    index === activeSuggestionIndex
+                      ? "bg-gray-700"
+                      : "bg-gray-800 hover:bg-gray-700"
+                  }`}
+                  onMouseEnter={() => setActiveSuggestionIndex(index)}
+                  onClick={() => selectPlayerFromSearch(player)}
+                >
+                  <div>
+                    <div className="font-medium">{player.name}</div>
+                    {player.nickname && (
+                      <div className="text-sm text-gray-500">
+                        {player.nickname}
+                      </div>
+                    )}
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {!selectedPlayer &&
+          search.trim().length === 0 &&
+          randomPlayers.length > 0 && (
+            <div className="mt-6 border rounded p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-3">
+                Explore Players...
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {randomPlayers.map((player) => (
+                  <PlayerCard key={player.player_id} player={player} />
                 ))}
               </div>
-            )}
-        </div>
+            </div>
+          )}
 
         {/* Selected Player Details */}
         {selectedPlayer &&
