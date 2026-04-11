@@ -339,36 +339,38 @@ export default function AdminPage() {
             {isAdmin ? (
               <div className="w-full xl:max-w-[88rem] mx-auto rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 xl:p-6">
                 <div className="space-y-4">
-                  <div>
+                  <div className="mx-auto w-full max-w-md text-center">
                     <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                       Admin Tools
                     </h2>
                   </div>
 
-                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/60">
-                    {ADMIN_PLAYER_TABS.map((tab) => {
-                      const active = activePlayerTab === tab.value;
-                      return (
-                        <button
-                          key={tab.value}
-                          type="button"
-                          onClick={() => {
-                            setActivePlayerTab(tab.value);
-                            setSavePlayerError(null);
-                            setSavePlayerSuccess(null);
-                            setCreatePlayerError(null);
-                            setCreatePlayerSuccess(null);
-                          }}
-                          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                            active
-                              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                              : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      );
-                    })}
+                  <div className="w-full flex justify-center">
+                    <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/60">
+                      {ADMIN_PLAYER_TABS.map((tab) => {
+                        const active = activePlayerTab === tab.value;
+                        return (
+                          <button
+                            key={tab.value}
+                            type="button"
+                            onClick={() => {
+                              setActivePlayerTab(tab.value);
+                              setSavePlayerError(null);
+                              setSavePlayerSuccess(null);
+                              setCreatePlayerError(null);
+                              setCreatePlayerSuccess(null);
+                            }}
+                            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                              active
+                                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                                : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {activePlayerTab === "EDIT" ? (
