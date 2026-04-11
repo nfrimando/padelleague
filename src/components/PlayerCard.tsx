@@ -10,6 +10,7 @@ interface PlayerCardProps {
   size?: "sm" | "lg";
   highlight?: boolean;
   layout?: "default" | "matchCompact";
+  disableLink?: boolean;
 }
 
 export default function PlayerCard({
@@ -17,6 +18,7 @@ export default function PlayerCard({
   size = "sm",
   highlight = false,
   layout = "default",
+  disableLink = false,
 }: PlayerCardProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -26,6 +28,10 @@ export default function PlayerCard({
     ? (player?.image_link as string)
     : "/default-avatar.webp";
   const playerHref = (() => {
+    if (disableLink) {
+      return null;
+    }
+
     if (!player?.player_id) {
       return null;
     }
