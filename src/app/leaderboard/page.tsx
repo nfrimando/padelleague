@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 
 type LeaderboardRow = {
-  player_id: number;
+  player_id: string;
   name: string;
   matches_played: number;
   wins: number;
@@ -51,7 +51,7 @@ function LeaderboardPageContent() {
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
-  const [topPlayersById, setTopPlayersById] = useState<Map<number, Player>>(
+  const [topPlayersById, setTopPlayersById] = useState<Map<string, Player>>(
     new Map(),
   );
   const [seasonFilter, setSeasonFilter] = useState<
@@ -221,7 +221,7 @@ function LeaderboardPageContent() {
       }
 
       const combinedRows = rpcResults.flatMap((result) => result.data || []);
-      const aggregatedMap = new Map<number, LeaderboardRow>();
+      const aggregatedMap = new Map<string, LeaderboardRow>();
 
       const parseDateMs = (value: string | null) => {
         if (!value) {
@@ -247,7 +247,10 @@ function LeaderboardPageContent() {
       };
 
       combinedRows.forEach((row: any) => {
-        const playerId = Number(row.player_id);
+        const playerId = String(row.player_id ?? "");
+        if (!playerId) {
+          return;
+        }
         const matchesPlayed = Number(row.matches_played || 0);
         const wins = Number(row.wins || 0);
         const setsWon = Number(row.sets_won || 0);
@@ -365,21 +368,20 @@ function LeaderboardPageContent() {
           .in("player_id", topTenIds);
 
         if (!playersError && playersData) {
-          const map = new Map<number, Player>();
+          const map = new Map<string, Player>();
           playersData.forEach((player) => {
-            map.set(Number(player.player_id), {
+            const playerId = String(player.player_id);
+            map.set(playerId, {
               player_id: String(player.player_id),
               name: player.name || "Unknown",
               nickname: player.nickname || "-",
               image_link: player.image_link || null,
               latest_rating:
-                normalized.find(
-                  (row) => row.player_id === Number(player.player_id),
-                )?.latest_rating ?? null,
+                normalized.find((row) => row.player_id === playerId)
+                  ?.latest_rating ?? null,
               latest_match_date:
-                normalized.find(
-                  (row) => row.player_id === Number(player.player_id),
-                )?.last_match_date ?? null,
+                normalized.find((row) => row.player_id === playerId)
+                  ?.last_match_date ?? null,
             });
           });
           setTopPlayersById(map);
