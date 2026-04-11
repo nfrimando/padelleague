@@ -1,14 +1,13 @@
 """
 Full ETL pipeline. Runs all scripts in order:
 
-  1. extract_gsheet.py          — pull fact_matches, dim_players, fact_sets from Google Sheets
-  2. extract_gsheet_ratings.py  — pull ratings_v2, ratings_v3 from Google Sheets
-  3. transform_players.py       — produce data/outputs/players.csv
-    4. load_players_to_supabase_full_refresh.py — insert players (generates player_id values in Supabase)
-  5. transform_matches.py       — produce matches.csv and match_teams.csv (needs player_ids)
-  6. transform_sets.py          — produce match_sets.csv
-  7. transform_ratings.py       — produce match_player_ratings.csv (needs player_ids)
-  8. load_all_to_supabase_full_refresh.py — insert matches, match_teams, match_sets, ratings
+    1. extract.py                 — run all Google Sheets extracts
+    2. transform_players.py       — produce data/outputs/players.csv
+    3. load_players_to_supabase_full_refresh.py — insert players (generates player_id values in Supabase)
+    4. transform_matches.py       — produce matches.csv and match_teams.csv (needs player_ids)
+    5. transform_sets.py          — produce match_sets.csv
+    6. transform_ratings.py       — produce match_player_ratings.csv (needs player_ids)
+    7. load_all_to_supabase_full_refresh.py — insert matches, match_teams, match_sets, ratings
 """
 
 import subprocess
@@ -20,8 +19,7 @@ from time import perf_counter
 SCRIPTS_DIR = Path(__file__).resolve().parent
 
 PIPELINE = [
-    ("Extract: fact_matches / dim_players / fact_sets", "extract_gsheet.py"),
-    ("Extract: ratings_v2 / ratings_v3",               "extract_gsheet_ratings.py"),
+    ("Extract: all sheets",                             "extract.py"),
     ("Transform: players",                              "transform_players.py"),
     ("Load: players → Supabase",                        "load_players_to_supabase_full_refresh.py"),
     ("Transform: matches + match_teams",                "transform_matches.py"),

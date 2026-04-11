@@ -45,3 +45,7 @@ next-env.d.ts
 
 # scripts secrets/config exports
 /src/app/scripts/**/*.json
+
+# python cache
+__pycache__/
+*.py[cod]
