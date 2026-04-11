@@ -64,10 +64,7 @@ transformed_data = transformed_data.reset_index(drop=True)
 
 
 # === SAVE OUTPUT ===
-# Get the filename without extension and add _fixed prefix
-base_filename = os.path.basename(INPUT_FILE)
-filename_without_ext = os.path.splitext(base_filename)[0]
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, f"{filename_without_ext}_fixed.csv")
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "players.csv")
 
 transformed_data.to_csv(OUTPUT_FILE, index=False, na_rep="")
 

@@ -42,6 +42,12 @@ export default function PlayerCard({
   const isMatchCompact = layout === "matchCompact";
   const displayName = player?.name || "N/A";
   const displayLabel = player?.nickname || "—";
+  const preMatchRating = player?.pre_match_rating;
+  const hasPreMatchRating =
+    typeof preMatchRating === "number" && Number.isFinite(preMatchRating);
+  const latestRating = player?.latest_rating;
+  const hasLatestRating =
+    typeof latestRating === "number" && Number.isFinite(latestRating);
 
   return (
     <div
@@ -93,57 +99,67 @@ export default function PlayerCard({
           } shrink-0 aspect-square rounded-full object-cover`}
         />
       )}
-      <div className={isMatchCompact ? "text-center" : ""}>
-        <div
-          className={`${
-            isMatchCompact
-              ? "text-[10px] lg:text-xs font-semibold"
-              : isLg
-                ? "text-xl font-semibold"
-                : "text-sm font-medium"
-          } text-slate-900 dark:text-slate-100`}
-        >
-          {playerHref ? (
-            <Link
-              href={playerHref}
-              className={`text-slate-900 dark:text-slate-100 decoration-transparent underline-offset-2 transition-colors duration-150 hover:text-sky-700 dark:hover:text-sky-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
-                isMatchCompact
-                  ? "inline-block"
-                  : "inline-flex items-center gap-1"
-              }`}
-            >
-              {isMatchCompact ? (
+      <div className={isMatchCompact ? "text-center" : "flex-1 min-w-0"}>
+        {isMatchCompact ? (
+          <>
+            <div className="text-[10px] lg:text-xs font-semibold text-slate-900 dark:text-slate-100">
+              {playerHref ? (
+                <Link
+                  href={playerHref}
+                  className="inline-block text-slate-900 dark:text-slate-100 decoration-transparent underline-offset-2 transition-colors duration-150 hover:text-sky-700 dark:hover:text-sky-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+                >
+                  <span className="inline lg:hidden">{displayLabel}</span>
+                  <span className="hidden lg:inline">{displayName}</span>
+                </Link>
+              ) : (
                 <>
                   <span className="inline lg:hidden">{displayLabel}</span>
                   <span className="hidden lg:inline">{displayName}</span>
                 </>
-              ) : (
-                displayName
               )}
-              {!isMatchCompact && (
-                <span className="text-sky-600/80 dark:text-sky-300/80 opacity-0 translate-x-[-2px] transition-all duration-150 group-hover/player:opacity-100 group-hover/player:translate-x-0">
-                  {"->"}
-                </span>
-              )}
-            </Link>
-          ) : isMatchCompact ? (
-            <>
-              <span className="inline lg:hidden">{displayLabel}</span>
-              <span className="hidden lg:inline">{displayName}</span>
-            </>
-          ) : (
-            displayName
-          )}
-        </div>
-        {isMatchCompact ? (
-          <div className="hidden lg:block text-[11px] text-slate-500 dark:text-slate-400">
-            {displayLabel}
-          </div>
+            </div>
+            <div className="hidden lg:block text-[11px] text-slate-500 dark:text-slate-400">
+              {displayLabel}
+            </div>
+          </>
         ) : (
-          <div
-            className={`${isLg ? "text-sm" : "text-xs"} text-slate-500 dark:text-slate-400`}
-          >
-            {displayLabel}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div
+                className={`${isLg ? "text-xl font-semibold" : "text-sm font-medium"} text-slate-900 dark:text-slate-100`}
+              >
+                {playerHref ? (
+                  <Link
+                    href={playerHref}
+                    className="inline-flex items-center gap-1 text-slate-900 dark:text-slate-100 decoration-transparent underline-offset-2 transition-colors duration-150 hover:text-sky-700 dark:hover:text-sky-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+                  >
+                    {displayName}
+                    <span className="text-sky-600/80 dark:text-sky-300/80 opacity-0 translate-x-[-2px] transition-all duration-150 group-hover/player:opacity-100 group-hover/player:translate-x-0">
+                      {"->"}
+                    </span>
+                  </Link>
+                ) : (
+                  displayName
+                )}
+              </div>
+              <div
+                className={`${isLg ? "text-sm" : "text-xs"} text-slate-500 dark:text-slate-400`}
+              >
+                {displayLabel}
+              </div>
+            </div>
+            {hasLatestRating && (
+              <div
+                className={`inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 dark:border-sky-700/60 dark:bg-sky-900/30 ${isLg ? "text-base" : "text-sm"} font-bold tabular-nums text-sky-700 dark:text-sky-300 whitespace-nowrap leading-none shadow-sm`}
+              >
+                {latestRating.toFixed(2)}
+              </div>
+            )}
+          </div>
+        )}
+        {isMatchCompact && hasPreMatchRating && (
+          <div className="mt-0.5 text-[10px] lg:text-[11px] font-medium text-sky-700 dark:text-sky-300">
+            {preMatchRating.toFixed(2)}
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 import pandas as pd
 
 INPUT_PATH = "data/inputs/fact_sets.csv"
-OUTPUT_PATH = "data/outputs/match_sets_fixed.csv"
+OUTPUT_PATH = "data/outputs/match_sets.csv"
 
 
 def main() -> None:
