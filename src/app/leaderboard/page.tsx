@@ -362,31 +362,31 @@ function LeaderboardPageContent() {
                   </div>
                 </div>
               )}
-              <div className="overflow-x-auto overflow-y-scroll max-h-[70vh] border rounded-lg ring-1 ring-slate-200 dark:ring-slate-700">
+              <div className="overflow-x-hidden md:overflow-x-auto overflow-y-scroll max-h-[70vh] border rounded-lg ring-1 ring-slate-200 dark:ring-slate-700">
                 <table
                   className={`w-full text-sm ${loading ? "opacity-70" : ""}`}
                 >
                   <thead>
                     <tr>
-                      <th className="sticky top-0 left-0 z-50 w-[72px] min-w-[72px] bg-slate-100 dark:bg-slate-800 text-left px-4 py-3 shadow-sm">
+                      <th className="sticky top-0 md:left-0 z-50 w-[72px] min-w-[72px] bg-slate-100 dark:bg-slate-800 text-left px-4 py-3 shadow-sm">
                         Rank
                       </th>
-                      <th className="sticky top-0 left-[72px] z-50 min-w-[220px] bg-slate-100 dark:bg-slate-800 text-left px-4 py-3 shadow-sm">
+                      <th className="sticky top-0 md:left-[72px] z-50 min-w-[190px] md:min-w-[220px] bg-slate-100 dark:bg-slate-800 text-left px-4 py-3 shadow-sm">
                         Player
                       </th>
-                      <th className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
+                      <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
                         Matches
                       </th>
-                      <th className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
+                      <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
                         Wins
                       </th>
-                      <th className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
+                      <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
                         Sets Won
                       </th>
-                      <th className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
+                      <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
                         Sets Lost
                       </th>
-                      <th className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
+                      <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
                         Win Rate
                       </th>
                     </tr>
@@ -402,7 +402,7 @@ function LeaderboardPageContent() {
                         }`}
                       >
                         <td
-                          className={`sticky left-0 z-30 w-[72px] min-w-[72px] px-4 py-3 font-semibold shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
+                          className={`md:sticky md:left-0 z-30 w-[72px] min-w-[72px] px-4 py-3 font-semibold md:shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
                             row.rank === 1
                               ? "bg-amber-50 dark:bg-amber-900/20"
                               : "bg-white dark:bg-slate-900"
@@ -411,7 +411,7 @@ function LeaderboardPageContent() {
                           #{row.rank}
                         </td>
                         <td
-                          className={`sticky left-[72px] z-30 min-w-[220px] px-4 py-3 shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
+                          className={`md:sticky md:left-[72px] z-30 min-w-[190px] md:min-w-[220px] px-4 py-3 md:shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
                             row.rank === 1
                               ? "bg-amber-50 dark:bg-amber-900/20"
                               : "bg-white dark:bg-slate-900"
@@ -447,8 +447,17 @@ function LeaderboardPageContent() {
                                 </span>
                               )}
                           </div>
+                          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300 md:hidden">
+                            <div>Matches: {row.matches_played}</div>
+                            <div>Wins: {row.wins}</div>
+                            <div>Sets Won: {row.sets_won}</div>
+                            <div>Sets Lost: {row.sets_lost}</div>
+                            <div className="col-span-2 font-medium">
+                              Win Rate: {(row.win_rate * 100).toFixed(1)}%
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="hidden md:table-cell px-4 py-3 text-right">
                           {index < 10 ? (
                             <div className="inline-flex items-center justify-end">
                               <span className="text-base font-semibold bg-gradient-to-r from-slate-700 to-slate-500 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
@@ -459,7 +468,7 @@ function LeaderboardPageContent() {
                             row.matches_played
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="hidden md:table-cell px-4 py-3 text-right">
                           {index < 10 ? (
                             <div className="inline-flex items-center justify-end">
                               <span className="text-base font-semibold bg-gradient-to-r from-emerald-600 to-lime-500 dark:from-emerald-400 dark:to-lime-300 bg-clip-text text-transparent">
@@ -470,7 +479,7 @@ function LeaderboardPageContent() {
                             row.wins
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="hidden md:table-cell px-4 py-3 text-right">
                           {index < 10 ? (
                             <div className="inline-flex items-center justify-end">
                               <span className="text-base font-semibold bg-gradient-to-r from-indigo-600 to-violet-500 dark:from-indigo-400 dark:to-violet-300 bg-clip-text text-transparent">
@@ -481,7 +490,7 @@ function LeaderboardPageContent() {
                             row.sets_won
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="hidden md:table-cell px-4 py-3 text-right">
                           {index < 10 ? (
                             <div className="inline-flex items-center justify-end">
                               <span className="text-base font-semibold bg-gradient-to-r from-rose-600 to-orange-500 dark:from-rose-400 dark:to-orange-300 bg-clip-text text-transparent">
@@ -492,7 +501,7 @@ function LeaderboardPageContent() {
                             row.sets_lost
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right font-medium">
+                        <td className="hidden md:table-cell px-4 py-3 text-right font-medium">
                           {index < 10 ? (
                             <div className="inline-flex items-center justify-end">
                               <span className="text-base font-semibold bg-gradient-to-r from-amber-500 to-yellow-400 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent">
