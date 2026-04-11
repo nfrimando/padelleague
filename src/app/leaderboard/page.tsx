@@ -18,6 +18,8 @@ type LeaderboardRow = {
   sets_lost: number;
   win_rate: number;
   latest_rating: number | null;
+  last_match_id: number | null;
+  last_match_date: string | null;
 };
 
 const ALL_TYPES = "ALL";
@@ -25,6 +27,10 @@ const ALL_SEASONS = "ALL";
 const MIN_MATCHES = 5;
 const MIN_MATCHES_ALL_TYPES = 10;
 const MAX_LEADERBOARD_ROWS = 20;
+const LEADERBOARD_MODE_OPTIONS = [
+  { value: "PERFORMANCE", label: "Performance" },
+  { value: "RATING", label: "Rating" },
+] as const;
 const TYPE_FILTER_OPTIONS = [
   { value: "ALL", label: "ALL", includeTypes: null as string[] | null },
   {
@@ -54,6 +60,8 @@ function LeaderboardPageContent() {
   const [seasons, setSeasons] = useState<number[]>([]);
   const [selectedTypeFilter, setSelectedTypeFilter] =
     useState<string>(ALL_TYPES);
+  const [selectedMode, setSelectedMode] =
+    useState<(typeof LEADERBOARD_MODE_OPTIONS)[number]["value"]>("PERFORMANCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,12 +122,20 @@ function LeaderboardPageContent() {
       ? (typeParam as string)
       : ALL_TYPES;
 
+    const modeParam = params.get("mode");
+    const nextMode = LEADERBOARD_MODE_OPTIONS.some(
+      (option) => option.value === modeParam,
+    )
+      ? (modeParam as (typeof LEADERBOARD_MODE_OPTIONS)[number]["value"])
+      : "PERFORMANCE";
+
     setSeasonFilter((current) =>
       current === nextSeason ? current : nextSeason,
     );
     setSelectedTypeFilter((current) =>
       current === nextType ? current : nextType,
     );
+    setSelectedMode((current) => (current === nextMode ? current : nextMode));
   }, [seasons, searchParamsString]);
 
   useEffect(() => {
@@ -130,6 +146,8 @@ function LeaderboardPageContent() {
     const params = new URLSearchParams(searchParamsString);
     params.set("season", String(seasonFilter));
     params.set("type", selectedTypeFilter);
+    params.set("mode", selectedMode);
+    params.delete("formula");
 
     const nextQuery = params.toString();
     if (nextQuery === searchParamsString) {
@@ -138,7 +156,14 @@ function LeaderboardPageContent() {
 
     const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
     router.replace(nextUrl, { scroll: false });
-  }, [pathname, router, searchParamsString, seasonFilter, selectedTypeFilter]);
+  }, [
+    pathname,
+    router,
+    searchParamsString,
+    seasonFilter,
+    selectedTypeFilter,
+    selectedMode,
+  ]);
 
   useEffect(() => {
     async function loadLeaderboard() {
@@ -154,21 +179,35 @@ function LeaderboardPageContent() {
       );
 
       const includeTypes = selectedFilter?.includeTypes ?? null;
+      const minMatchesRequired =
+        seasonFilter === ALL_SEASONS ? MIN_MATCHES_ALL_TYPES : MIN_MATCHES;
+
+      const rpcName =
+        selectedMode === "RATING"
+          ? "get_leaderboard_ratings"
+          : "get_leaderboard";
+
+      const buildRpcArgs = (typeFilter: string | null) => {
+        if (selectedMode === "RATING") {
+          return {
+            season_filter: seasonFilter === ALL_SEASONS ? null : seasonFilter,
+            type_filter: typeFilter,
+            formula_filter: null,
+            min_matches: minMatchesRequired,
+          };
+        }
+
+        return {
+          season_filter: seasonFilter === ALL_SEASONS ? null : seasonFilter,
+          type_filter: typeFilter,
+        };
+      };
+
       const rpcRequests =
         includeTypes === null
-          ? [
-              supabase.rpc("get_leaderboard", {
-                season_filter:
-                  seasonFilter === ALL_SEASONS ? null : seasonFilter,
-                type_filter: null,
-              }),
-            ]
+          ? [supabase.rpc(rpcName, buildRpcArgs(null))]
           : includeTypes.map((type) =>
-              supabase.rpc("get_leaderboard", {
-                season_filter:
-                  seasonFilter === ALL_SEASONS ? null : seasonFilter,
-                type_filter: type,
-              }),
+              supabase.rpc(rpcName, buildRpcArgs(type)),
             );
 
       const rpcResults = await Promise.all(rpcRequests);
@@ -183,8 +222,29 @@ function LeaderboardPageContent() {
 
       const combinedRows = rpcResults.flatMap((result) => result.data || []);
       const aggregatedMap = new Map<number, LeaderboardRow>();
-      const minMatchesRequired =
-        seasonFilter === ALL_SEASONS ? MIN_MATCHES_ALL_TYPES : MIN_MATCHES;
+
+      const parseDateMs = (value: string | null) => {
+        if (!value) {
+          return Number.NEGATIVE_INFINITY;
+        }
+        const timestamp = Date.parse(value);
+        return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
+      };
+
+      const isRowMoreRecent = (
+        incomingDate: string | null,
+        incomingMatchId: number | null,
+        existingDate: string | null,
+        existingMatchId: number | null,
+      ) => {
+        const incomingDateMs = parseDateMs(incomingDate);
+        const existingDateMs = parseDateMs(existingDate);
+        if (incomingDateMs !== existingDateMs) {
+          return incomingDateMs > existingDateMs;
+        }
+
+        return (incomingMatchId ?? -1) > (existingMatchId ?? -1);
+      };
 
       combinedRows.forEach((row: any) => {
         const playerId = Number(row.player_id);
@@ -192,6 +252,14 @@ function LeaderboardPageContent() {
         const wins = Number(row.wins || 0);
         const setsWon = Number(row.sets_won || 0);
         const setsLost = Number(row.sets_lost || 0);
+        const lastMatchId =
+          row.last_match_id === null || row.last_match_id === undefined
+            ? null
+            : Number(row.last_match_id);
+        const lastMatchDate =
+          row.last_match_date === null || row.last_match_date === undefined
+            ? null
+            : String(row.last_match_date);
         const latestRating =
           row.latest_rating === null || row.latest_rating === undefined
             ? null
@@ -208,11 +276,22 @@ function LeaderboardPageContent() {
               ? existing.wins / existing.matches_played
               : 0;
           if (
-            existing.latest_rating === null &&
             latestRating !== null &&
-            Number.isFinite(latestRating)
+            Number.isFinite(latestRating) &&
+            (existing.latest_rating === null ||
+              isRowMoreRecent(
+                lastMatchDate,
+                Number.isFinite(lastMatchId ?? NaN) ? lastMatchId : null,
+                existing.last_match_date,
+                existing.last_match_id,
+              ))
           ) {
             existing.latest_rating = latestRating;
+            existing.last_match_id =
+              Number.isFinite(lastMatchId ?? NaN) && lastMatchId !== null
+                ? lastMatchId
+                : existing.last_match_id;
+            existing.last_match_date = lastMatchDate;
           }
           return;
         }
@@ -229,6 +308,11 @@ function LeaderboardPageContent() {
             latestRating !== null && Number.isFinite(latestRating)
               ? latestRating
               : null,
+          last_match_id:
+            Number.isFinite(lastMatchId ?? NaN) && lastMatchId !== null
+              ? lastMatchId
+              : null,
+          last_match_date: lastMatchDate,
         });
       });
 
@@ -239,6 +323,21 @@ function LeaderboardPageContent() {
       );
 
       normalized.sort((a: LeaderboardRow, b: LeaderboardRow) => {
+        if (selectedMode === "RATING") {
+          const ratingA = a.latest_rating ?? Number.NEGATIVE_INFINITY;
+          const ratingB = b.latest_rating ?? Number.NEGATIVE_INFINITY;
+          if (ratingB !== ratingA) {
+            return ratingB - ratingA;
+          }
+          if (b.matches_played !== a.matches_played) {
+            return b.matches_played - a.matches_played;
+          }
+          if (b.wins !== a.wins) {
+            return b.wins - a.wins;
+          }
+          return a.name.localeCompare(b.name);
+        }
+
         if (b.win_rate !== a.win_rate) {
           return b.win_rate - a.win_rate;
         }
@@ -290,21 +389,24 @@ function LeaderboardPageContent() {
     }
 
     loadLeaderboard();
-  }, [seasonFilter, selectedTypeFilter]);
+  }, [seasonFilter, selectedTypeFilter, selectedMode]);
 
   let previousRow: LeaderboardRow | null = null;
   let currentRank = 0;
   const rankedRows = rows.map((row, index) => {
-    if (
+    const isTie =
       previousRow &&
-      row.win_rate === previousRow.win_rate &&
-      row.matches_played === previousRow.matches_played &&
-      row.wins === previousRow.wins &&
-      row.sets_won === previousRow.sets_won &&
-      row.sets_lost === previousRow.sets_lost
-    ) {
-      // Keep the same rank when matches and wins are tied.
-    } else {
+      (selectedMode === "RATING"
+        ? row.latest_rating === previousRow.latest_rating &&
+          row.matches_played === previousRow.matches_played &&
+          row.wins === previousRow.wins
+        : row.win_rate === previousRow.win_rate &&
+          row.matches_played === previousRow.matches_played &&
+          row.wins === previousRow.wins &&
+          row.sets_won === previousRow.sets_won &&
+          row.sets_lost === previousRow.sets_lost);
+
+    if (!isTie) {
       currentRank = index + 1;
     }
 
@@ -320,6 +422,14 @@ function LeaderboardPageContent() {
     const baseRows = rankedRows.slice(0, MAX_LEADERBOARD_ROWS);
     const boundary = baseRows[baseRows.length - 1];
     const extraTies = rankedRows.slice(MAX_LEADERBOARD_ROWS).filter((row) => {
+      if (selectedMode === "RATING") {
+        return (
+          row.latest_rating === boundary.latest_rating &&
+          row.matches_played === boundary.matches_played &&
+          row.wins === boundary.wins
+        );
+      }
+
       return (
         row.win_rate === boundary.win_rate &&
         row.matches_played === boundary.matches_played &&
@@ -337,7 +447,40 @@ function LeaderboardPageContent() {
       <BackToHome />
       <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-2">Leaderboard</h1>
+        <div className="mb-3 inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/60">
+          {LEADERBOARD_MODE_OPTIONS.map((option) => {
+            const active = selectedMode === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setSelectedMode(option.value);
+                  setSelectedTypeFilter(ALL_TYPES);
+                  if (option.value === "PERFORMANCE") {
+                    const latestSeason = seasons[seasons.length - 1];
+                    setSeasonFilter(
+                      latestSeason !== undefined ? latestSeason : ALL_SEASONS,
+                    );
+                  } else {
+                    setSeasonFilter(ALL_SEASONS);
+                  }
+                }}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  active
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
         <p className="text-sm text-slate-500 mb-4">
+          {selectedMode === "RATING"
+            ? "Rating leaderboard: ordered by latest rating. "
+            : "Performance leaderboard: ordered by win rate. "}
           Only players with{" "}
           {seasonFilter === ALL_SEASONS ? MIN_MATCHES_ALL_TYPES : MIN_MATCHES}+
           matches or more are included.
@@ -407,7 +550,7 @@ function LeaderboardPageContent() {
                         Sets Lost
                       </th>
                       <th className="hidden md:table-cell sticky top-0 z-30 bg-slate-100 dark:bg-slate-800 text-right px-4 py-3 shadow-sm">
-                        Win Rate
+                        {selectedMode === "RATING" ? "Rating" : "Win Rate"}
                       </th>
                     </tr>
                   </thead>
@@ -462,6 +605,7 @@ function LeaderboardPageContent() {
                               </Link>
                             )}
                             {row.rank === 1 &&
+                              selectedMode === "PERFORMANCE" &&
                               selectedTypeFilter === "SEASON" && (
                                 <span className="inline-flex items-center rounded-full bg-amber-500 text-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                                   MVP
@@ -474,7 +618,13 @@ function LeaderboardPageContent() {
                             <div>Sets Won: {row.sets_won}</div>
                             <div>Sets Lost: {row.sets_lost}</div>
                             <div className="col-span-2 font-medium">
-                              Win Rate: {(row.win_rate * 100).toFixed(1)}%
+                              {selectedMode === "RATING"
+                                ? `Rating: ${
+                                    row.latest_rating !== null
+                                      ? row.latest_rating.toFixed(2)
+                                      : "N/A"
+                                  }`
+                                : `Win Rate: ${(row.win_rate * 100).toFixed(1)}%`}
                             </div>
                           </div>
                         </td>
@@ -523,7 +673,19 @@ function LeaderboardPageContent() {
                           )}
                         </td>
                         <td className="hidden md:table-cell px-4 py-3 text-right font-medium">
-                          {index < 10 ? (
+                          {selectedMode === "RATING" ? (
+                            row.latest_rating === null ? (
+                              "N/A"
+                            ) : index < 10 ? (
+                              <div className="inline-flex items-center justify-end">
+                                <span className="text-base font-semibold bg-gradient-to-r from-sky-600 to-cyan-500 dark:from-sky-300 dark:to-cyan-200 bg-clip-text text-transparent">
+                                  {row.latest_rating.toFixed(2)}
+                                </span>
+                              </div>
+                            ) : (
+                              row.latest_rating.toFixed(2)
+                            )
+                          ) : index < 10 ? (
                             <div className="inline-flex items-center justify-end">
                               <span className="text-base font-semibold bg-gradient-to-r from-amber-500 to-yellow-400 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent">
                                 {(row.win_rate * 100).toFixed(1)}%
