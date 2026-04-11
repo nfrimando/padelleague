@@ -261,7 +261,7 @@ function LeaderboardPageContent() {
                                 : "bg-white dark:bg-slate-900"
                             }`}
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-start gap-2">
                               {index < 10 ? (
                                 <PlayerCard
                                   player={
@@ -289,7 +289,7 @@ function LeaderboardPageContent() {
                               {row.rank === 1 &&
                                 selectedMode === "PERFORMANCE" &&
                                 selectedTypeFilter === "SEASON" && (
-                                  <span className="inline-flex items-center rounded-full bg-amber-500 text-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                  <span className="mt-1 inline-flex items-center rounded-full bg-amber-500 text-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                                     MVP
                                   </span>
                                 )}
