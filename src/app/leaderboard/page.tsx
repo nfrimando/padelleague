@@ -34,11 +34,13 @@ function LeaderboardPageContent() {
   >(null);
   const [selectedTypeFilter, setSelectedTypeFilter] =
     useState<string>(ALL_MATCH_FILTER);
-  const [selectedMode, setSelectedMode] = useState<LeaderboardMode>(
-    "PERFORMANCE",
-  );
-  const { seasons, loading: seasonsLoading, error: seasonsError } =
-    useMatchSeasons();
+  const [selectedMode, setSelectedMode] =
+    useState<LeaderboardMode>("PERFORMANCE");
+  const {
+    seasons,
+    loading: seasonsLoading,
+    error: seasonsError,
+  } = useMatchSeasons();
   const {
     rows,
     topPlayersById,
@@ -159,9 +161,7 @@ function LeaderboardPageContent() {
           {selectedMode === "RATING"
             ? "Rating leaderboard: ordered by latest rating. "
             : "Performance leaderboard: ordered by win rate. "}
-          Only players with{" "}
-          {minMatchesRequired}+
-          matches or more are included.
+          Only players with {minMatchesRequired}+ matches or more are included.
         </p>
         <div className="-mb-4">
           <MatchFiltersCard
@@ -235,139 +235,141 @@ function LeaderboardPageContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rankedRowsWithTopTies.map((row: RankedLeaderboardRow, index) => (
-                      <tr
-                        key={row.player_id}
-                        className={`border-t border-slate-200 dark:border-slate-700 ${
-                          row.rank === 1
-                            ? "bg-amber-50 dark:bg-amber-900/20"
-                            : ""
-                        }`}
-                      >
-                        <td
-                          className={`md:sticky md:left-0 z-30 w-[72px] min-w-[72px] px-4 py-3 font-semibold md:shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
+                    {rankedRowsWithTopTies.map(
+                      (row: RankedLeaderboardRow, index) => (
+                        <tr
+                          key={row.player_id}
+                          className={`border-t border-slate-200 dark:border-slate-700 ${
                             row.rank === 1
                               ? "bg-amber-50 dark:bg-amber-900/20"
-                              : "bg-white dark:bg-slate-900"
+                              : ""
                           }`}
                         >
-                          #{row.rank}
-                        </td>
-                        <td
-                          className={`md:sticky md:left-[72px] z-30 min-w-[190px] md:min-w-[220px] px-4 py-3 md:shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
-                            row.rank === 1
-                              ? "bg-amber-50 dark:bg-amber-900/20"
-                              : "bg-white dark:bg-slate-900"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {index < 10 ? (
-                              <PlayerCard
-                                player={
-                                  topPlayersById.get(row.player_id) || {
-                                    player_id: String(row.player_id),
-                                    name: row.name,
-                                    nickname: "-",
-                                    image_link: null,
-                                    latest_rating: row.latest_rating,
-                                    latest_match_date: row.last_match_date,
+                          <td
+                            className={`md:sticky md:left-0 z-30 w-[72px] min-w-[72px] px-4 py-3 font-semibold md:shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
+                              row.rank === 1
+                                ? "bg-amber-50 dark:bg-amber-900/20"
+                                : "bg-white dark:bg-slate-900"
+                            }`}
+                          >
+                            #{row.rank}
+                          </td>
+                          <td
+                            className={`md:sticky md:left-[72px] z-30 min-w-[190px] md:min-w-[220px] px-4 py-3 md:shadow-[2px_0_0_0_rgba(0,0,0,0.06)] ${
+                              row.rank === 1
+                                ? "bg-amber-50 dark:bg-amber-900/20"
+                                : "bg-white dark:bg-slate-900"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              {index < 10 ? (
+                                <PlayerCard
+                                  player={
+                                    topPlayersById.get(row.player_id) || {
+                                      player_id: String(row.player_id),
+                                      name: row.name,
+                                      nickname: "-",
+                                      image_link: null,
+                                      latest_rating: row.latest_rating,
+                                      latest_match_date: row.last_match_date,
+                                    }
                                   }
-                                }
-                              />
-                            ) : (
-                              <Link
-                                href={`/players?playerId=${encodeURIComponent(String(row.player_id))}`}
-                                className="group inline-flex items-center gap-1 text-slate-900 dark:text-slate-100 decoration-transparent underline-offset-2 transition-colors duration-150 hover:text-sky-700 dark:hover:text-sky-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 rounded"
-                              >
-                                {row.name}
-                                <span className="text-sky-600/80 dark:text-sky-300/80 opacity-0 translate-x-[-2px] transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0">
-                                  {"->"}
-                                </span>
-                              </Link>
-                            )}
-                            {row.rank === 1 &&
-                              selectedMode === "PERFORMANCE" &&
-                              selectedTypeFilter === "SEASON" && (
-                                <span className="inline-flex items-center rounded-full bg-amber-500 text-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                                  MVP
-                                </span>
+                                />
+                              ) : (
+                                <Link
+                                  href={`/players?playerId=${encodeURIComponent(String(row.player_id))}`}
+                                  className="group inline-flex items-center gap-1 text-slate-900 dark:text-slate-100 decoration-transparent underline-offset-2 transition-colors duration-150 hover:text-sky-700 dark:hover:text-sky-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 rounded"
+                                >
+                                  {row.name}
+                                  <span className="text-sky-600/80 dark:text-sky-300/80 opacity-0 translate-x-[-2px] transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0">
+                                    {"->"}
+                                  </span>
+                                </Link>
                               )}
-                          </div>
-                          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300 md:hidden">
-                            <div>Matches: {row.matches_played}</div>
-                            <div>Wins: {row.wins}</div>
-                            <div>Sets Won: {row.sets_won}</div>
-                            <div>Sets Lost: {row.sets_lost}</div>
-                            <div className="col-span-2 font-medium">
-                              {selectedMode === "RATING"
-                                ? `Rating: ${
-                                    row.latest_rating !== null
-                                      ? row.latest_rating.toFixed(2)
-                                      : "N/A"
-                                  }`
-                                : `Win Rate: ${(row.win_rate * 100).toFixed(1)}%`}
+                              {row.rank === 1 &&
+                                selectedMode === "PERFORMANCE" &&
+                                selectedTypeFilter === "SEASON" && (
+                                  <span className="inline-flex items-center rounded-full bg-amber-500 text-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                    MVP
+                                  </span>
+                                )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-right">
-                          {index < 10 ? (
-                            <div className="inline-flex items-center justify-end">
-                              <span className="text-base font-semibold bg-gradient-to-r from-slate-700 to-slate-500 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
-                                {row.matches_played}
-                              </span>
+                            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300 md:hidden">
+                              <div>Matches: {row.matches_played}</div>
+                              <div>Wins: {row.wins}</div>
+                              <div>Sets Won: {row.sets_won}</div>
+                              <div>Sets Lost: {row.sets_lost}</div>
+                              <div className="col-span-2 font-medium">
+                                {selectedMode === "RATING"
+                                  ? `Rating: ${
+                                      row.latest_rating !== null
+                                        ? row.latest_rating.toFixed(2)
+                                        : "N/A"
+                                    }`
+                                  : `Win Rate: ${(row.win_rate * 100).toFixed(1)}%`}
+                              </div>
                             </div>
-                          ) : (
-                            row.matches_played
-                          )}
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-right">
-                          {index < 10 ? (
-                            <div className="inline-flex items-center justify-end">
-                              <span className="text-base font-semibold bg-gradient-to-r from-emerald-600 to-lime-500 dark:from-emerald-400 dark:to-lime-300 bg-clip-text text-transparent">
-                                {row.wins}
-                              </span>
-                            </div>
-                          ) : (
-                            row.wins
-                          )}
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-right">
-                          {index < 10 ? (
-                            <div className="inline-flex items-center justify-end">
-                              <span className="text-base font-semibold bg-gradient-to-r from-indigo-600 to-violet-500 dark:from-indigo-400 dark:to-violet-300 bg-clip-text text-transparent">
-                                {row.sets_won}
-                              </span>
-                            </div>
-                          ) : (
-                            row.sets_won
-                          )}
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-right">
-                          {index < 10 ? (
-                            <div className="inline-flex items-center justify-end">
-                              <span className="text-base font-semibold bg-gradient-to-r from-rose-600 to-orange-500 dark:from-rose-400 dark:to-orange-300 bg-clip-text text-transparent">
-                                {row.sets_lost}
-                              </span>
-                            </div>
-                          ) : (
-                            row.sets_lost
-                          )}
-                        </td>
-                        {selectedMode !== "RATING" && (
-                          <td className="hidden md:table-cell px-4 py-3 text-right font-medium">
+                          </td>
+                          <td className="hidden md:table-cell px-4 py-3 text-right">
                             {index < 10 ? (
                               <div className="inline-flex items-center justify-end">
-                                <span className="text-base font-semibold bg-gradient-to-r from-amber-500 to-yellow-400 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent">
-                                  {(row.win_rate * 100).toFixed(1)}%
+                                <span className="text-base font-semibold bg-gradient-to-r from-slate-700 to-slate-500 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
+                                  {row.matches_played}
                                 </span>
                               </div>
                             ) : (
-                              `${(row.win_rate * 100).toFixed(1)}%`
+                              row.matches_played
                             )}
                           </td>
-                        )}
-                      </tr>
-                    ))}
+                          <td className="hidden md:table-cell px-4 py-3 text-right">
+                            {index < 10 ? (
+                              <div className="inline-flex items-center justify-end">
+                                <span className="text-base font-semibold bg-gradient-to-r from-emerald-600 to-lime-500 dark:from-emerald-400 dark:to-lime-300 bg-clip-text text-transparent">
+                                  {row.wins}
+                                </span>
+                              </div>
+                            ) : (
+                              row.wins
+                            )}
+                          </td>
+                          <td className="hidden md:table-cell px-4 py-3 text-right">
+                            {index < 10 ? (
+                              <div className="inline-flex items-center justify-end">
+                                <span className="text-base font-semibold bg-gradient-to-r from-indigo-600 to-violet-500 dark:from-indigo-400 dark:to-violet-300 bg-clip-text text-transparent">
+                                  {row.sets_won}
+                                </span>
+                              </div>
+                            ) : (
+                              row.sets_won
+                            )}
+                          </td>
+                          <td className="hidden md:table-cell px-4 py-3 text-right">
+                            {index < 10 ? (
+                              <div className="inline-flex items-center justify-end">
+                                <span className="text-base font-semibold bg-gradient-to-r from-rose-600 to-orange-500 dark:from-rose-400 dark:to-orange-300 bg-clip-text text-transparent">
+                                  {row.sets_lost}
+                                </span>
+                              </div>
+                            ) : (
+                              row.sets_lost
+                            )}
+                          </td>
+                          {selectedMode !== "RATING" && (
+                            <td className="hidden md:table-cell px-4 py-3 text-right font-medium">
+                              {index < 10 ? (
+                                <div className="inline-flex items-center justify-end">
+                                  <span className="text-base font-semibold bg-gradient-to-r from-amber-500 to-yellow-400 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent">
+                                    {(row.win_rate * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              ) : (
+                                `${(row.win_rate * 100).toFixed(1)}%`
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ),
+                    )}
                   </tbody>
                 </table>
               </div>
