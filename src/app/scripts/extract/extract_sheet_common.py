@@ -11,7 +11,7 @@ CREDENTIALS_FILENAME = "padelleagueph-2b8f09674fe6.json"
 
 
 def _get_spreadsheet() -> gspread.Spreadsheet:
-    credentials_path = Path(__file__).resolve().parent / CREDENTIALS_FILENAME
+    credentials_path = Path(__file__).resolve().parents[1] / CREDENTIALS_FILENAME
     print(f"[INFO] Using credentials file: {credentials_path}")
 
     creds = Credentials.from_service_account_file(str(credentials_path), scopes=SCOPES)
@@ -24,7 +24,7 @@ def _get_spreadsheet() -> gspread.Spreadsheet:
 
 
 def _get_output_path(output_filename: str) -> Path:
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[4]
     output_dir = repo_root / "data" / "inputs"
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"[INFO] Output directory ready: {output_dir}")

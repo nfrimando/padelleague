@@ -92,7 +92,7 @@ function PlayersPageContent() {
     return Array.from(
       new Set(
         playerMatches
-          .map((match) => match.season)
+          .map((match) => match.season_id)
           .filter((season): season is number => season !== null)
           .map((season) => Number(season))
           .filter((season) => !Number.isNaN(season)),
@@ -102,7 +102,7 @@ function PlayersPageContent() {
 
   const filteredMatches = useMemo(() => {
     return playerMatches.filter((match) => {
-      if (seasonFilter !== ALL_FILTER && match.season !== seasonFilter) {
+      if (seasonFilter !== ALL_FILTER && match.season_id !== seasonFilter) {
         return false;
       }
 
@@ -737,7 +737,7 @@ function PlayersPageContent() {
               .slice(0, 3);
 
             const seasons = playerMatches
-              .map((m) => m.season)
+              .map((m) => m.season_id)
               .filter((s): s is number => s !== null)
               .map((s) => Number(s))
               .filter((s) => !Number.isNaN(s));

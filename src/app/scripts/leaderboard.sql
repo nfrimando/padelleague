@@ -24,7 +24,7 @@ WITH player_matches AS (
     p.player_id,
     p.name,
     m.match_id,
-    m.season,
+    m.season_id,
     m.type,
     m.date_local,
     m.time_local,
@@ -64,7 +64,7 @@ latest_player_matches AS (
           pm.match_id DESC
       ) AS rn
     FROM player_matches pm
-    WHERE (season_filter IS NULL OR pm.season = season_filter)
+    WHERE (season_filter IS NULL OR pm.season_id = season_filter)
       AND (type_filter IS NULL OR pm.type = type_filter)
   ) ranked
   WHERE ranked.rn = 1
@@ -111,7 +111,7 @@ LEFT JOIN latest_player_ratings lpr
   ON lpr.player_id = pm.player_id
 LEFT JOIN latest_player_matches lpm
   ON lpm.player_id = pm.player_id
-WHERE (season_filter IS NULL OR season = season_filter)
+WHERE (season_filter IS NULL OR season_id = season_filter)
   AND (type_filter IS NULL OR type = type_filter)
 GROUP BY pm.player_id, pm.name
 HAVING COUNT(*) > 0
@@ -144,13 +144,13 @@ as $$
 with filtered_matches as (
   select
     m.match_id,
-    m.season,
+    m.season_id,
     m.type,
     m.winner_team,
     m.date_local,
     m.time_local
   from public.matches m
-  where (season_filter is null or m.season = season_filter)
+  where (season_filter is null or m.season_id = season_filter)
     and (type_filter is null or m.type = type_filter)
 ),
 player_matches as (

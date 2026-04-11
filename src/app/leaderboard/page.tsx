@@ -69,9 +69,9 @@ function LeaderboardPageContent() {
     async function loadFilterOptions() {
       const { data, error: filterError } = await supabase
         .from("matches")
-        .select("season,type")
-        .not("season", "is", null)
-        .order("season", { ascending: true });
+        .select("season_id,type")
+        .not("season_id", "is", null)
+        .order("season_id", { ascending: true });
 
       if (filterError || !data) {
         setLoading(false);
@@ -82,7 +82,7 @@ function LeaderboardPageContent() {
       const uniqueSeasons = Array.from(
         new Set(
           data
-            .map((row) => Number(row.season))
+            .map((row) => Number(row.season_id))
             .filter((season) => !Number.isNaN(season)),
         ),
       );
