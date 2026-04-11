@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { formatMatchDate } from "@/lib/utils";
 import { Player } from "@/lib/types";
 
 interface PlayerCardProps {
@@ -48,6 +49,9 @@ export default function PlayerCard({
   const latestRating = player?.latest_rating;
   const hasLatestRating =
     typeof latestRating === "number" && Number.isFinite(latestRating);
+  const latestMatchDate = player?.latest_match_date;
+  const hasLatestMatchDate =
+    typeof latestMatchDate === "string" && latestMatchDate.trim().length > 0;
 
   return (
     <div
@@ -147,6 +151,11 @@ export default function PlayerCard({
               >
                 {displayLabel}
               </div>
+              {hasLatestMatchDate && (
+                <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  Last Match: {formatMatchDate(latestMatchDate)}
+                </div>
+              )}
             </div>
             {hasLatestRating && (
               <div

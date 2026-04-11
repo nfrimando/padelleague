@@ -275,23 +275,25 @@ function LeaderboardPageContent() {
             existing.matches_played > 0
               ? existing.wins / existing.matches_played
               : 0;
-          if (
-            latestRating !== null &&
-            Number.isFinite(latestRating) &&
-            (existing.latest_rating === null ||
-              isRowMoreRecent(
-                lastMatchDate,
-                Number.isFinite(lastMatchId ?? NaN) ? lastMatchId : null,
-                existing.last_match_date,
-                existing.last_match_id,
-              ))
-          ) {
-            existing.latest_rating = latestRating;
+          const incomingIsMoreRecent = isRowMoreRecent(
+            lastMatchDate,
+            Number.isFinite(lastMatchId ?? NaN) ? lastMatchId : null,
+            existing.last_match_date,
+            existing.last_match_id,
+          );
+          if (incomingIsMoreRecent) {
             existing.last_match_id =
               Number.isFinite(lastMatchId ?? NaN) && lastMatchId !== null
                 ? lastMatchId
                 : existing.last_match_id;
             existing.last_match_date = lastMatchDate;
+          }
+          if (
+            latestRating !== null &&
+            Number.isFinite(latestRating) &&
+            (existing.latest_rating === null || incomingIsMoreRecent)
+          ) {
+            existing.latest_rating = latestRating;
           }
           return;
         }
@@ -374,6 +376,10 @@ function LeaderboardPageContent() {
                 normalized.find(
                   (row) => row.player_id === Number(player.player_id),
                 )?.latest_rating ?? null,
+              latest_match_date:
+                normalized.find(
+                  (row) => row.player_id === Number(player.player_id),
+                )?.last_match_date ?? null,
             });
           });
           setTopPlayersById(map);
@@ -590,6 +596,7 @@ function LeaderboardPageContent() {
                                     nickname: "-",
                                     image_link: null,
                                     latest_rating: row.latest_rating,
+                                    latest_match_date: row.last_match_date,
                                   }
                                 }
                               />

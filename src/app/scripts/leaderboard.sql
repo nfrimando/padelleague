@@ -12,7 +12,9 @@ returns table (
   sets_won bigint,
   sets_lost bigint,
   win_rate numeric,
-  latest_rating numeric
+  latest_rating numeric,
+  last_match_id bigint,
+  last_match_date text
 )
 language sql
 set search_path = pg_catalog, public
@@ -24,6 +26,8 @@ WITH player_matches AS (
     m.match_id,
     m.season,
     m.type,
+    m.date_local,
+    m.time_local,
     mt.team_number,
     m.winner_team,
     mt.sets_won,
@@ -40,6 +44,30 @@ WITH player_matches AS (
   JOIN public.players p 
     ON p.player_id = mt.player_1_id 
     OR p.player_id = mt.player_2_id
+),
+latest_player_matches AS (
+  SELECT
+    ranked.player_id,
+    ranked.match_id AS last_match_id,
+    ranked.date_local AS last_match_date
+  FROM (
+    SELECT
+      pm.player_id,
+      pm.match_id,
+      pm.date_local,
+      pm.time_local,
+      ROW_NUMBER() OVER (
+        PARTITION BY pm.player_id
+        ORDER BY
+          pm.date_local DESC NULLS LAST,
+          pm.time_local DESC NULLS LAST,
+          pm.match_id DESC
+      ) AS rn
+    FROM player_matches pm
+    WHERE (season_filter IS NULL OR pm.season = season_filter)
+      AND (type_filter IS NULL OR pm.type = type_filter)
+  ) ranked
+  WHERE ranked.rn = 1
 ),
 latest_player_ratings AS (
   SELECT
@@ -75,10 +103,14 @@ SELECT
   SUM(COALESCE(pm.sets_won, 0)) AS sets_won,
   SUM(COALESCE(pm.sets_lost, 0)) AS sets_lost,
   ROUND(SUM(pm.is_win)::decimal / COUNT(*), 3) AS win_rate,
-  MAX(lpr.latest_rating) AS latest_rating
+  MAX(lpr.latest_rating) AS latest_rating,
+  MAX(lpm.last_match_id) AS last_match_id,
+  MAX(lpm.last_match_date) AS last_match_date
 FROM player_matches pm
 LEFT JOIN latest_player_ratings lpr
   ON lpr.player_id = pm.player_id
+LEFT JOIN latest_player_matches lpm
+  ON lpm.player_id = pm.player_id
 WHERE (season_filter IS NULL OR season = season_filter)
   AND (type_filter IS NULL OR type = type_filter)
 GROUP BY pm.player_id, pm.name

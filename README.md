@@ -6,11 +6,13 @@ A lightweight Next.js app for tracking Padel league players and matches in the P
 
 - Home page with quick navigation to the main sections
 - Players page with player search, profile stats, and filtered match history
-- Leaderboard page powered by Supabase RPC (`get_leaderboard`)
+- Leaderboard page with two modes:
+  - Performance mode powered by Supabase RPC `get_leaderboard(season_filter, type_filter)`
+  - Rating mode powered by Supabase RPC `get_leaderboard_ratings(season_filter, type_filter, formula_filter, min_matches)`
 - Shared match card component for consistent match display
 - Shared `MatchFiltersCard` component used by players and leaderboard pages
 - Supports Supabase as the backend/data source
-- Includes Google Sheet extract, CSV transform, and full refresh scripts for importing players, matches, teams, and sets
+- Includes Google Sheet extract, CSV transform, and full refresh scripts for importing players, matches, teams, sets, and ratings
 
 ## Local setup
 
@@ -89,8 +91,20 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
     - `dim_players.csv`
     - `fact_sets.csv`
 
+- `src/app/scripts/extract_gsheet_ratings.py`
+  - Reads ratings worksheets from the same Google Sheet.
+  - Exports:
+    - `data/inputs/ratings_v2.csv`
+    - `data/inputs/ratings_v3.csv`
+
+- `src/app/scripts/transform_ratings.py`
+  - Transforms `ratings_v2.csv` and `ratings_v3.csv` into `data/outputs/match_player_ratings.csv`.
+  - Sets `formula_name` to `v2`/`v3` and maps player names to Supabase `player_id` values.
+
 - `src/app/scripts/leaderboard.sql`
-  - Creates/updates the `get_leaderboard(season_filter, type_filter)` SQL function in Supabase.
+  - Creates/updates both leaderboard SQL functions in Supabase:
+    - `get_leaderboard(season_filter, type_filter)`
+    - `get_leaderboard_ratings(season_filter, type_filter, formula_filter, min_matches)`
   - Used by the leaderboard page via Supabase RPC.
   - Run this command to apply it:
 
@@ -114,6 +128,12 @@ To pull input CSVs directly from Google Sheets, run:
 
 ```bash
 python3 src/app/scripts/extract_gsheet.py
+```
+
+To pull ratings CSVs directly from Google Sheets, run:
+
+```bash
+python3 src/app/scripts/extract_gsheet_ratings.py
 ```
 
 To transform the player import CSV in `data/inputs/`, run:
@@ -146,6 +166,12 @@ To transform set-level game score data, run:
 python3 src/app/scripts/transform_sets.py
 ```
 
+To transform ratings data, run:
+
+```bash
+python3 src/app/scripts/transform_ratings.py
+```
+
 To load all remaining transformed outputs into Supabase with a full refresh, run:
 
 ```bash
@@ -156,4 +182,7 @@ python3 src/app/scripts/load_all_to_supabase_full_refresh.py
 
 - The app uses Tailwind CSS for styling and Next.js 16 for routing.
 - Players and leaderboard use shared match filters (season/type, default `ALL`).
+- Leaderboard mode behavior:
+  - Performance mode resets filters to latest season + type `ALL`.
+  - Rating mode resets filters to season `ALL` + type `ALL`.
 - Loading states are rendered as overlays to keep layouts stable while data refreshes.

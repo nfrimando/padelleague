@@ -7,6 +7,7 @@ export type Player = {
   pre_match_rating_formula?: string | null;
   latest_rating?: number | null;
   latest_rating_formula?: string | null;
+  latest_match_date?: string | null;
   created_at?: string;
 };
 
