@@ -45,9 +45,10 @@
 
 - CSV/data scripts live in `src/app/scripts/`.
 - Maintain compatibility with:
-  - `player_transform.py`
-  - `match_transform.py`
-  - `refresh_supabase_from_outputs.py`
+  - `transform_players.py`
+  - `transform_matches.py`
+  - `transform_sets.py`
+  - `load_all_to_supabase_full_refresh.py`
   - `leaderboard.sql`
 
 ## Coding Expectations

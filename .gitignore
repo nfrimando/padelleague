@@ -42,3 +42,6 @@ next-env.d.ts
 
 # data
 /data/*
+
+# scripts secrets/config exports
+/src/app/scripts/**/*.json
