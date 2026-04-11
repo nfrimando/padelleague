@@ -29,6 +29,9 @@ function PlayersPageContent() {
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [isClearingPlayerSelection, setIsClearingPlayerSelection] =
     useState(false);
+  const [ignoredPlayerIdAfterClear, setIgnoredPlayerIdAfterClear] = useState<
+    string | null
+  >(null);
   const [pendingSelectedPlayerId, setPendingSelectedPlayerId] = useState<
     string | null
   >(null);
@@ -235,10 +238,23 @@ function PlayersPageContent() {
 
     if (!playerIdParam && isClearingPlayerSelection) {
       setIsClearingPlayerSelection(false);
+      setIgnoredPlayerIdAfterClear(null);
     }
 
     if (isClearingPlayerSelection) {
-      return;
+      if (!playerIdParam) {
+        return;
+      }
+
+      if (
+        ignoredPlayerIdAfterClear &&
+        String(playerIdParam) === ignoredPlayerIdAfterClear
+      ) {
+        return;
+      }
+
+      setIsClearingPlayerSelection(false);
+      setIgnoredPlayerIdAfterClear(null);
     }
 
     if (
@@ -274,6 +290,7 @@ function PlayersPageContent() {
     searchParamsString,
     isClearingPlayerSelection,
     pendingSelectedPlayerId,
+    ignoredPlayerIdAfterClear,
   ]);
 
   // Fetch matches for selected player
@@ -593,6 +610,9 @@ function PlayersPageContent() {
               className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
               onClick={() => {
                 setIsClearingPlayerSelection(true);
+                setIgnoredPlayerIdAfterClear(
+                  selectedPlayer ? String(selectedPlayer.player_id) : null,
+                );
                 setPendingSelectedPlayerId(null);
                 setSearch("");
                 setFiltered([]);
