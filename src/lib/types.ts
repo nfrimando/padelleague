@@ -29,7 +29,7 @@ export type MatchSet = {
 export type MatchWithTeams = {
   match_id: number;
   created_at: string;
-  season: number | null;
+  season_id: number | null;
   date_local: string | null;
   time_local: string | null;
   venue: string | null;

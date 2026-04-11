@@ -12,7 +12,7 @@ except ImportError as exc:
     ) from exc
 
 
-BASE_DIR = Path(__file__).resolve().parents[3]
+BASE_DIR = Path(__file__).resolve().parents[4]
 OUTPUT_DIR = BASE_DIR / "data" / "outputs"
 
 PLAYERS_CSV = OUTPUT_DIR / "players.csv"
