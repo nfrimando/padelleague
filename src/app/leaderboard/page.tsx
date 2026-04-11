@@ -315,35 +315,45 @@ function LeaderboardPageContent() {
   return (
     <>
       <BackToHome />
-      <div className="p-6 max-w-4xl mx-auto">
+      <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-2">Leaderboard</h1>
         <p className="text-sm text-slate-500 mb-4">
           Only players with{" "}
           {seasonFilter === ALL_SEASONS ? MIN_MATCHES_ALL_TYPES : MIN_MATCHES}+
           matches or more are included.
         </p>
-        <MatchFiltersCard
-          seasonFilter={seasonFilter}
-          seasons={seasons}
-          selectedTypeFilter={selectedTypeFilter}
-          typeFilterOptions={TYPE_FILTER_OPTIONS}
-          onSeasonChange={(value) => setSeasonFilter(value)}
-          onTypeChange={(value) => setSelectedTypeFilter(value)}
-        />
+        <div className="-mb-4">
+          <MatchFiltersCard
+            seasonFilter={seasonFilter}
+            seasons={seasons}
+            selectedTypeFilter={selectedTypeFilter}
+            typeFilterOptions={TYPE_FILTER_OPTIONS}
+            onSeasonChange={(value) => setSeasonFilter(value)}
+            onTypeChange={(value) => setSelectedTypeFilter(value)}
+          />
+        </div>
+      </div>
 
-        {!loading && error && (
-          <div className="text-red-600 dark:text-red-400">Error: {error}</div>
-        )}
+      {!loading && error && (
+        <div className="px-6 max-w-xl mx-auto text-red-600 dark:text-red-400">
+          Error: {error}
+        </div>
+      )}
 
-        {!loading && !error && rows.length === 0 && (
-          <div className="text-slate-600">No leaderboard data found.</div>
-        )}
+      {!loading && !error && rows.length === 0 && (
+        <div className="px-6 max-w-xl mx-auto text-slate-600">
+          No leaderboard data found.
+        </div>
+      )}
 
-        {!error && (rows.length > 0 || loading) && (
-          <div className="space-y-2">
+      {!error && (rows.length > 0 || loading) && (
+        <div className="-mt-2">
+          <div className="max-w-xl mx-auto px-6 mb-0.5">
             <p className="text-xs text-slate-500">
               Scroll inside the table to view more rankings.
             </p>
+          </div>
+          <div className="max-w-5xl mx-auto px-6">
             <div className="relative min-h-[320px]">
               {loading && (
                 <div className="absolute inset-0 z-40 flex items-center justify-center rounded-lg bg-white/70 dark:bg-slate-900/70 backdrop-blur-[1px]">
@@ -500,8 +510,8 @@ function LeaderboardPageContent() {
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 }
@@ -510,7 +520,7 @@ export default function LeaderboardPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-6 max-w-4xl mx-auto text-sm text-slate-500">
+        <div className="p-6 max-w-xl mx-auto text-sm text-slate-500">
           Loading leaderboard...
         </div>
       }
