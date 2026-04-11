@@ -691,6 +691,7 @@ function PlayersPageContent() {
                     latest_match_date: selectedPlayerLatestMatchDate,
                   }}
                   size="lg"
+                  disableLink
                 />
                 {!loadingMatches && matchCount > 0 && (
                   <div className="mt-4 pt-3 border-t space-y-4">
