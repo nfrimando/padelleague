@@ -1,43 +1,114 @@
-export type Player = {
+export interface Player {
   player_id: string;
   name: string;
-  nickname: string;
-  image_link?: string | null;
-  initial_rating?: number | null;
-  pre_match_rating?: number | null;
-  pre_match_rating_formula?: string | null;
-  latest_rating?: number | null;
-  latest_rating_formula?: string | null;
-  latest_match_date?: string | null;
-  created_at?: string;
-  updated_at?: string;
-};
+  nickname?: string;
+  image_link?: string;
+}
 
-export type TeamWithPlayers = {
-  uuid: string;
-  team_number: number | null;
-  sets_won: number | null;
-  player_1: Player | null;
-  player_2: Player | null;
-};
+export interface MostPlayedPartner {
+  player_id: string;
+  name: string;
+  nickname?: string;
+  count: number;
+}
 
-export type MatchSet = {
-  match_id: number;
+export interface PlayerProfile extends Player {
+  current_rating: number;
+  first_season: string;
+  last_season: string;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  win_pct: number;
+  sets_won: number;
+  sets_lost: number;
+  last_match_date: string;
+  most_played_partners: MostPlayedPartner[];
+  rating_trend: number[];
+}
+
+export interface PlayerInMatch {
+  player_id: string;
+  name: string;
+  nickname?: string;
+  image_link?: string;
+  match_rating?: number;
+}
+
+export interface MatchTeam {
+  match_team_id: string;
+  match_id: string;
+  team_side: "A" | "B";
+  result: "win" | "loss" | null;
+  player1_id: string;
+  player2_id?: string;
+  team_rating?: number;
+  player1?: PlayerInMatch;
+  player2?: PlayerInMatch;
+}
+
+export interface MatchSet {
   set_number: number;
-  team_1_games: number;
-  team_2_games: number;
-};
+  score_a: number;
+  score_b: number;
+}
 
-export type MatchWithTeams = {
-  match_id: number;
-  created_at: string;
-  season_id: number | null;
-  date_local: string | null;
-  time_local: string | null;
-  venue: string | null;
-  type: string | null;
-  winner_team: number | null;
-  status: "scheduled" | "completed" | "forfeit" | "cancelled";
-  teams: TeamWithPlayers[];
-  sets?: MatchSet[];
-};
+export interface Match {
+  match_id: string;
+  season_id: string;
+  match_date: string;
+  match_type: MatchType;
+  status: string;
+  venue?: string;
+  match_teams?: MatchTeam[];
+  match_sets?: MatchSet[];
+}
+
+export interface LeaderboardRow {
+  rank: number;
+  player_id: string;
+  player_name: string;
+  nickname?: string;
+  image_link?: string;
+  team_name?: string;
+  wins: number;
+  losses: number;
+  win_pct: number;
+  points: number;
+  matches_played: number;
+  sets_won: number;
+  sets_lost: number;
+  last_match_date?: string;
+}
+
+export interface LeaderboardRatingRow {
+  rank: number;
+  player_id: string;
+  player_name: string;
+  nickname?: string;
+  image_link?: string;
+  team_name?: string;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  sets_won: number;
+  sets_lost: number;
+  avg_rating: number;
+  peak_rating: number;
+  current_rating: number;
+  formula_name?: string;
+  last_match_date?: string;
+}
+
+export interface CarouselSlide {
+  id: string;
+  image_url: string;
+  title?: string;
+  subtitle?: string;
+  link?: string;
+}
+
+export type MatchType = "duel" | "doubles" | "kotc" | "team";
+export type SeasonFilter = "ALL" | string;
+export type TypeFilter = "ALL" | MatchType;
+export type MinMatchesFilter = 0 | 5 | 10 | 15 | 20;
