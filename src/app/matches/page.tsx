@@ -15,8 +15,12 @@ function ymd(date: Date) {
 export default function MatchesPage() {
   const [matchLimit, setMatchLimit] = useState(10);
   const now = new Date();
-  const calendarRangeStart = ymd(new Date(now.getFullYear(), now.getMonth() - 2, 1));
-  const calendarRangeEnd = ymd(new Date(now.getFullYear(), now.getMonth() + 2, 0));
+  const calendarRangeStart = ymd(
+    new Date(now.getFullYear(), now.getMonth() - 2, 1),
+  );
+  const calendarRangeEnd = ymd(
+    new Date(now.getFullYear(), now.getMonth() + 2, 0),
+  );
 
   const { matches, loading, error } = useMatches({ limit: matchLimit });
   const {
