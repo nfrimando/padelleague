@@ -6,15 +6,34 @@ import MatchCalendar from "@/components/MatchCalendar";
 import MatchCard from "@/components/MatchCard";
 import { useMatches } from "@/lib/useMatches";
 
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function ymd(date: Date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export default function MatchesPage() {
   const [matchLimit, setMatchLimit] = useState(10);
-  const { matches, loading, error } = useMatches(matchLimit);
+  const now = new Date();
+  const calendarRangeStart = ymd(new Date(now.getFullYear(), now.getMonth() - 2, 1));
+  const calendarRangeEnd = ymd(new Date(now.getFullYear(), now.getMonth() + 2, 0));
+
+  const { matches, loading, error } = useMatches({ limit: matchLimit });
+  const {
+    matches: calendarMatches,
+    loading: calendarLoading,
+    error: calendarError,
+  } = useMatches({ dateGte: calendarRangeStart, dateLte: calendarRangeEnd });
 
   return (
     <>
       <BackToHome />
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <MatchCalendar className="mb-10" matches={matches} loading={loading} />
+        <MatchCalendar
+          className="mb-10"
+          matches={calendarMatches}
+          loading={calendarLoading}
+        />
 
         <div className="mb-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -48,9 +67,9 @@ export default function MatchesPage() {
           </div>
         </div>
 
-        {error ? (
+        {error || calendarError ? (
           <div className="rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20 p-6 text-sm text-rose-700 dark:text-rose-300">
-            {error}
+            {error || calendarError}
           </div>
         ) : (
           <div className="relative min-h-[320px]">
