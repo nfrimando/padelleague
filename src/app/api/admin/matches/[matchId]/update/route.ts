@@ -25,6 +25,31 @@ type UpdateMatchRequest = {
   sets?: SetScoreInput[];
 };
 
+type MatchSnapshot = {
+  status: MatchStatus;
+  season_id: number | null;
+  date_local: string | null;
+  time_local: string | null;
+  venue: string | null;
+  type: string | null;
+  winner_team: number | null;
+};
+
+type SetSnapshot = {
+  set_number: number;
+  team_1_games: number;
+  team_2_games: number;
+};
+
+type RatingSnapshot = {
+  player_id: number;
+  match_id: number;
+  rating_pre: number;
+  rating_post: number;
+  result: "win" | "loss";
+  formula_name: string;
+};
+
 type ValidationResult =
   | { valid: true; value: UpdateMatchRequest }
   | { valid: false; errors: string[] };
@@ -393,7 +418,7 @@ export async function PATCH(
 
   const { data: teams, error: teamsError } = await supabase
     .from("match_teams")
-    .select("uuid,team_number,player_1_id,player_2_id")
+    .select("uuid,team_number,player_1_id,player_2_id,sets_won")
     .eq("match_id", matchId);
 
   if (teamsError) {
@@ -444,6 +469,146 @@ export async function PATCH(
   }
 
   if (validation.value.status === "completed") {
+    const { data: currentMatchRow, error: currentMatchError } = await supabase
+      .from("matches")
+      .select("status,season_id,date_local,time_local,venue,type,winner_team")
+      .eq("match_id", matchId)
+      .maybeSingle();
+
+    if (currentMatchError || !currentMatchRow) {
+      return NextResponse.json(
+        {
+          error:
+            currentMatchError?.message ||
+            "Failed to snapshot current match before update.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const { data: existingSetsRows, error: existingSetsError } = await supabase
+      .from("match_sets")
+      .select("set_number,team_1_games,team_2_games")
+      .eq("match_id", matchId)
+      .order("set_number", { ascending: true });
+
+    if (existingSetsError) {
+      return NextResponse.json(
+        { error: existingSetsError.message || "Failed to snapshot existing sets." },
+        { status: 500 },
+      );
+    }
+
+    const { data: existingV3RatingsRows, error: existingV3RatingsError } =
+      await supabase
+        .from("match_player_ratings")
+        .select("player_id,match_id,rating_pre,rating_post,result,formula_name")
+        .eq("match_id", matchId)
+        .eq("formula_name", "v3");
+
+    if (existingV3RatingsError) {
+      return NextResponse.json(
+        {
+          error:
+            existingV3RatingsError.message ||
+            "Failed to snapshot existing v3 ratings.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const matchSnapshot = currentMatchRow as MatchSnapshot;
+    const setsSnapshot = (existingSetsRows ?? []) as SetSnapshot[];
+    const ratingsSnapshot = (existingV3RatingsRows ?? []) as RatingSnapshot[];
+    const team1SetsWonSnapshot = team1.sets_won ?? null;
+    const team2SetsWonSnapshot = team2.sets_won ?? null;
+
+    const rollbackCompletedFlow = async (reason: string) => {
+      const rollbackErrors: string[] = [];
+
+      const { error: rollbackMatchError } = await supabase
+        .from("matches")
+        .update({
+          status: matchSnapshot.status,
+          season_id: matchSnapshot.season_id,
+          date_local: matchSnapshot.date_local,
+          time_local: matchSnapshot.time_local,
+          venue: matchSnapshot.venue,
+          type: matchSnapshot.type,
+          winner_team: matchSnapshot.winner_team,
+        })
+        .eq("match_id", matchId);
+      if (rollbackMatchError) {
+        rollbackErrors.push(rollbackMatchError.message);
+      }
+
+      const { error: rollbackDeleteSetsError } = await supabase
+        .from("match_sets")
+        .delete()
+        .eq("match_id", matchId);
+      if (rollbackDeleteSetsError) {
+        rollbackErrors.push(rollbackDeleteSetsError.message);
+      }
+
+      if (setsSnapshot.length > 0) {
+        const { error: rollbackInsertSetsError } = await supabase
+          .from("match_sets")
+          .insert(
+            setsSnapshot.map((set) => ({
+              match_id: matchId,
+              set_number: set.set_number,
+              team_1_games: set.team_1_games,
+              team_2_games: set.team_2_games,
+            })),
+          );
+        if (rollbackInsertSetsError) {
+          rollbackErrors.push(rollbackInsertSetsError.message);
+        }
+      }
+
+      const { error: rollbackTeam1Error } = await supabase
+        .from("match_teams")
+        .update({ sets_won: team1SetsWonSnapshot })
+        .eq("uuid", team1.uuid);
+      if (rollbackTeam1Error) {
+        rollbackErrors.push(rollbackTeam1Error.message);
+      }
+
+      const { error: rollbackTeam2Error } = await supabase
+        .from("match_teams")
+        .update({ sets_won: team2SetsWonSnapshot })
+        .eq("uuid", team2.uuid);
+      if (rollbackTeam2Error) {
+        rollbackErrors.push(rollbackTeam2Error.message);
+      }
+
+      const { error: rollbackDeleteRatingsError } = await supabase
+        .from("match_player_ratings")
+        .delete()
+        .eq("match_id", matchId)
+        .eq("formula_name", "v3");
+      if (rollbackDeleteRatingsError) {
+        rollbackErrors.push(rollbackDeleteRatingsError.message);
+      }
+
+      if (ratingsSnapshot.length > 0) {
+        const { error: rollbackInsertRatingsError } = await supabase
+          .from("match_player_ratings")
+          .insert(ratingsSnapshot);
+        if (rollbackInsertRatingsError) {
+          rollbackErrors.push(rollbackInsertRatingsError.message);
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error: reason,
+          rollbackErrors,
+        },
+        { status: 500 },
+      );
+    };
+
     const sets = validation.value.sets ?? [];
     let team1SetsWon = 0;
     let team2SetsWon = 0;
@@ -533,9 +698,8 @@ export async function PATCH(
       .eq("match_id", matchId);
 
     if (deleteSetsError) {
-      return NextResponse.json(
-        { error: deleteSetsError.message || "Failed to clear existing sets." },
-        { status: 500 },
+      return rollbackCompletedFlow(
+        deleteSetsError.message || "Failed to clear existing sets.",
       );
     }
 
@@ -551,9 +715,8 @@ export async function PATCH(
       .insert(setRows);
 
     if (insertSetsError) {
-      return NextResponse.json(
-        { error: insertSetsError.message || "Failed to insert match sets." },
-        { status: 500 },
+      return rollbackCompletedFlow(
+        insertSetsError.message || "Failed to insert match sets.",
       );
     }
 
@@ -562,9 +725,8 @@ export async function PATCH(
       .update({ sets_won: calculation.team1SetsWon })
       .eq("uuid", team1.uuid);
     if (team1UpdateError) {
-      return NextResponse.json(
-        { error: team1UpdateError.message || "Failed to update team 1 sets won." },
-        { status: 500 },
+      return rollbackCompletedFlow(
+        team1UpdateError.message || "Failed to update team 1 sets won.",
       );
     }
 
@@ -573,9 +735,8 @@ export async function PATCH(
       .update({ sets_won: calculation.team2SetsWon })
       .eq("uuid", team2.uuid);
     if (team2UpdateError) {
-      return NextResponse.json(
-        { error: team2UpdateError.message || "Failed to update team 2 sets won." },
-        { status: 500 },
+      return rollbackCompletedFlow(
+        team2UpdateError.message || "Failed to update team 2 sets won.",
       );
     }
 
@@ -585,9 +746,8 @@ export async function PATCH(
       .eq("match_id", matchId)
       .eq("formula_name", "v3");
     if (deleteRatingsError) {
-      return NextResponse.json(
-        { error: deleteRatingsError.message || "Failed to clear existing v3 ratings." },
-        { status: 500 },
+      return rollbackCompletedFlow(
+        deleteRatingsError.message || "Failed to clear existing v3 ratings.",
       );
     }
 
@@ -608,13 +768,8 @@ export async function PATCH(
       );
 
     if (insertRatingsError) {
-      return NextResponse.json(
-        {
-          error:
-            insertRatingsError.message ||
-            "Failed to insert match player ratings.",
-        },
-        { status: 500 },
+      return rollbackCompletedFlow(
+        insertRatingsError.message || "Failed to insert match player ratings.",
       );
     }
 

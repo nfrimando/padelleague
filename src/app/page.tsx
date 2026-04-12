@@ -2,7 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-const WEBSITE_VERSION = "v0.3.0";
+const WEBSITE_VERSION = "v0.3.1";
 
 export default function HomePage() {
   return (
@@ -37,6 +37,13 @@ export default function HomePage() {
                 className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
               >
                 Leaderboard
+              </Link>
+
+              <Link
+                href="/matches"
+                className="px-8 py-4 bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
+              >
+                Matches
               </Link>
             </div>
           </div>
