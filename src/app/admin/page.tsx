@@ -949,9 +949,7 @@ export default function AdminPage() {
       }
 
       setCreateMatchSeasonId(
-        matchSeasons.length > 0
-          ? String(matchSeasons[0])
-          : "",
+        matchSeasons.length > 0 ? String(matchSeasons[0]) : "",
       );
       setCreateMatchDateLocal("");
       setCreateMatchTimeLocal("");
