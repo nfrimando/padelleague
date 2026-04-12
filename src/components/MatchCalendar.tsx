@@ -59,6 +59,16 @@ function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
+function dayLabel(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function MatchCalendar({
   className,
   matches,
@@ -139,6 +149,8 @@ export default function MatchCalendar({
       dateStr: `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`,
     };
   });
+
+  const mobileDates = currentCells.map((c) => c.dateStr);
 
   const totalCells = leadingCells.length + currentCells.length;
   const trailingCount = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
@@ -228,8 +240,74 @@ export default function MatchCalendar({
         </div>
       </div>
 
+      {/* Mobile agenda */}
+      <div className="sm:hidden border-t border-slate-200 dark:border-slate-700">
+        <div className="max-h-[65vh] overflow-y-auto">
+          {mobileDates.map((dateStr) => {
+            const dayMatches = matchesByDate(dateStr);
+            const [y, m, d] = dateStr.split("-").map(Number);
+            const isCurrentToday =
+              y === now.getFullYear() &&
+              m - 1 === now.getMonth() &&
+              d === now.getDate();
+
+            return (
+              <div
+                key={dateStr}
+                className="border-b border-slate-100 dark:border-slate-800"
+              >
+                <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50/70 dark:bg-slate-950/40">
+                  <div className="flex items-center gap-2">
+                    {isCurrentToday && (
+                      <span className="inline-flex h-2 w-2 rounded-full bg-sky-500" />
+                    )}
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      {dayLabel(dateStr)}
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {dayMatches.length} match{dayMatches.length === 1 ? "" : "es"}
+                  </span>
+                </div>
+
+                {dayMatches.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
+                    No matches
+                  </div>
+                ) : (
+                  <div className="px-2 py-2 space-y-2">
+                    {dayMatches.map((match) => {
+                      const t1 = match.teams.find((t) => t.team_number === 1);
+                      const t2 = match.teams.find((t) => t.team_number === 2);
+
+                      return (
+                        <div
+                          key={match.match_id}
+                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5"
+                        >
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            {match.venue || "No venue"}
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {teamLabel(t1)}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">vs</div>
+                          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {teamLabel(t2)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Weekday labels */}
-      <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-700">
+      <div className="hidden sm:grid grid-cols-7 border-b border-slate-200 dark:border-slate-700">
         {WEEKDAY_LABELS.map((label) => (
           <div
             key={label}
@@ -241,7 +319,7 @@ export default function MatchCalendar({
       </div>
 
       {/* Day grid */}
-      <div className="grid grid-cols-7">
+      <div className="hidden sm:grid grid-cols-7">
         {allCells.map((cell, idx) => {
           const today_ = isToday(cell.day, cell.type);
           const isCurrent = cell.type === "current";

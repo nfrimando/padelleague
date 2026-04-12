@@ -2,7 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-const WEBSITE_VERSION = "v0.3.1";
+const WEBSITE_VERSION = "v0.4.0";
 
 export default function HomePage() {
   return (
@@ -26,6 +26,13 @@ export default function HomePage() {
 
             <div className="flex flex-col sm:flex-row gap-6">
               <Link
+                href="/matches"
+                className="px-8 py-4 bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
+              >
+                Matches
+              </Link>
+
+              <Link
                 href="/players"
                 className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
               >
@@ -37,13 +44,6 @@ export default function HomePage() {
                 className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
               >
                 Leaderboard
-              </Link>
-
-              <Link
-                href="/matches"
-                className="px-8 py-4 bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
-              >
-                Matches
               </Link>
             </div>
           </div>
