@@ -11,7 +11,8 @@ import { usePlayers } from "@/lib/usePlayers";
 const ADMIN_PLAYER_TABS = [
   { value: "CREATE", label: "Create Player" },
   { value: "EDIT", label: "Edit Player" },
-  { value: "CREATE_MATCH", label: "Schedule a Match" },
+  { value: "CREATE_MATCH", label: "Schedule Match" },
+  { value: "COMPLETE_MATCH", label: "Complete Match" },
   { value: "UPDATE_MATCH", label: "Update Match" },
 ] as const;
 const MATCH_STATUS_OPTIONS = [
@@ -20,6 +21,52 @@ const MATCH_STATUS_OPTIONS = [
   "forfeit",
   "cancelled",
 ] as const;
+const UPDATE_MATCH_STATUS_OPTIONS = [
+  "scheduled",
+  "forfeit",
+  "cancelled",
+] as const;
+
+type MatchStatusValue = (typeof MATCH_STATUS_OPTIONS)[number];
+
+type MatchPlayerSummary = {
+  player_id: number;
+  name: string | null;
+  nickname: string | null;
+};
+
+type LoadedMatchDetails = {
+  matchId: number;
+  status: MatchStatusValue;
+  seasonId: number | null;
+  dateLocal: string | null;
+  timeLocal: string | null;
+  venue: string | null;
+  type: string | null;
+  winnerTeam: number | null;
+  team1: {
+    player1: MatchPlayerSummary | null;
+    player2: MatchPlayerSummary | null;
+  };
+  team2: {
+    player1: MatchPlayerSummary | null;
+    player2: MatchPlayerSummary | null;
+  };
+  preRatingsV3: Record<number, number | null>;
+};
+
+type ScheduledMatchOption = {
+  match_id: number;
+  date_local: string | null;
+  time_local: string | null;
+  venue: string | null;
+  type: string | null;
+  team1Player1Id: number | null;
+  team1Player2Id: number | null;
+  team2Player1Id: number | null;
+  team2Player2Id: number | null;
+};
+
 const AUTH_BOX_CLASS =
   "w-full md:w-[24rem] md:max-w-[24rem] min-h-[188px] mx-auto rounded-lg border border-slate-200 dark:border-slate-700 p-4";
 
@@ -78,11 +125,32 @@ export default function AdminPage() {
   const [updateSet2Team2, setUpdateSet2Team2] = useState("");
   const [updateSet3Team1, setUpdateSet3Team1] = useState("");
   const [updateSet3Team2, setUpdateSet3Team2] = useState("");
+  const [completingMatch, setCompletingMatch] = useState(false);
+  const [completeMatchError, setCompleteMatchError] = useState<string | null>(
+    null,
+  );
+  const [completeMatchSuccess, setCompleteMatchSuccess] = useState<
+    string | null
+  >(null);
   const [updatingMatch, setUpdatingMatch] = useState(false);
   const [updateMatchError, setUpdateMatchError] = useState<string | null>(null);
   const [updateMatchSuccess, setUpdateMatchSuccess] = useState<string | null>(
     null,
   );
+  const [updateMatchLoadingDetails, setUpdateMatchLoadingDetails] =
+    useState(false);
+  const [updateMatchDetailsError, setUpdateMatchDetailsError] = useState<
+    string | null
+  >(null);
+  const [loadedMatchDetails, setLoadedMatchDetails] =
+    useState<LoadedMatchDetails | null>(null);
+  const [scheduledMatches, setScheduledMatches] = useState<
+    ScheduledMatchOption[]
+  >([]);
+  const [scheduledMatchesLoading, setScheduledMatchesLoading] = useState(false);
+  const [scheduledMatchesError, setScheduledMatchesError] = useState<
+    string | null
+  >(null);
   const {
     players,
     setPlayers,
@@ -90,6 +158,12 @@ export default function AdminPage() {
     error: playersError,
   } = usePlayers({ enabled: isAdmin, orderByName: true });
   const filtered = usePlayerSearch(players, search);
+  const playerNameById = new Map(
+    players.map((player) => [
+      String(player.player_id),
+      player.nickname || player.name || `#${player.player_id}`,
+    ]),
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -180,11 +254,347 @@ export default function AdminPage() {
       setCreatePlayerSuccess(null);
       setCreateMatchError(null);
       setCreateMatchSuccess(null);
+      setCompleteMatchError(null);
+      setCompleteMatchSuccess(null);
       setUpdateMatchError(null);
       setUpdateMatchSuccess(null);
+      setUpdateMatchDetailsError(null);
+      setScheduledMatches([]);
+      setScheduledMatchesError(null);
+      setLoadedMatchDetails(null);
       return;
     }
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || activePlayerTab !== "COMPLETE_MATCH") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadScheduledMatches = async () => {
+      setScheduledMatchesLoading(true);
+      setScheduledMatchesError(null);
+
+      const { data, error } = await supabase
+        .from("matches")
+        .select("match_id,date_local,time_local,venue,type")
+        .eq("status", "scheduled")
+        .order("date_local", { ascending: true })
+        .order("time_local", { ascending: true })
+        .order("match_id", { ascending: true });
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        setScheduledMatches([]);
+        setScheduledMatchesError(
+          error.message || "Failed to load scheduled matches.",
+        );
+        setScheduledMatchesLoading(false);
+        return;
+      }
+
+      const baseRows = (data ?? []) as Array<
+        Omit<
+          ScheduledMatchOption,
+          | "team1Player1Id"
+          | "team1Player2Id"
+          | "team2Player1Id"
+          | "team2Player2Id"
+        >
+      >;
+
+      const matchIds = baseRows.map((row) => row.match_id);
+      const teamMap = new Map<
+        number,
+        {
+          team1Player1Id: number | null;
+          team1Player2Id: number | null;
+          team2Player1Id: number | null;
+          team2Player2Id: number | null;
+        }
+      >();
+
+      if (matchIds.length > 0) {
+        const { data: teamRows } = await supabase
+          .from("match_teams")
+          .select("match_id,team_number,player_1_id,player_2_id")
+          .in("match_id", matchIds);
+
+        for (const row of teamRows ?? []) {
+          const existing = teamMap.get(row.match_id) ?? {
+            team1Player1Id: null,
+            team1Player2Id: null,
+            team2Player1Id: null,
+            team2Player2Id: null,
+          };
+
+          if (row.team_number === 1) {
+            existing.team1Player1Id = row.player_1_id;
+            existing.team1Player2Id = row.player_2_id;
+          } else if (row.team_number === 2) {
+            existing.team2Player1Id = row.player_1_id;
+            existing.team2Player2Id = row.player_2_id;
+          }
+
+          teamMap.set(row.match_id, existing);
+        }
+      }
+
+      const rows: ScheduledMatchOption[] = baseRows.map((row) => {
+        const team = teamMap.get(row.match_id);
+        return {
+          ...row,
+          team1Player1Id: team?.team1Player1Id ?? null,
+          team1Player2Id: team?.team1Player2Id ?? null,
+          team2Player1Id: team?.team2Player1Id ?? null,
+          team2Player2Id: team?.team2Player2Id ?? null,
+        };
+      });
+
+      setScheduledMatches(rows);
+
+      if (
+        updateMatchId &&
+        !rows.some((match) => String(match.match_id) === updateMatchId)
+      ) {
+        setUpdateMatchId("");
+      }
+
+      setScheduledMatchesLoading(false);
+    };
+
+    void loadScheduledMatches();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAdmin,
+    activePlayerTab,
+    completeMatchSuccess,
+    createMatchSuccess,
+    updateMatchId,
+  ]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const matchId = Number.parseInt(updateMatchId, 10);
+    if (!Number.isInteger(matchId) || matchId <= 0) {
+      setLoadedMatchDetails(null);
+      setUpdateMatchDetailsError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadMatchDetails = async () => {
+      setUpdateMatchLoadingDetails(true);
+      setUpdateMatchDetailsError(null);
+
+      const { data: matchRow, error: matchError } = await supabase
+        .from("matches")
+        .select(
+          "match_id,status,season_id,date_local,time_local,venue,type,winner_team",
+        )
+        .eq("match_id", matchId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (matchError) {
+        setLoadedMatchDetails(null);
+        setUpdateMatchDetailsError(
+          matchError.message || "Failed to load match.",
+        );
+        setUpdateMatchLoadingDetails(false);
+        return;
+      }
+
+      if (!matchRow) {
+        setLoadedMatchDetails(null);
+        setUpdateMatchDetailsError("Match not found.");
+        setUpdateMatchLoadingDetails(false);
+        return;
+      }
+
+      const { data: teams, error: teamsError } = await supabase
+        .from("match_teams")
+        .select("team_number,player_1_id,player_2_id")
+        .eq("match_id", matchId);
+
+      if (cancelled) return;
+
+      if (teamsError) {
+        setLoadedMatchDetails(null);
+        setUpdateMatchDetailsError(
+          teamsError.message || "Failed to load match teams.",
+        );
+        setUpdateMatchLoadingDetails(false);
+        return;
+      }
+
+      const { data: setsRows, error: setsError } = await supabase
+        .from("match_sets")
+        .select("set_number,team_1_games,team_2_games")
+        .eq("match_id", matchId)
+        .order("set_number", { ascending: true });
+
+      if (cancelled) return;
+
+      if (setsError) {
+        setLoadedMatchDetails(null);
+        setUpdateMatchDetailsError(
+          setsError.message || "Failed to load match sets.",
+        );
+        setUpdateMatchLoadingDetails(false);
+        return;
+      }
+
+      const team1 = (teams ?? []).find((team) => team.team_number === 1);
+      const team2 = (teams ?? []).find((team) => team.team_number === 2);
+
+      const playerIds = [
+        team1?.player_1_id,
+        team1?.player_2_id,
+        team2?.player_1_id,
+        team2?.player_2_id,
+      ].filter((id): id is number => typeof id === "number");
+
+      const uniquePlayerIds = Array.from(new Set(playerIds));
+
+      const { data: playersRows, error: playersError } =
+        uniquePlayerIds.length > 0
+          ? await supabase
+              .from("players")
+              .select("player_id,name,nickname")
+              .in("player_id", uniquePlayerIds)
+          : { data: [], error: null };
+
+      if (cancelled) return;
+
+      if (playersError) {
+        setLoadedMatchDetails(null);
+        setUpdateMatchDetailsError(
+          playersError.message || "Failed to load players.",
+        );
+        setUpdateMatchLoadingDetails(false);
+        return;
+      }
+
+      const playerMap = new Map<number, MatchPlayerSummary>();
+      for (const row of playersRows ?? []) {
+        playerMap.set(row.player_id, {
+          player_id: row.player_id,
+          name: row.name ?? null,
+          nickname: row.nickname ?? null,
+        });
+      }
+
+      const preRatingsV3: Record<number, number | null> = {};
+      for (const playerId of uniquePlayerIds) {
+        const { data: latest } = await supabase
+          .from("match_player_ratings")
+          .select("rating_post,created_at")
+          .eq("player_id", playerId)
+          .neq("match_id", matchId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (typeof latest?.rating_post === "number") {
+          preRatingsV3[playerId] = latest.rating_post;
+          continue;
+        }
+
+        const { data: existingForMatch } = await supabase
+          .from("match_player_ratings")
+          .select("rating_pre")
+          .eq("match_id", matchId)
+          .eq("player_id", playerId)
+          .maybeSingle();
+
+        preRatingsV3[playerId] =
+          typeof existingForMatch?.rating_pre === "number"
+            ? existingForMatch.rating_pre
+            : null;
+      }
+
+      if (cancelled) return;
+
+      const nextStatus =
+        matchRow.status &&
+        ["completed", "scheduled", "forfeit", "cancelled"].includes(
+          matchRow.status,
+        )
+          ? (matchRow.status as MatchStatusValue)
+          : "completed";
+
+      setUpdateMatchStatus(nextStatus);
+      setUpdateMatchSeasonId(
+        matchRow.season_id ? String(matchRow.season_id) : "",
+      );
+      setUpdateMatchDateLocal(matchRow.date_local || "");
+      setUpdateMatchTimeLocal(matchRow.time_local || "");
+      setUpdateMatchVenue(matchRow.venue || "");
+      setUpdateMatchType(matchRow.type || "");
+
+      const sets = setsRows ?? [];
+      setUpdateSet1Team1(sets[0] ? String(sets[0].team_1_games) : "");
+      setUpdateSet1Team2(sets[0] ? String(sets[0].team_2_games) : "");
+      setUpdateSet2Team1(sets[1] ? String(sets[1].team_1_games) : "");
+      setUpdateSet2Team2(sets[1] ? String(sets[1].team_2_games) : "");
+      setUpdateSet3Team1(sets[2] ? String(sets[2].team_1_games) : "");
+      setUpdateSet3Team2(sets[2] ? String(sets[2].team_2_games) : "");
+
+      setLoadedMatchDetails({
+        matchId,
+        status: nextStatus,
+        seasonId: matchRow.season_id,
+        dateLocal: matchRow.date_local,
+        timeLocal: matchRow.time_local,
+        venue: matchRow.venue,
+        type: matchRow.type,
+        winnerTeam: matchRow.winner_team,
+        team1: {
+          player1:
+            typeof team1?.player_1_id === "number"
+              ? (playerMap.get(team1.player_1_id) ?? null)
+              : null,
+          player2:
+            typeof team1?.player_2_id === "number"
+              ? (playerMap.get(team1.player_2_id) ?? null)
+              : null,
+        },
+        team2: {
+          player1:
+            typeof team2?.player_1_id === "number"
+              ? (playerMap.get(team2.player_1_id) ?? null)
+              : null,
+          player2:
+            typeof team2?.player_2_id === "number"
+              ? (playerMap.get(team2.player_2_id) ?? null)
+              : null,
+        },
+        preRatingsV3,
+      });
+
+      setUpdateMatchLoadingDetails(false);
+    };
+
+    void loadMatchDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, updateMatchId]);
 
   const selectPlayerFromSearch = (player: Player) => {
     setActivePlayerTab("EDIT");
@@ -221,17 +631,48 @@ export default function AdminPage() {
         return;
       }
 
-      const { data: updated, error } = await supabase
-        .from("players")
-        .update(updates)
-        .eq("player_id", selectedPlayer.player_id)
-        .select("*")
-        .maybeSingle();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (error) {
-        setSavePlayerError(error.message || "Failed to update player.");
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setSavePlayerError("No active session found. Please sign in again.");
         return;
       }
+
+      const response = await fetch(
+        `/api/admin/players/${selectedPlayer.player_id}/update`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            name: updates.name,
+            nickname: updates.nickname,
+            imageLink: updates.image_link,
+          }),
+        },
+      );
+
+      const result = (await response.json()) as {
+        error?: string;
+        details?: string[];
+        message?: string;
+        player?: Player;
+      };
+
+      if (!response.ok) {
+        const details = result.details?.join(" ");
+        setSavePlayerError(
+          details || result.error || "Failed to update player.",
+        );
+        return;
+      }
+
+      const updated = result.player;
 
       if (!updated) {
         setSavePlayerError("Player not found.");
@@ -244,7 +685,7 @@ export default function AdminPage() {
           String(p.player_id) === String(updated.player_id) ? updated : p,
         ),
       );
-      setSavePlayerSuccess("Player updated successfully.");
+      setSavePlayerSuccess(result.message || "Player updated successfully.");
     } catch {
       setSavePlayerError("Unexpected error while updating player.");
     } finally {
@@ -269,16 +710,45 @@ export default function AdminPage() {
         return;
       }
 
-      const { data: created, error } = await supabase
-        .from("players")
-        .insert(payload)
-        .select("*")
-        .maybeSingle();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (error) {
-        setCreatePlayerError(error.message || "Failed to create player.");
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setCreatePlayerError("No active session found. Please sign in again.");
         return;
       }
+
+      const response = await fetch("/api/admin/players/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          name: payload.name,
+          nickname: payload.nickname,
+          imageLink: payload.image_link,
+        }),
+      });
+
+      const result = (await response.json()) as {
+        error?: string;
+        details?: string[];
+        message?: string;
+        player?: Player;
+      };
+
+      if (!response.ok) {
+        const details = result.details?.join(" ");
+        setCreatePlayerError(
+          details || result.error || "Failed to create player.",
+        );
+        return;
+      }
+
+      const created = result.player;
 
       if (!created) {
         setCreatePlayerError("Player was not created.");
@@ -296,7 +766,7 @@ export default function AdminPage() {
       setCreateName("");
       setCreateNickname("");
       setCreateImageLink("");
-      setCreatePlayerSuccess("Player created successfully.");
+      setCreatePlayerSuccess(result.message || "Player created successfully.");
       setActivePlayerTab("EDIT");
     } catch {
       setCreatePlayerError("Unexpected error while creating player.");
@@ -398,6 +868,127 @@ export default function AdminPage() {
     }
   };
 
+  const handleCompleteMatch = async () => {
+    setCompletingMatch(true);
+    setCompleteMatchError(null);
+    setCompleteMatchSuccess(null);
+
+    try {
+      const matchId = Number.parseInt(updateMatchId, 10);
+      if (!Number.isInteger(matchId) || matchId <= 0) {
+        setCompleteMatchError("match_id must be a positive integer.");
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setCompleteMatchError("No active session found. Please sign in again.");
+        return;
+      }
+
+      const rawSetPairs = [
+        { team1: updateSet1Team1, team2: updateSet1Team2 },
+        { team1: updateSet2Team1, team2: updateSet2Team2 },
+        { team1: updateSet3Team1, team2: updateSet3Team2 },
+      ];
+
+      const sets: Array<{ team1Games: number; team2Games: number }> = [];
+      for (const pair of rawSetPairs) {
+        const t1 = pair.team1.trim();
+        const t2 = pair.team2.trim();
+
+        if (!t1 && !t2) {
+          continue;
+        }
+
+        if (!t1 || !t2) {
+          setCompleteMatchError("Each set row must have both team scores.");
+          return;
+        }
+
+        const t1Games = Number.parseInt(t1, 10);
+        const t2Games = Number.parseInt(t2, 10);
+        if (
+          !Number.isInteger(t1Games) ||
+          !Number.isInteger(t2Games) ||
+          t1Games < 0 ||
+          t2Games < 0
+        ) {
+          setCompleteMatchError("Set scores must be whole numbers >= 0.");
+          return;
+        }
+
+        sets.push({ team1Games: t1Games, team2Games: t2Games });
+      }
+
+      if (sets.length === 0) {
+        setCompleteMatchError(
+          "At least one set score is required for completed matches.",
+        );
+        return;
+      }
+
+      let team1SetsWon = 0;
+      let team2SetsWon = 0;
+      for (const set of sets) {
+        if (set.team1Games > set.team2Games) team1SetsWon += 1;
+        else team2SetsWon += 1;
+      }
+      if (team1SetsWon === team2SetsWon) {
+        setCompleteMatchError(
+          "Set scores must produce a clear winner (no tied sets won).",
+        );
+        return;
+      }
+
+      const payload: Record<string, unknown> = {
+        status: "completed",
+        sets,
+      };
+
+      const response = await fetch(`/api/admin/matches/${matchId}/update`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as {
+        error?: string;
+        details?: string[];
+        message?: string;
+      };
+
+      if (!response.ok) {
+        const details = result.details?.join(" ");
+        setCompleteMatchError(
+          details || result.error || "Failed to update match.",
+        );
+        return;
+      }
+
+      setUpdateSet1Team1("");
+      setUpdateSet1Team2("");
+      setUpdateSet2Team1("");
+      setUpdateSet2Team2("");
+      setUpdateSet3Team1("");
+      setUpdateSet3Team2("");
+      setCompleteMatchSuccess(
+        result.message || "Match completed successfully.",
+      );
+    } catch {
+      setCompleteMatchError("Unexpected error while completing match.");
+    } finally {
+      setCompletingMatch(false);
+    }
+  };
+
   const handleUpdateMatch = async () => {
     setUpdatingMatch(true);
     setUpdateMatchError(null);
@@ -420,48 +1011,6 @@ export default function AdminPage() {
         return;
       }
 
-      const rawSetPairs = [
-        { team1: updateSet1Team1, team2: updateSet1Team2 },
-        { team1: updateSet2Team1, team2: updateSet2Team2 },
-        { team1: updateSet3Team1, team2: updateSet3Team2 },
-      ];
-
-      const sets: Array<{ team1Games: number; team2Games: number }> = [];
-      for (const pair of rawSetPairs) {
-        const t1 = pair.team1.trim();
-        const t2 = pair.team2.trim();
-
-        if (!t1 && !t2) {
-          continue;
-        }
-
-        if (!t1 || !t2) {
-          setUpdateMatchError("Each set row must have both team scores.");
-          return;
-        }
-
-        const t1Games = Number.parseInt(t1, 10);
-        const t2Games = Number.parseInt(t2, 10);
-        if (
-          !Number.isInteger(t1Games) ||
-          !Number.isInteger(t2Games) ||
-          t1Games < 0 ||
-          t2Games < 0
-        ) {
-          setUpdateMatchError("Set scores must be whole numbers >= 0.");
-          return;
-        }
-
-        sets.push({ team1Games: t1Games, team2Games: t2Games });
-      }
-
-      if (updateMatchStatus === "completed" && sets.length === 0) {
-        setUpdateMatchError(
-          "At least one set score is required for completed matches.",
-        );
-        return;
-      }
-
       const payload: Record<string, unknown> = {
         status: updateMatchStatus,
       };
@@ -479,7 +1028,6 @@ export default function AdminPage() {
       if (updateMatchTimeLocal) payload.timeLocal = updateMatchTimeLocal;
       if (updateMatchVenue.trim()) payload.venue = updateMatchVenue.trim();
       if (updateMatchType.trim()) payload.type = updateMatchType.trim();
-      if (updateMatchStatus === "completed") payload.sets = sets;
 
       const response = await fetch(`/api/admin/matches/${matchId}/update`, {
         method: "PATCH",
@@ -504,12 +1052,6 @@ export default function AdminPage() {
         return;
       }
 
-      setUpdateSet1Team1("");
-      setUpdateSet1Team2("");
-      setUpdateSet2Team1("");
-      setUpdateSet2Team2("");
-      setUpdateSet3Team1("");
-      setUpdateSet3Team2("");
       setUpdateMatchSuccess(result.message || "Match updated successfully.");
     } catch {
       setUpdateMatchError("Unexpected error while updating match.");
@@ -517,6 +1059,177 @@ export default function AdminPage() {
       setUpdatingMatch(false);
     }
   };
+
+  const getUpdateMatchRatingPreview = () => {
+    if (!loadedMatchDetails) {
+      return null;
+    }
+
+    const setPairs = [
+      { t1: updateSet1Team1.trim(), t2: updateSet1Team2.trim() },
+      { t1: updateSet2Team1.trim(), t2: updateSet2Team2.trim() },
+      { t1: updateSet3Team1.trim(), t2: updateSet3Team2.trim() },
+    ];
+
+    const sets: Array<{ team1Games: number; team2Games: number }> = [];
+    for (const pair of setPairs) {
+      if (!pair.t1 && !pair.t2) {
+        continue;
+      }
+
+      if (!pair.t1 || !pair.t2) {
+        return { error: "Fill both team scores for each set row." };
+      }
+
+      const t1Games = Number.parseInt(pair.t1, 10);
+      const t2Games = Number.parseInt(pair.t2, 10);
+      if (
+        !Number.isInteger(t1Games) ||
+        !Number.isInteger(t2Games) ||
+        t1Games < 0 ||
+        t2Games < 0 ||
+        t1Games === t2Games
+      ) {
+        return { error: "Set scores must be valid and cannot be tied." };
+      }
+
+      sets.push({ team1Games: t1Games, team2Games: t2Games });
+    }
+
+    if (sets.length === 0) {
+      return { error: "Enter at least one set to preview rating impact." };
+    }
+
+    const players = [
+      loadedMatchDetails.team1.player1,
+      loadedMatchDetails.team1.player2,
+      loadedMatchDetails.team2.player1,
+      loadedMatchDetails.team2.player2,
+    ];
+
+    if (players.some((p) => !p)) {
+      return { error: "Match teams are incomplete. Cannot preview ratings." };
+    }
+
+    const missingPre = (players as MatchPlayerSummary[]).find(
+      (player) => loadedMatchDetails.preRatingsV3[player.player_id] == null,
+    );
+
+    if (missingPre) {
+      return {
+        error:
+          "Missing prior rating for one or more players. Rating preview unavailable.",
+      };
+    }
+
+    const [t1p1, t1p2, t2p1, t2p2] = players as MatchPlayerSummary[];
+
+    const ELO_VAR_1 = 2.67;
+    const UTR_VAR_1 = 0.15;
+    const UTR_VAR_2 = 1.5;
+    const UTR_VAR_3 = 0.5;
+    const UTR_VAR_4 = 0.08;
+    const UTR_VAR_5 = 2;
+    const GAMES_NORMALIZATION = 1 - 14 / 32;
+
+    const pre1 = loadedMatchDetails.preRatingsV3[t1p1.player_id] as number;
+    const pre2 = loadedMatchDetails.preRatingsV3[t1p2.player_id] as number;
+    const pre3 = loadedMatchDetails.preRatingsV3[t2p1.player_id] as number;
+    const pre4 = loadedMatchDetails.preRatingsV3[t2p2.player_id] as number;
+
+    let team1SetsWon = 0;
+    let team2SetsWon = 0;
+    for (const set of sets) {
+      if (set.team1Games > set.team2Games) team1SetsWon += 1;
+      else team2SetsWon += 1;
+    }
+    const winnerTeam =
+      team1SetsWon > team2SetsWon ? 1 : team2SetsWon > team1SetsWon ? 2 : null;
+    if (!winnerTeam) {
+      return {
+        error: "Set scores must produce a clear winner to preview ratings.",
+      };
+    }
+
+    const avg1 = (pre1 + pre2) / 2;
+    const avg2 = (pre3 + pre4) / 2;
+
+    const elo1 = Math.pow(10, avg1 / ELO_VAR_1);
+    const elo2 = Math.pow(10, avg2 / ELO_VAR_1);
+    const ewp1 = elo1 / (elo1 + elo2);
+    const ewp2 = elo2 / (elo1 + elo2);
+
+    const totalGames1 = sets.reduce((sum, s) => sum + s.team1Games, 0);
+    const totalGames2 = sets.reduce((sum, s) => sum + s.team2Games, 0);
+    const totalGames = totalGames1 + totalGames2;
+    const actualPerf1 = totalGames > 0 ? totalGames1 / totalGames : 0;
+    const actualPerf2 = totalGames > 0 ? totalGames2 / totalGames : 0;
+
+    const calcReward = (actualPerf: number, ewp: number) => {
+      if (actualPerf <= ewp) return 0;
+      const ratio = (actualPerf - ewp) / GAMES_NORMALIZATION;
+      const raw =
+        Math.pow(ratio, UTR_VAR_5) * (UTR_VAR_2 - UTR_VAR_1) + UTR_VAR_1;
+      return Math.min(raw, UTR_VAR_3);
+    };
+
+    let delta1 = 0;
+    let delta2 = 0;
+    if (winnerTeam === 1) {
+      const reward = Math.max(UTR_VAR_4, calcReward(actualPerf1, ewp1));
+      delta1 = reward;
+      delta2 = -reward;
+    } else if (winnerTeam === 2) {
+      const reward = Math.max(UTR_VAR_4, calcReward(actualPerf2, ewp2));
+      delta2 = reward;
+      delta1 = -reward;
+    }
+
+    return {
+      winnerTeam,
+      rows: [
+        {
+          player: t1p1,
+          team: 1,
+          before: pre1,
+          after: pre1 + delta1,
+          delta: delta1,
+        },
+        {
+          player: t1p2,
+          team: 1,
+          before: pre2,
+          after: pre2 + delta1,
+          delta: delta1,
+        },
+        {
+          player: t2p1,
+          team: 2,
+          before: pre3,
+          after: pre3 + delta2,
+          delta: delta2,
+        },
+        {
+          player: t2p2,
+          team: 2,
+          before: pre4,
+          after: pre4 + delta2,
+          delta: delta2,
+        },
+      ],
+    };
+  };
+
+  const updateMatchRatingPreview = getUpdateMatchRatingPreview();
+  const updateMatchRatingPreviewWithRows =
+    updateMatchRatingPreview && "rows" in updateMatchRatingPreview
+      ? updateMatchRatingPreview
+      : null;
+  const updateMatchRatingPreviewRows =
+    updateMatchRatingPreviewWithRows?.rows ?? [];
+  const completeMatchWinnerTeamDisplay =
+    updateMatchRatingPreviewWithRows?.winnerTeam ??
+    loadedMatchDetails?.winnerTeam;
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
@@ -619,6 +1332,8 @@ export default function AdminPage() {
                               setCreatePlayerSuccess(null);
                               setCreateMatchError(null);
                               setCreateMatchSuccess(null);
+                              setCompleteMatchError(null);
+                              setCompleteMatchSuccess(null);
                               setUpdateMatchError(null);
                               setUpdateMatchSuccess(null);
                             }}
@@ -1013,13 +1728,330 @@ export default function AdminPage() {
                         </button>
                       </div>
                     </div>
+                  ) : activePlayerTab === "COMPLETE_MATCH" ? (
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
+                      <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                        Complete Match
+                      </div>
+
+                      <div className="rounded bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-amber-800 dark:text-amber-300">
+                        Note that rating changes are dependent on when matches
+                        are inputted as completed. Make sure to input matches
+                        chronologicaly especially when updating matches with
+                        similar players.
+                      </div>
+
+                      <div>
+                        <label
+                          className="text-slate-500 dark:text-slate-400"
+                          htmlFor="complete-match-select"
+                        >
+                          Scheduled match:
+                        </label>
+                        <select
+                          id="complete-match-select"
+                          value={updateMatchId}
+                          onChange={(e) => setUpdateMatchId(e.target.value)}
+                          className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                        >
+                          <option value="">Select a scheduled match</option>
+                          {scheduledMatches.map((match) => {
+                            const datePart = match.date_local || "No date";
+                            const timePart = match.time_local || "No time";
+                            const typePart = match.type || "No type";
+                            const venuePart = match.venue || "No venue";
+                            const team1 = `${
+                              (match.team1Player1Id &&
+                                playerNameById.get(
+                                  String(match.team1Player1Id),
+                                )) ||
+                              (match.team1Player1Id
+                                ? `#${match.team1Player1Id}`
+                                : "?")
+                            } / ${
+                              (match.team1Player2Id &&
+                                playerNameById.get(
+                                  String(match.team1Player2Id),
+                                )) ||
+                              (match.team1Player2Id
+                                ? `#${match.team1Player2Id}`
+                                : "?")
+                            }`;
+                            const team2 = `${
+                              (match.team2Player1Id &&
+                                playerNameById.get(
+                                  String(match.team2Player1Id),
+                                )) ||
+                              (match.team2Player1Id
+                                ? `#${match.team2Player1Id}`
+                                : "?")
+                            } / ${
+                              (match.team2Player2Id &&
+                                playerNameById.get(
+                                  String(match.team2Player2Id),
+                                )) ||
+                              (match.team2Player2Id
+                                ? `#${match.team2Player2Id}`
+                                : "?")
+                            }`;
+
+                            return (
+                              <option
+                                key={match.match_id}
+                                value={String(match.match_id)}
+                              >
+                                #{match.match_id} - {team1} vs {team2} -{" "}
+                                {datePart} {timePart} - {typePart} - {venuePart}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {scheduledMatchesLoading && (
+                        <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
+                          Loading scheduled matches...
+                        </div>
+                      )}
+
+                      {scheduledMatchesError && (
+                        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-rose-700 dark:text-rose-300">
+                          {scheduledMatchesError}
+                        </div>
+                      )}
+
+                      {!scheduledMatchesLoading &&
+                        !scheduledMatchesError &&
+                        scheduledMatches.length === 0 && (
+                          <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
+                            No scheduled matches found.
+                          </div>
+                        )}
+
+                      {updateMatchLoadingDetails && (
+                        <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
+                          Loading match details...
+                        </div>
+                      )}
+
+                      {updateMatchDetailsError && (
+                        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-rose-700 dark:text-rose-300">
+                          {updateMatchDetailsError}
+                        </div>
+                      )}
+
+                      {loadedMatchDetails && (
+                        <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
+                          <div className="font-medium text-slate-900 dark:text-slate-100">
+                            Match Details
+                          </div>
+                          <div className="grid gap-3 xl:grid-cols-4 text-sm">
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                current status:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {loadedMatchDetails.status}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                winner_team:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {completeMatchWinnerTeamDisplay ?? "N/A"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                team 1:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {loadedMatchDetails.team1.player1?.nickname ||
+                                  loadedMatchDetails.team1.player1?.name ||
+                                  "?"}
+                                {" / "}
+                                {loadedMatchDetails.team1.player2?.nickname ||
+                                  loadedMatchDetails.team1.player2?.name ||
+                                  "?"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                team 2:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {loadedMatchDetails.team2.player1?.nickname ||
+                                  loadedMatchDetails.team2.player1?.name ||
+                                  "?"}
+                                {" / "}
+                                {loadedMatchDetails.team2.player2?.nickname ||
+                                  loadedMatchDetails.team2.player2?.name ||
+                                  "?"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
+                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                          Set Scores
+                        </div>
+
+                        <div className="grid gap-3 xl:grid-cols-3">
+                          <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Set 1
+                          </div>
+                          <input
+                            type="number"
+                            value={updateSet1Team1}
+                            onChange={(e) => setUpdateSet1Team1(e.target.value)}
+                            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="Team 1 games"
+                          />
+                          <input
+                            type="number"
+                            value={updateSet1Team2}
+                            onChange={(e) => setUpdateSet1Team2(e.target.value)}
+                            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="Team 2 games"
+                          />
+
+                          <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Set 2
+                          </div>
+                          <input
+                            type="number"
+                            value={updateSet2Team1}
+                            onChange={(e) => setUpdateSet2Team1(e.target.value)}
+                            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="Team 1 games"
+                          />
+                          <input
+                            type="number"
+                            value={updateSet2Team2}
+                            onChange={(e) => setUpdateSet2Team2(e.target.value)}
+                            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="Team 2 games"
+                          />
+
+                          <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Set 3 (optional)
+                          </div>
+                          <input
+                            type="number"
+                            value={updateSet3Team1}
+                            onChange={(e) => setUpdateSet3Team1(e.target.value)}
+                            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="Team 1 games"
+                          />
+                          <input
+                            type="number"
+                            value={updateSet3Team2}
+                            onChange={(e) => setUpdateSet3Team2(e.target.value)}
+                            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="Team 2 games"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-3">
+                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                          Rating Effect Preview (v3)
+                        </div>
+
+                        {!loadedMatchDetails ? (
+                          <div className="text-sm text-slate-500 dark:text-slate-400">
+                            Enter a valid match_id to preview ratings.
+                          </div>
+                        ) : updateMatchRatingPreview?.error ? (
+                          <div className="text-sm text-slate-500 dark:text-slate-400">
+                            {updateMatchRatingPreview.error}
+                          </div>
+                        ) : updateMatchRatingPreviewWithRows ? (
+                          <div className="space-y-2">
+                            <div className="text-sm text-slate-600 dark:text-slate-300">
+                              Winner preview: Team{" "}
+                              {updateMatchRatingPreviewWithRows.winnerTeam}
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-left text-slate-500 dark:text-slate-400">
+                                    <th className="py-1 pr-3">Player</th>
+                                    <th className="py-1 pr-3">Team</th>
+                                    <th className="py-1 pr-3">Before</th>
+                                    <th className="py-1 pr-3">After</th>
+                                    <th className="py-1">Delta</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {updateMatchRatingPreviewRows.map((row) => (
+                                    <tr key={row.player.player_id}>
+                                      <td className="py-1 pr-3 text-slate-900 dark:text-slate-100">
+                                        {row.player.nickname ||
+                                          row.player.name ||
+                                          row.player.player_id}
+                                      </td>
+                                      <td className="py-1 pr-3 text-slate-700 dark:text-slate-300">
+                                        {row.team}
+                                      </td>
+                                      <td className="py-1 pr-3 text-slate-700 dark:text-slate-300">
+                                        {row.before.toFixed(4)}
+                                      </td>
+                                      <td className="py-1 pr-3 text-slate-900 dark:text-slate-100">
+                                        {row.after.toFixed(4)}
+                                      </td>
+                                      <td
+                                        className={`py-1 ${
+                                          row.delta >= 0
+                                            ? "text-emerald-700 dark:text-emerald-300"
+                                            : "text-rose-700 dark:text-rose-300"
+                                        }`}
+                                      >
+                                        {row.delta >= 0 ? "+" : ""}
+                                        {row.delta.toFixed(4)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {completeMatchError && (
+                        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
+                          {completeMatchError}
+                        </div>
+                      )}
+
+                      {completeMatchSuccess && (
+                        <div className="rounded bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-2 text-emerald-700 dark:text-emerald-300">
+                          {completeMatchSuccess}
+                        </div>
+                      )}
+
+                      <div>
+                        <button
+                          type="button"
+                          onClick={handleCompleteMatch}
+                          disabled={completingMatch}
+                          className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {completingMatch ? "Completing..." : "Complete Match"}
+                        </button>
+                      </div>
+                    </div>
                   ) : activePlayerTab === "UPDATE_MATCH" ? (
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
                       <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
                         Update Match
                       </div>
 
-                      <div className="grid gap-4 xl:grid-cols-3">
+                      <div className="grid gap-4 xl:grid-cols-2">
                         <div>
                           <label
                             className="text-slate-500 dark:text-slate-400"
@@ -1049,186 +2081,190 @@ export default function AdminPage() {
                             value={updateMatchStatus}
                             onChange={(e) =>
                               setUpdateMatchStatus(
-                                e.target
-                                  .value as (typeof MATCH_STATUS_OPTIONS)[number],
+                                e.target.value as MatchStatusValue,
                               )
                             }
                             className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                           >
-                            {MATCH_STATUS_OPTIONS.map((status) => (
+                            {updateMatchStatus === "completed" && (
+                              <option value="completed" disabled>
+                                completed (set via Complete Match tab)
+                              </option>
+                            )}
+                            {UPDATE_MATCH_STATUS_OPTIONS.map((status) => (
                               <option key={status} value={status}>
                                 {status}
                               </option>
                             ))}
                           </select>
                         </div>
-
-                        <div>
-                          <label
-                            className="text-slate-500 dark:text-slate-400"
-                            htmlFor="update-match-season-id"
-                          >
-                            season_id (optional):
-                          </label>
-                          <input
-                            id="update-match-season-id"
-                            type="number"
-                            value={updateMatchSeasonId}
-                            onChange={(e) =>
-                              setUpdateMatchSeasonId(e.target.value)
-                            }
-                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                            placeholder="leave blank to keep"
-                          />
-                        </div>
-
-                        <div>
-                          <label
-                            className="text-slate-500 dark:text-slate-400"
-                            htmlFor="update-match-date-local"
-                          >
-                            date_local (optional):
-                          </label>
-                          <input
-                            id="update-match-date-local"
-                            type="date"
-                            value={updateMatchDateLocal}
-                            onChange={(e) =>
-                              setUpdateMatchDateLocal(e.target.value)
-                            }
-                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                          />
-                        </div>
-
-                        <div>
-                          <label
-                            className="text-slate-500 dark:text-slate-400"
-                            htmlFor="update-match-time-local"
-                          >
-                            time_local (optional):
-                          </label>
-                          <input
-                            id="update-match-time-local"
-                            type="time"
-                            value={updateMatchTimeLocal}
-                            onChange={(e) =>
-                              setUpdateMatchTimeLocal(e.target.value)
-                            }
-                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                          />
-                        </div>
-
-                        <div>
-                          <label
-                            className="text-slate-500 dark:text-slate-400"
-                            htmlFor="update-match-type"
-                          >
-                            type (optional):
-                          </label>
-                          <input
-                            id="update-match-type"
-                            type="text"
-                            value={updateMatchType}
-                            onChange={(e) => setUpdateMatchType(e.target.value)}
-                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                            placeholder="e.g. group"
-                          />
-                        </div>
-
-                        <div className="xl:col-span-3">
-                          <label
-                            className="text-slate-500 dark:text-slate-400"
-                            htmlFor="update-match-venue"
-                          >
-                            venue (optional):
-                          </label>
-                          <input
-                            id="update-match-venue"
-                            type="text"
-                            value={updateMatchVenue}
-                            onChange={(e) =>
-                              setUpdateMatchVenue(e.target.value)
-                            }
-                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                          />
-                        </div>
                       </div>
 
-                      {updateMatchStatus === "completed" && (
+                      {updateMatchLoadingDetails && (
+                        <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
+                          Loading match details...
+                        </div>
+                      )}
+
+                      {updateMatchDetailsError && (
+                        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-rose-700 dark:text-rose-300">
+                          {updateMatchDetailsError}
+                        </div>
+                      )}
+
+                      {loadedMatchDetails && (
                         <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
                           <div className="font-medium text-slate-900 dark:text-slate-100">
-                            Set Scores (required for completed)
+                            Match Details
                           </div>
-
-                          <div className="grid gap-3 xl:grid-cols-3">
-                            <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              Set 1
+                          <div className="grid gap-3 xl:grid-cols-4 text-sm">
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                current status:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {loadedMatchDetails.status}
+                              </span>
                             </div>
-                            <input
-                              type="number"
-                              value={updateSet1Team1}
-                              onChange={(e) =>
-                                setUpdateSet1Team1(e.target.value)
-                              }
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                              placeholder="Team 1 games"
-                            />
-                            <input
-                              type="number"
-                              value={updateSet1Team2}
-                              onChange={(e) =>
-                                setUpdateSet1Team2(e.target.value)
-                              }
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                              placeholder="Team 2 games"
-                            />
-
-                            <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              Set 2
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                winner_team:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {loadedMatchDetails.winnerTeam ?? "N/A"}
+                              </span>
                             </div>
-                            <input
-                              type="number"
-                              value={updateSet2Team1}
-                              onChange={(e) =>
-                                setUpdateSet2Team1(e.target.value)
-                              }
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                              placeholder="Team 1 games"
-                            />
-                            <input
-                              type="number"
-                              value={updateSet2Team2}
-                              onChange={(e) =>
-                                setUpdateSet2Team2(e.target.value)
-                              }
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                              placeholder="Team 2 games"
-                            />
-
-                            <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              Set 3 (optional)
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                team 1:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {loadedMatchDetails.team1.player1?.nickname ||
+                                  loadedMatchDetails.team1.player1?.name ||
+                                  "?"}
+                                {" / "}
+                                {loadedMatchDetails.team1.player2?.nickname ||
+                                  loadedMatchDetails.team1.player2?.name ||
+                                  "?"}
+                              </span>
                             </div>
-                            <input
-                              type="number"
-                              value={updateSet3Team1}
-                              onChange={(e) =>
-                                setUpdateSet3Team1(e.target.value)
-                              }
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                              placeholder="Team 1 games"
-                            />
-                            <input
-                              type="number"
-                              value={updateSet3Team2}
-                              onChange={(e) =>
-                                setUpdateSet3Team2(e.target.value)
-                              }
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                              placeholder="Team 2 games"
-                            />
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                team 2:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {loadedMatchDetails.team2.player1?.nickname ||
+                                  loadedMatchDetails.team2.player1?.name ||
+                                  "?"}
+                                {" / "}
+                                {loadedMatchDetails.team2.player2?.nickname ||
+                                  loadedMatchDetails.team2.player2?.name ||
+                                  "?"}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       )}
+
+                      <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
+                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                          Update-able Match Details
+                        </div>
+
+                        <div className="grid gap-4 xl:grid-cols-3">
+                          <div>
+                            <label
+                              className="text-slate-500 dark:text-slate-400"
+                              htmlFor="update-match-season-id"
+                            >
+                              season_id (optional):
+                            </label>
+                            <input
+                              id="update-match-season-id"
+                              type="number"
+                              value={updateMatchSeasonId}
+                              onChange={(e) =>
+                                setUpdateMatchSeasonId(e.target.value)
+                              }
+                              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              placeholder="leave blank to keep"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              className="text-slate-500 dark:text-slate-400"
+                              htmlFor="update-match-date-local"
+                            >
+                              date_local (optional):
+                            </label>
+                            <input
+                              id="update-match-date-local"
+                              type="date"
+                              value={updateMatchDateLocal}
+                              onChange={(e) =>
+                                setUpdateMatchDateLocal(e.target.value)
+                              }
+                              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              className="text-slate-500 dark:text-slate-400"
+                              htmlFor="update-match-time-local"
+                            >
+                              time_local (optional):
+                            </label>
+                            <input
+                              id="update-match-time-local"
+                              type="time"
+                              value={updateMatchTimeLocal}
+                              onChange={(e) =>
+                                setUpdateMatchTimeLocal(e.target.value)
+                              }
+                              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              className="text-slate-500 dark:text-slate-400"
+                              htmlFor="update-match-type"
+                            >
+                              type (optional):
+                            </label>
+                            <input
+                              id="update-match-type"
+                              type="text"
+                              value={updateMatchType}
+                              onChange={(e) =>
+                                setUpdateMatchType(e.target.value)
+                              }
+                              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              placeholder="e.g. group"
+                            />
+                          </div>
+
+                          <div className="xl:col-span-2">
+                            <label
+                              className="text-slate-500 dark:text-slate-400"
+                              htmlFor="update-match-venue"
+                            >
+                              venue (optional):
+                            </label>
+                            <input
+                              id="update-match-venue"
+                              type="text"
+                              value={updateMatchVenue}
+                              onChange={(e) =>
+                                setUpdateMatchVenue(e.target.value)
+                              }
+                              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            />
+                          </div>
+                        </div>
+                      </div>
 
                       {updateMatchError && (
                         <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
