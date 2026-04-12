@@ -41,7 +41,13 @@ const chunkMatchIds = (matchIds: Array<string | number>) => {
   return chunks;
 };
 
-export function useMatches(limit = 10, enabled = true) {
+type UseMatchesOptions = {
+  limit?: number;
+  dateGte?: string;
+  dateLte?: string;
+};
+
+export function useMatches(options: UseMatchesOptions = {}, enabled = true) {
   const [matches, setMatches] = useState<MatchWithTeams[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,17 +67,32 @@ export function useMatches(limit = 10, enabled = true) {
       setError(null);
 
       try {
-        const safeLimit =
-          Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
+        const limit =
+          Number.isFinite(options.limit) && (options.limit ?? 0) > 0
+            ? Math.floor(options.limit as number)
+            : undefined;
 
-        const { data: matchesData, error: matchesError } = await supabase
+        let query = supabase
           .from("matches")
           .select("*")
           .order("date_local", { ascending: false, nullsFirst: false })
           .order("time_local", { ascending: false, nullsFirst: false })
           .order("season_id", { ascending: false, nullsFirst: false })
-          .order("match_id", { ascending: false })
-          .limit(safeLimit);
+          .order("match_id", { ascending: false });
+
+        if (options.dateGte) {
+          query = query.gte("date_local", options.dateGte);
+        }
+
+        if (options.dateLte) {
+          query = query.lte("date_local", options.dateLte);
+        }
+
+        if (limit) {
+          query = query.limit(limit);
+        }
+
+        const { data: matchesData, error: matchesError } = await query;
 
         if (matchesError) {
           throw new Error(matchesError.message || "Failed to load matches.");
@@ -243,7 +264,7 @@ export function useMatches(limit = 10, enabled = true) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, limit]);
+  }, [enabled, options.dateGte, options.dateLte, options.limit]);
 
   return {
     matches,
