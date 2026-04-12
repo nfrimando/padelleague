@@ -5,13 +5,14 @@ import BackToHome from "@/components/BackToHome";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
+import { useMatchSeasons } from "@/lib/useMatchSeasons";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { usePlayers } from "@/lib/usePlayers";
 
 const ADMIN_PLAYER_TABS = [
   { value: "CREATE", label: "Create Player" },
   { value: "EDIT", label: "Edit Player" },
-  { value: "CREATE_MATCH", label: "Schedule Match" },
+  { value: "SCHEDULE_MATCH", label: "Schedule Match" },
   { value: "COMPLETE_MATCH", label: "Complete Match" },
   { value: "UPDATE_MATCH", label: "Update Match" },
 ] as const;
@@ -25,6 +26,24 @@ const UPDATE_MATCH_STATUS_OPTIONS = [
   "scheduled",
   "forfeit",
   "cancelled",
+] as const;
+const SCHEDULE_MATCH_TYPE_OPTIONS = [
+  "duel",
+  "kotc",
+  "group",
+  "finals",
+] as const;
+const SCHEDULE_MATCH_VENUE_OPTIONS = [
+  "ACC",
+  "Manila Polo Club",
+  "MPC Arcovia",
+  "MPC BGC",
+  "Padel 300",
+  "Palm Beach",
+  "Play Padel",
+  "Play Padel Pavilion",
+  "Unilab",
+  "Warehouse 71",
 ] as const;
 
 type MatchStatusValue = (typeof MATCH_STATUS_OPTIONS)[number];
@@ -76,7 +95,7 @@ export default function AdminPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activePlayerTab, setActivePlayerTab] =
-    useState<(typeof ADMIN_PLAYER_TABS)[number]["value"]>("CREATE");
+    useState<(typeof ADMIN_PLAYER_TABS)[number]["value"]>("SCHEDULE_MATCH");
   const [search, setSearch] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [editName, setEditName] = useState("");
@@ -160,6 +179,11 @@ export default function AdminPage() {
     loading: playersLoading,
     error: playersError,
   } = usePlayers({ enabled: isAdmin, orderByName: true });
+  const {
+    seasons: matchSeasons,
+    loading: matchSeasonsLoading,
+    error: matchSeasonsError,
+  } = useMatchSeasons(isAdmin);
   const filtered = usePlayerSearch(players, search);
   const playerNameById = new Map(
     players.map((player) => [
@@ -248,7 +272,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!isAdmin) {
-      setActivePlayerTab("CREATE");
+      setActivePlayerTab("SCHEDULE_MATCH");
       setSelectedPlayer(null);
       setSearch("");
       setSavePlayerError(null);
@@ -269,6 +293,18 @@ export default function AdminPage() {
       return;
     }
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    if (createMatchSeasonId || matchSeasons.length === 0) {
+      return;
+    }
+
+    setCreateMatchSeasonId(String(matchSeasons[matchSeasons.length - 1]));
+  }, [isAdmin, createMatchSeasonId, matchSeasons]);
 
   useEffect(() => {
     if (!isAdmin || activePlayerTab !== "COMPLETE_MATCH") {
@@ -654,11 +690,6 @@ export default function AdminPage() {
     setEditName(selectedPlayer?.name || "");
     setEditNickname(selectedPlayer?.nickname || "");
     setEditImageLink(selectedPlayer?.image_link || "");
-    setEditInitialRating(
-      typeof selectedPlayer?.initial_rating === "number"
-        ? String(selectedPlayer.initial_rating)
-        : "",
-    );
   }, [selectedPlayer]);
 
   const handleSavePlayer = async () => {
@@ -675,21 +706,10 @@ export default function AdminPage() {
         name: editName.trim(),
         nickname: editNickname.trim(),
         image_link: editImageLink.trim() || null,
-        initial_rating: editInitialRating.trim()
-          ? Number(editInitialRating.trim())
-          : null,
       };
 
       if (!updates.name || !updates.nickname) {
         setSavePlayerError("Name and nickname cannot be empty.");
-        return;
-      }
-
-      if (
-        updates.initial_rating !== null &&
-        (!Number.isFinite(updates.initial_rating) || updates.initial_rating < 0)
-      ) {
-        setSavePlayerError("initial_rating must be a non-negative number.");
         return;
       }
 
@@ -715,7 +735,6 @@ export default function AdminPage() {
             name: updates.name,
             nickname: updates.nickname,
             imageLink: updates.image_link,
-            initialRating: updates.initial_rating,
           }),
         },
       );
@@ -929,7 +948,11 @@ export default function AdminPage() {
         return;
       }
 
-      setCreateMatchSeasonId("");
+      setCreateMatchSeasonId(
+        matchSeasons.length > 0
+          ? String(matchSeasons[matchSeasons.length - 1])
+          : "",
+      );
       setCreateMatchDateLocal("");
       setCreateMatchTimeLocal("");
       setCreateMatchVenue("");
@@ -1548,25 +1571,9 @@ export default function AdminPage() {
                                 placeholder="https://..."
                               />
                             </div>
-                            <div>
-                              <label className="text-slate-500 dark:text-slate-400">
-                                initial_rating:
-                              </label>
-                              <input
-                                type="number"
-                                step="0.0001"
-                                min="0"
-                                value={editInitialRating}
-                                onChange={(e) =>
-                                  setEditInitialRating(e.target.value)
-                                }
-                                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                                placeholder="e.g. 3.5"
-                              />
-                            </div>
                           </div>
 
-                          <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 grid gap-3 xl:grid-cols-3">
+                          <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 grid gap-3 xl:grid-cols-4">
                             <div>
                               <span className="text-slate-500 dark:text-slate-400">
                                 player_id:
@@ -1577,10 +1584,13 @@ export default function AdminPage() {
                             </div>
                             <div>
                               <span className="text-slate-500 dark:text-slate-400">
-                                updated_at:
+                                initial_rating:
                               </span>{" "}
                               <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                                {selectedPlayer.updated_at || "N/A"}
+                                {typeof selectedPlayer.initial_rating ===
+                                "number"
+                                  ? selectedPlayer.initial_rating
+                                  : "N/A"}
                               </span>
                             </div>
                             <div>
@@ -1589,6 +1599,14 @@ export default function AdminPage() {
                               </span>{" "}
                               <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
                                 {selectedPlayer.created_at || "N/A"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                updated_at:
+                              </span>{" "}
+                              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
+                                {selectedPlayer.updated_at || "N/A"}
                               </span>
                             </div>
                           </div>
@@ -1618,7 +1636,7 @@ export default function AdminPage() {
                         </div>
                       )}
                     </div>
-                  ) : activePlayerTab === "CREATE_MATCH" ? (
+                  ) : activePlayerTab === "SCHEDULE_MATCH" ? (
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
                       <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
                         Schedule a Match
@@ -1632,16 +1650,34 @@ export default function AdminPage() {
                           >
                             season_id:
                           </label>
-                          <input
+                          <select
                             id="create-match-season-id"
-                            type="number"
                             value={createMatchSeasonId}
                             onChange={(e) =>
                               setCreateMatchSeasonId(e.target.value)
                             }
                             className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                            placeholder="e.g. 1"
-                          />
+                            disabled={
+                              matchSeasonsLoading || matchSeasons.length === 0
+                            }
+                          >
+                            {matchSeasons.length === 0 ? (
+                              <option value="">
+                                {matchSeasonsLoading
+                                  ? "Loading seasons..."
+                                  : "No seasons available"}
+                              </option>
+                            ) : (
+                              matchSeasons
+                                .slice()
+                                .sort((a, b) => b - a)
+                                .map((season) => (
+                                  <option key={season} value={String(season)}>
+                                    {season}
+                                  </option>
+                                ))
+                            )}
+                          </select>
                         </div>
                         <div>
                           <label
@@ -1684,15 +1720,21 @@ export default function AdminPage() {
                           >
                             venue:
                           </label>
-                          <input
+                          <select
                             id="create-match-venue"
-                            type="text"
                             value={createMatchVenue}
                             onChange={(e) =>
                               setCreateMatchVenue(e.target.value)
                             }
                             className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                          />
+                          >
+                            <option value="">Select venue</option>
+                            {SCHEDULE_MATCH_VENUE_OPTIONS.map((venue) => (
+                              <option key={venue} value={venue}>
+                                {venue}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label
@@ -1701,16 +1743,27 @@ export default function AdminPage() {
                           >
                             type:
                           </label>
-                          <input
+                          <select
                             id="create-match-type"
-                            type="text"
                             value={createMatchType}
                             onChange={(e) => setCreateMatchType(e.target.value)}
                             className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                            placeholder="e.g. americano"
-                          />
+                          >
+                            <option value="">Select type</option>
+                            {SCHEDULE_MATCH_TYPE_OPTIONS.map((type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
+
+                      {matchSeasonsError && (
+                        <div className="text-sm text-rose-600 dark:text-rose-400">
+                          Error loading seasons: {matchSeasonsError}
+                        </div>
+                      )}
 
                       <div className="grid gap-4 xl:grid-cols-2">
                         <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
@@ -2355,18 +2408,26 @@ export default function AdminPage() {
                               className="text-slate-500 dark:text-slate-400"
                               htmlFor="update-match-season-id"
                             >
-                              season_id (optional):
+                              season_id:
                             </label>
-                            <input
+                            <select
                               id="update-match-season-id"
-                              type="number"
                               value={updateMatchSeasonId}
                               onChange={(e) =>
                                 setUpdateMatchSeasonId(e.target.value)
                               }
                               className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                              placeholder="leave blank to keep"
-                            />
+                            >
+                              <option value="">Keep existing</option>
+                              {matchSeasons
+                                .slice()
+                                .sort((a, b) => b - a)
+                                .map((season) => (
+                                  <option key={season} value={String(season)}>
+                                    {season}
+                                  </option>
+                                ))}
+                            </select>
                           </div>
 
                           <div>
@@ -2374,7 +2435,7 @@ export default function AdminPage() {
                               className="text-slate-500 dark:text-slate-400"
                               htmlFor="update-match-date-local"
                             >
-                              date_local (optional):
+                              date_local:
                             </label>
                             <input
                               id="update-match-date-local"
@@ -2392,7 +2453,7 @@ export default function AdminPage() {
                               className="text-slate-500 dark:text-slate-400"
                               htmlFor="update-match-time-local"
                             >
-                              time_local (optional):
+                              time_local:
                             </label>
                             <input
                               id="update-match-time-local"
@@ -2410,18 +2471,23 @@ export default function AdminPage() {
                               className="text-slate-500 dark:text-slate-400"
                               htmlFor="update-match-type"
                             >
-                              type (optional):
+                              type:
                             </label>
-                            <input
+                            <select
                               id="update-match-type"
-                              type="text"
                               value={updateMatchType}
                               onChange={(e) =>
                                 setUpdateMatchType(e.target.value)
                               }
                               className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                              placeholder="e.g. group"
-                            />
+                            >
+                              <option value="">Keep existing</option>
+                              {SCHEDULE_MATCH_TYPE_OPTIONS.map((type) => (
+                                <option key={type} value={type}>
+                                  {type}
+                                </option>
+                              ))}
+                            </select>
                           </div>
 
                           <div className="xl:col-span-2">
@@ -2429,17 +2495,23 @@ export default function AdminPage() {
                               className="text-slate-500 dark:text-slate-400"
                               htmlFor="update-match-venue"
                             >
-                              venue (optional):
+                              venue:
                             </label>
-                            <input
+                            <select
                               id="update-match-venue"
-                              type="text"
                               value={updateMatchVenue}
                               onChange={(e) =>
                                 setUpdateMatchVenue(e.target.value)
                               }
                               className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                            />
+                            >
+                              <option value="">Keep existing</option>
+                              {SCHEDULE_MATCH_VENUE_OPTIONS.map((venue) => (
+                                <option key={venue} value={venue}>
+                                  {venue}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </div>
                       </div>
