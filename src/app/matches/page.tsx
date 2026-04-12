@@ -14,7 +14,7 @@ export default function MatchesPage() {
     <>
       <BackToHome />
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <MatchCalendar className="mb-10" />
+        <MatchCalendar className="mb-10" matches={matches} loading={loading} />
 
         <div className="mb-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

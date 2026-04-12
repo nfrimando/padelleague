@@ -1,104 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { MatchWithTeams } from "@/lib/types";
+
+const pad = (n: number) => String(n).padStart(2, "0");
 
 interface MatchCalendarProps {
   className?: string;
+  matches: MatchWithTeams[];
+  loading?: boolean;
 }
 
-// --- Dummy data (to be replaced with real matches) ---
-const today = new Date();
-const pad = (n: number) => String(n).padStart(2, "0");
-const makeDate = (offsetDays: number) => {
-  const d = new Date(today);
-  d.setDate(d.getDate() + offsetDays);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
-
-const DUMMY_MATCHES: Array<{
-  date: string;
-  team1: string;
-  team2: string;
-  venue: string;
-}> = [
-  {
-    date: makeDate(0),
-    team1: "Carlos / Nigel",
-    team2: "Marco / Ben",
-    venue: "Padel 300",
-  },
-  {
-    date: makeDate(0),
-    team1: "Javi / Luis",
-    team2: "Pedro / Rafa",
-    venue: "MPC BGC",
-  },
-  {
-    date: makeDate(0),
-    team1: "Ana / Sofia",
-    team2: "Mia / Clara",
-    venue: "Unilab",
-  },
-  {
-    date: makeDate(0),
-    team1: "Tom / Chris",
-    team2: "Dave / Alex",
-    venue: "Palm Beach",
-  },
-  {
-    date: makeDate(0),
-    team1: "Jin / Kenji",
-    team2: "Dan / Sam",
-    venue: "MPC Arcovia",
-  },
-  {
-    date: makeDate(2),
-    team1: "Carlos / Nigel",
-    team2: "Javi / Luis",
-    venue: "Padel 300",
-  },
-  {
-    date: makeDate(2),
-    team1: "Marco / Ben",
-    team2: "Tom / Chris",
-    venue: "MPC BGC",
-  },
-  {
-    date: makeDate(5),
-    team1: "Ana / Sofia",
-    team2: "Javi / Luis",
-    venue: "Unilab",
-  },
-  {
-    date: makeDate(-3),
-    team1: "Pedro / Rafa",
-    team2: "Carlos / Nigel",
-    venue: "Palm Beach",
-  },
-  {
-    date: makeDate(-3),
-    team1: "Dave / Alex",
-    team2: "Jin / Kenji",
-    venue: "MPC BGC",
-  },
-  {
-    date: makeDate(-7),
-    team1: "Tom / Chris",
-    team2: "Marco / Ben",
-    venue: "Padel 300",
-  },
-];
-
-function matchesByDate(dateStr: string) {
-  return DUMMY_MATCHES.filter((m) => m.date === dateStr);
+function playerLabel(p: { name: string; nickname: string } | null): string {
+  return p?.nickname || p?.name || "TBD";
 }
-// --- End dummy data ---
 
-function snapToSunday(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() - date.getDay());
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+function teamLabel(team: MatchWithTeams["teams"][number] | undefined): string {
+  if (!team) return "TBA";
+  return `${playerLabel(team.player_1)} / ${playerLabel(team.player_2)}`;
 }
 
 function viewStartSunday(year: number, month: number): string {
@@ -140,7 +59,11 @@ function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
-export default function MatchCalendar({ className }: MatchCalendarProps) {
+export default function MatchCalendar({
+  className,
+  matches,
+  loading,
+}: MatchCalendarProps) {
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -186,8 +109,19 @@ export default function MatchCalendar({ className }: MatchCalendarProps) {
   const nextYear = viewMonth === 11 ? viewYear + 1 : viewYear;
   const nextMonth = viewMonth === 11 ? 0 : viewMonth + 1;
 
+  // Filter to only matches visible in the current calendar grid
+  const calendarStart = viewStartSunday(viewYear, viewMonth);
+  const calendarEnd = viewEndSaturday(viewYear, viewMonth);
+  const calendarMatches = matches.filter(
+    (m) =>
+      m.date_local != null &&
+      m.date_local >= calendarStart &&
+      m.date_local <= calendarEnd,
+  );
+  const matchesByDate = (dateStr: string) =>
+    calendarMatches.filter((m) => m.date_local === dateStr);
+
   // Build calendar grid cells
-  // Leading cells from previous month
   const leadingCells = Array.from({ length: firstDayOfWeek }, (_, i) => {
     const day = daysInPrevMonth - firstDayOfWeek + 1 + i;
     return {
@@ -197,7 +131,6 @@ export default function MatchCalendar({ className }: MatchCalendarProps) {
     };
   });
 
-  // Current month cells
   const currentCells = Array.from({ length: daysInMonth }, (_, i) => {
     const day = i + 1;
     return {
@@ -207,7 +140,6 @@ export default function MatchCalendar({ className }: MatchCalendarProps) {
     };
   });
 
-  // Trailing cells to fill out last row
   const totalCells = leadingCells.length + currentCells.length;
   const trailingCount = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
   const trailingCells = Array.from({ length: trailingCount }, (_, i) => {
@@ -229,8 +161,16 @@ export default function MatchCalendar({ className }: MatchCalendarProps) {
 
   return (
     <div
-      className={`rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden ${className ?? ""}`}
+      className={`relative rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden ${className ?? ""}`}
     >
+      {loading && (
+        <div className="absolute inset-0 z-10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-[1px] flex items-start justify-center pt-6">
+          <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 px-3 py-2 text-xs text-slate-600 dark:text-slate-300 shadow-sm">
+            Loading matches…
+          </div>
+        </div>
+      )}
+
       {/* Calendar Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-3">
@@ -305,9 +245,9 @@ export default function MatchCalendar({ className }: MatchCalendarProps) {
         {allCells.map((cell, idx) => {
           const today_ = isToday(cell.day, cell.type);
           const isCurrent = cell.type === "current";
-
           const isLastRow = idx >= allCells.length - 7;
           const isLastCol = (idx + 1) % 7 === 0;
+          const dayMatches = isCurrent ? matchesByDate(cell.dateStr) : [];
 
           return (
             <div
@@ -341,27 +281,30 @@ export default function MatchCalendar({ className }: MatchCalendarProps) {
               >
                 {cell.day}
               </span>
-              {isCurrent &&
-                matchesByDate(cell.dateStr).map((m, i) => (
+              {dayMatches.map((m, i) => {
+                const t1 = m.teams.find((t) => t.team_number === 1);
+                const t2 = m.teams.find((t) => t.team_number === 2);
+                return (
                   <div
                     key={i}
                     className="mt-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1 py-0.5 text-center"
-                    title={`${m.team1} vs ${m.team2}`}
+                    title={`${teamLabel(t1)} vs ${teamLabel(t2)}`}
                   >
                     <div className="text-[9px] font-semibold leading-tight text-slate-500 dark:text-slate-400 truncate uppercase tracking-wide">
-                      {m.venue}
+                      {m.venue || ""}
                     </div>
                     <div className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-100 truncate">
-                      {m.team1}
+                      {teamLabel(t1)}
                     </div>
                     <div className="text-[9px] leading-tight text-slate-500 dark:text-slate-400">
                       vs
                     </div>
                     <div className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-100 truncate">
-                      {m.team2}
+                      {teamLabel(t2)}
                     </div>
                   </div>
-                ))}
+                );
+              })}
             </div>
           );
         })}
