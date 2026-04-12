@@ -12,6 +12,14 @@ type TeamUpdate = {
   setsWon: number | null;
 };
 
+type ExistingTeamRow = {
+  uuid: string;
+  team_number: number | null;
+  player_1_id: number | null;
+  player_2_id: number | null;
+  sets_won: number | null;
+};
+
 type UpdateMatchTeamsRequest = {
   team1: TeamUpdate;
   team2: TeamUpdate;
@@ -189,7 +197,7 @@ export async function PATCH(
 
   const { data: existingTeams, error: existingTeamsError } = await supabase
     .from("match_teams")
-    .select("uuid,team_number")
+    .select("uuid,team_number,player_1_id,player_2_id,sets_won")
     .eq("match_id", matchId);
 
   if (existingTeamsError) {
@@ -199,10 +207,12 @@ export async function PATCH(
     );
   }
 
-  const existingTeam1Rows = (existingTeams ?? []).filter(
+  const typedExistingTeams = (existingTeams ?? []) as ExistingTeamRow[];
+
+  const existingTeam1Rows = typedExistingTeams.filter(
     (row) => row.team_number === 1,
   );
-  const existingTeam2Rows = (existingTeams ?? []).filter(
+  const existingTeam2Rows = typedExistingTeams.filter(
     (row) => row.team_number === 2,
   );
 
@@ -228,7 +238,7 @@ export async function PATCH(
         .select("uuid,match_id,team_number,player_1_id,player_2_id,sets_won")
         .maybeSingle();
 
-      return { data, error };
+      return { data, error, mode: "updated" as const, previousRow: existingRow };
     }
 
     const { data, error } = await supabase
@@ -243,7 +253,7 @@ export async function PATCH(
       .select("uuid,match_id,team_number,player_1_id,player_2_id,sets_won")
       .maybeSingle();
 
-    return { data, error };
+    return { data, error, mode: "inserted" as const, previousRow: null };
   };
 
   const team1Result = await persistTeam(1, validation.value.team1);
@@ -256,8 +266,31 @@ export async function PATCH(
 
   const team2Result = await persistTeam(2, validation.value.team2);
   if (team2Result.error || !team2Result.data) {
+    let rollbackError: string | null = null;
+
+    if (team1Result.mode === "updated" && team1Result.previousRow) {
+      const { error } = await supabase
+        .from("match_teams")
+        .update({
+          player_1_id: team1Result.previousRow.player_1_id,
+          player_2_id: team1Result.previousRow.player_2_id,
+          sets_won: team1Result.previousRow.sets_won,
+        })
+        .eq("uuid", team1Result.previousRow.uuid);
+      rollbackError = error?.message ?? null;
+    } else if (team1Result.mode === "inserted") {
+      const { error } = await supabase
+        .from("match_teams")
+        .delete()
+        .eq("uuid", team1Result.data.uuid);
+      rollbackError = error?.message ?? null;
+    }
+
     return NextResponse.json(
-      { error: team2Result.error?.message || "Failed to update team 2." },
+      {
+        error: team2Result.error?.message || "Failed to update team 2.",
+        rollbackError,
+      },
       { status: 500 },
     );
   }
