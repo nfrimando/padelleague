@@ -82,9 +82,11 @@ export default function AdminPage() {
   const [editName, setEditName] = useState("");
   const [editNickname, setEditNickname] = useState("");
   const [editImageLink, setEditImageLink] = useState("");
+  const [editInitialRating, setEditInitialRating] = useState("");
   const [createName, setCreateName] = useState("");
   const [createNickname, setCreateNickname] = useState("");
   const [createImageLink, setCreateImageLink] = useState("");
+  const [createInitialRating, setCreateInitialRating] = useState("");
   const [savingPlayer, setSavingPlayer] = useState(false);
   const [savePlayerError, setSavePlayerError] = useState<string | null>(null);
   const [savePlayerSuccess, setSavePlayerSuccess] = useState<string | null>(
@@ -132,6 +134,7 @@ export default function AdminPage() {
   const [completeMatchSuccess, setCompleteMatchSuccess] = useState<
     string | null
   >(null);
+  const [completeMatchCalculated, setCompleteMatchCalculated] = useState(false);
   const [updatingMatch, setUpdatingMatch] = useState(false);
   const [updateMatchError, setUpdateMatchError] = useState<string | null>(null);
   const [updateMatchSuccess, setUpdateMatchSuccess] = useState<string | null>(
@@ -256,6 +259,7 @@ export default function AdminPage() {
       setCreateMatchSuccess(null);
       setCompleteMatchError(null);
       setCompleteMatchSuccess(null);
+      setCompleteMatchCalculated(false);
       setUpdateMatchError(null);
       setUpdateMatchSuccess(null);
       setUpdateMatchDetailsError(null);
@@ -474,7 +478,7 @@ export default function AdminPage() {
         uniquePlayerIds.length > 0
           ? await supabase
               .from("players")
-              .select("player_id,name,nickname")
+              .select("player_id,name,nickname,initial_rating")
               .in("player_id", uniquePlayerIds)
           : { data: [], error: null };
 
@@ -490,28 +494,70 @@ export default function AdminPage() {
       }
 
       const playerMap = new Map<number, MatchPlayerSummary>();
+      const initialRatingMap = new Map<number, number | null>();
       for (const row of playersRows ?? []) {
         playerMap.set(row.player_id, {
           player_id: row.player_id,
           name: row.name ?? null,
           nickname: row.nickname ?? null,
         });
+        initialRatingMap.set(
+          row.player_id,
+          typeof row.initial_rating === "number" ? row.initial_rating : null,
+        );
       }
 
       const preRatingsV3: Record<number, number | null> = {};
       for (const playerId of uniquePlayerIds) {
-        const { data: latest } = await supabase
+        const { data: latestRows } = await supabase
           .from("match_player_ratings")
-          .select("rating_post,created_at")
+          .select("match_id,rating_post,formula_name")
           .eq("player_id", playerId)
-          .neq("match_id", matchId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .neq("match_id", matchId);
 
-        if (typeof latest?.rating_post === "number") {
-          preRatingsV3[playerId] = latest.rating_post;
-          continue;
+        const preferredByMatch = new Map<
+          number,
+          { ratingPost: number; priority: number }
+        >();
+
+        for (const row of latestRows ?? []) {
+          const matchIdForRow = Number(row.match_id);
+          const ratingPost = Number(row.rating_post);
+          if (!Number.isFinite(matchIdForRow) || !Number.isFinite(ratingPost)) {
+            continue;
+          }
+
+          const formula = String(row.formula_name || "").toLowerCase();
+          const priority = formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
+          const existing = preferredByMatch.get(matchIdForRow);
+
+          if (!existing || priority >= existing.priority) {
+            preferredByMatch.set(matchIdForRow, { ratingPost, priority });
+          }
+        }
+
+        if (preferredByMatch.size > 0) {
+          const { data: matchesForRatings } = await supabase
+            .from("matches")
+            .select("match_id,date_local,time_local")
+            .in("match_id", Array.from(preferredByMatch.keys()))
+            .order("date_local", { ascending: false, nullsFirst: false })
+            .order("time_local", { ascending: false, nullsFirst: false })
+            .order("match_id", { ascending: false });
+
+          let foundLatest: number | null = null;
+          for (const row of matchesForRatings ?? []) {
+            const candidate = preferredByMatch.get(Number(row.match_id));
+            if (candidate) {
+              foundLatest = candidate.ratingPost;
+              break;
+            }
+          }
+
+          if (typeof foundLatest === "number") {
+            preRatingsV3[playerId] = foundLatest;
+            continue;
+          }
         }
 
         const { data: existingForMatch } = await supabase
@@ -524,7 +570,7 @@ export default function AdminPage() {
         preRatingsV3[playerId] =
           typeof existingForMatch?.rating_pre === "number"
             ? existingForMatch.rating_pre
-            : null;
+            : (initialRatingMap.get(playerId) ?? null);
       }
 
       if (cancelled) return;
@@ -608,6 +654,11 @@ export default function AdminPage() {
     setEditName(selectedPlayer?.name || "");
     setEditNickname(selectedPlayer?.nickname || "");
     setEditImageLink(selectedPlayer?.image_link || "");
+    setEditInitialRating(
+      typeof selectedPlayer?.initial_rating === "number"
+        ? String(selectedPlayer.initial_rating)
+        : "",
+    );
   }, [selectedPlayer]);
 
   const handleSavePlayer = async () => {
@@ -624,10 +675,21 @@ export default function AdminPage() {
         name: editName.trim(),
         nickname: editNickname.trim(),
         image_link: editImageLink.trim() || null,
+        initial_rating: editInitialRating.trim()
+          ? Number(editInitialRating.trim())
+          : null,
       };
 
       if (!updates.name || !updates.nickname) {
         setSavePlayerError("Name and nickname cannot be empty.");
+        return;
+      }
+
+      if (
+        updates.initial_rating !== null &&
+        (!Number.isFinite(updates.initial_rating) || updates.initial_rating < 0)
+      ) {
+        setSavePlayerError("initial_rating must be a non-negative number.");
         return;
       }
 
@@ -653,6 +715,7 @@ export default function AdminPage() {
             name: updates.name,
             nickname: updates.nickname,
             imageLink: updates.image_link,
+            initialRating: updates.initial_rating,
           }),
         },
       );
@@ -703,10 +766,21 @@ export default function AdminPage() {
         name: createName.trim(),
         nickname: createNickname.trim(),
         image_link: createImageLink.trim() || null,
+        initial_rating: createInitialRating.trim()
+          ? Number(createInitialRating.trim())
+          : null,
       };
 
       if (!payload.name || !payload.nickname) {
         setCreatePlayerError("Name and nickname cannot be empty.");
+        return;
+      }
+
+      if (
+        payload.initial_rating !== null &&
+        (!Number.isFinite(payload.initial_rating) || payload.initial_rating < 0)
+      ) {
+        setCreatePlayerError("initial_rating must be a non-negative number.");
         return;
       }
 
@@ -730,6 +804,7 @@ export default function AdminPage() {
           name: payload.name,
           nickname: payload.nickname,
           imageLink: payload.image_link,
+          initialRating: payload.initial_rating,
         }),
       });
 
@@ -763,9 +838,15 @@ export default function AdminPage() {
       setEditName(created.name || "");
       setEditNickname(created.nickname || "");
       setEditImageLink(created.image_link || "");
+      setEditInitialRating(
+        typeof created.initial_rating === "number"
+          ? String(created.initial_rating)
+          : "",
+      );
       setCreateName("");
       setCreateNickname("");
       setCreateImageLink("");
+      setCreateInitialRating("");
       setCreatePlayerSuccess(result.message || "Player created successfully.");
       setActivePlayerTab("EDIT");
     } catch {
@@ -874,6 +955,21 @@ export default function AdminPage() {
     setCompleteMatchSuccess(null);
 
     try {
+      if (!completeMatchCalculated) {
+        setCompleteMatchError(
+          "Click Calculate Outcome first before completing the match.",
+        );
+        return;
+      }
+
+      if (!updateMatchRatingPreviewWithRows) {
+        setCompleteMatchError(
+          updateMatchRatingPreview?.error ||
+            "Unable to complete. Please calculate outcome again.",
+        );
+        return;
+      }
+
       const matchId = Number.parseInt(updateMatchId, 10);
       if (!Number.isInteger(matchId) || matchId <= 0) {
         setCompleteMatchError("match_id must be a positive integer.");
@@ -979,6 +1075,7 @@ export default function AdminPage() {
       setUpdateSet2Team2("");
       setUpdateSet3Team1("");
       setUpdateSet3Team2("");
+      setCompleteMatchCalculated(false);
       setCompleteMatchSuccess(
         result.message || "Match completed successfully.",
       );
@@ -1228,8 +1325,31 @@ export default function AdminPage() {
   const updateMatchRatingPreviewRows =
     updateMatchRatingPreviewWithRows?.rows ?? [];
   const completeMatchWinnerTeamDisplay =
-    updateMatchRatingPreviewWithRows?.winnerTeam ??
-    loadedMatchDetails?.winnerTeam;
+    (completeMatchCalculated
+      ? updateMatchRatingPreviewWithRows?.winnerTeam
+      : null) ?? loadedMatchDetails?.winnerTeam;
+
+  const handleCalculateOutcome = () => {
+    setCompleteMatchError(null);
+    setCompleteMatchSuccess(null);
+
+    if (!loadedMatchDetails) {
+      setCompleteMatchCalculated(false);
+      setCompleteMatchError("Select a scheduled match first.");
+      return;
+    }
+
+    if (updateMatchRatingPreview?.error || !updateMatchRatingPreviewWithRows) {
+      setCompleteMatchCalculated(false);
+      setCompleteMatchError(
+        updateMatchRatingPreview?.error ||
+          "Unable to calculate outcome from current set scores.",
+      );
+      return;
+    }
+
+    setCompleteMatchCalculated(true);
+  };
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
@@ -1334,6 +1454,7 @@ export default function AdminPage() {
                               setCreateMatchSuccess(null);
                               setCompleteMatchError(null);
                               setCompleteMatchSuccess(null);
+                              setCompleteMatchCalculated(false);
                               setUpdateMatchError(null);
                               setUpdateMatchSuccess(null);
                             }}
@@ -1425,6 +1546,22 @@ export default function AdminPage() {
                                 }
                                 className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                                 placeholder="https://..."
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 dark:text-slate-400">
+                                initial_rating:
+                              </label>
+                              <input
+                                type="number"
+                                step="0.0001"
+                                min="0"
+                                value={editInitialRating}
+                                onChange={(e) =>
+                                  setEditInitialRating(e.target.value)
+                                }
+                                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                                placeholder="e.g. 3.5"
                               />
                             </div>
                           </div>
@@ -1751,7 +1888,10 @@ export default function AdminPage() {
                         <select
                           id="complete-match-select"
                           value={updateMatchId}
-                          onChange={(e) => setUpdateMatchId(e.target.value)}
+                          onChange={(e) => {
+                            setUpdateMatchId(e.target.value);
+                            setCompleteMatchCalculated(false);
+                          }}
                           className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                         >
                           <option value="">Select a scheduled match</option>
@@ -1906,14 +2046,20 @@ export default function AdminPage() {
                           <input
                             type="number"
                             value={updateSet1Team1}
-                            onChange={(e) => setUpdateSet1Team1(e.target.value)}
+                            onChange={(e) => {
+                              setUpdateSet1Team1(e.target.value);
+                              setCompleteMatchCalculated(false);
+                            }}
                             className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                             placeholder="Team 1 games"
                           />
                           <input
                             type="number"
                             value={updateSet1Team2}
-                            onChange={(e) => setUpdateSet1Team2(e.target.value)}
+                            onChange={(e) => {
+                              setUpdateSet1Team2(e.target.value);
+                              setCompleteMatchCalculated(false);
+                            }}
                             className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                             placeholder="Team 2 games"
                           />
@@ -1924,14 +2070,20 @@ export default function AdminPage() {
                           <input
                             type="number"
                             value={updateSet2Team1}
-                            onChange={(e) => setUpdateSet2Team1(e.target.value)}
+                            onChange={(e) => {
+                              setUpdateSet2Team1(e.target.value);
+                              setCompleteMatchCalculated(false);
+                            }}
                             className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                             placeholder="Team 1 games"
                           />
                           <input
                             type="number"
                             value={updateSet2Team2}
-                            onChange={(e) => setUpdateSet2Team2(e.target.value)}
+                            onChange={(e) => {
+                              setUpdateSet2Team2(e.target.value);
+                              setCompleteMatchCalculated(false);
+                            }}
                             className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                             placeholder="Team 2 games"
                           />
@@ -1942,18 +2094,35 @@ export default function AdminPage() {
                           <input
                             type="number"
                             value={updateSet3Team1}
-                            onChange={(e) => setUpdateSet3Team1(e.target.value)}
+                            onChange={(e) => {
+                              setUpdateSet3Team1(e.target.value);
+                              setCompleteMatchCalculated(false);
+                            }}
                             className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                             placeholder="Team 1 games"
                           />
                           <input
                             type="number"
                             value={updateSet3Team2}
-                            onChange={(e) => setUpdateSet3Team2(e.target.value)}
+                            onChange={(e) => {
+                              setUpdateSet3Team2(e.target.value);
+                              setCompleteMatchCalculated(false);
+                            }}
                             className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                             placeholder="Team 2 games"
                           />
                         </div>
+                      </div>
+
+                      <div>
+                        <button
+                          type="button"
+                          onClick={handleCalculateOutcome}
+                          disabled={!loadedMatchDetails}
+                          className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          Calculate Outcome
+                        </button>
                       </div>
 
                       <div className="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-3">
@@ -1961,7 +2130,12 @@ export default function AdminPage() {
                           Rating Effect Preview (v3)
                         </div>
 
-                        {!loadedMatchDetails ? (
+                        {!completeMatchCalculated ? (
+                          <div className="text-sm text-slate-500 dark:text-slate-400">
+                            Click Calculate Outcome to preview winner and rating
+                            changes.
+                          </div>
+                        ) : !loadedMatchDetails ? (
                           <div className="text-sm text-slate-500 dark:text-slate-400">
                             Enter a valid match_id to preview ratings.
                           </div>
@@ -2038,7 +2212,11 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={handleCompleteMatch}
-                          disabled={completingMatch}
+                          disabled={
+                            completingMatch ||
+                            !completeMatchCalculated ||
+                            !updateMatchRatingPreviewWithRows
+                          }
                           className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           {completingMatch ? "Completing..." : "Complete Match"}
@@ -2339,6 +2517,26 @@ export default function AdminPage() {
                             onChange={(e) => setCreateImageLink(e.target.value)}
                             className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
                             placeholder="https://..."
+                          />
+                        </div>
+                        <div>
+                          <label
+                            className="text-slate-500 dark:text-slate-400"
+                            htmlFor="create-player-initial-rating"
+                          >
+                            initial_rating:
+                          </label>
+                          <input
+                            id="create-player-initial-rating"
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            value={createInitialRating}
+                            onChange={(e) =>
+                              setCreateInitialRating(e.target.value)
+                            }
+                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="e.g. 3.5"
                           />
                         </div>
                       </div>

@@ -3,6 +3,7 @@ export type Player = {
   name: string;
   nickname: string;
   image_link?: string | null;
+  initial_rating?: number | null;
   pre_match_rating?: number | null;
   pre_match_rating_formula?: string | null;
   latest_rating?: number | null;
