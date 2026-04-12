@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MatchWithTeams } from "@/lib/types";
 import { formatMatchDate, formatMatchTime } from "@/lib/utils";
 
@@ -162,10 +162,94 @@ function dayLabel(dateStr: string) {
   });
 }
 
-function renderMatchPreview(
-  match: MatchWithTeams,
-  compact: boolean,
+function statusBadgeClass(status: MatchWithTeams["status"]) {
+  if (status === "scheduled") {
+    return "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300";
+  }
+  if (status === "forfeit") {
+    return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
+  }
+  if (status === "cancelled") {
+    return "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300";
+  }
+  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+}
+
+function mobileTeamInline(
+  team: MatchWithTeams["teams"][number] | undefined,
+  side: "left" | "right",
+  isWinner: boolean,
 ) {
+  if (!team) {
+    return (
+      <span className="text-xs text-slate-500 dark:text-slate-400">TBA</span>
+    );
+  }
+
+  const firstName = playerLabel(team.player_1);
+  const secondName = playerLabel(team.player_2);
+  const href = team.player_1?.player_id
+    ? `/players?playerId=${encodeURIComponent(String(team.player_1.player_id))}`
+    : null;
+
+  const avatar = team.player_1?.image_link ? (
+    <img
+      src={team.player_1.image_link}
+      alt={firstName}
+      className="h-5 w-5 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+    />
+  ) : (
+    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+      {firstName.charAt(0).toUpperCase()}
+    </span>
+  );
+
+  const label = `${firstName} / ${secondName}`;
+  const labelNode = href ? (
+    <Link
+      href={href}
+      className="truncate hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 rounded"
+    >
+      {label}
+    </Link>
+  ) : (
+    <span className="truncate">{label}</span>
+  );
+
+  return (
+    <span
+      className={`inline-flex min-w-0 items-center gap-1 text-xs font-medium ${
+        isWinner
+          ? "text-emerald-700 dark:text-emerald-300"
+          : "text-slate-800 dark:text-slate-100"
+      }`}
+    >
+      {side === "right" ? avatar : labelNode}
+      {side === "right" ? labelNode : avatar}
+    </span>
+  );
+}
+
+function renderMatchPreview(match: MatchWithTeams, compact: boolean) {
+  if (compact) {
+    return (
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-2">
+        <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+          Venue: {match.venue || "No venue"}
+        </div>
+        <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Type: {match.type || "match"}
+        </div>
+        {match.status === "completed" && (
+          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            {formatMatchDate(match.date_local)}{" "}
+            {formatMatchTime(match.time_local)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const t1 = match.teams.find((t) => t.team_number === 1);
   const t2 = match.teams.find((t) => t.team_number === 2);
   const setScores =
@@ -176,8 +260,8 @@ function renderMatchPreview(
           .join(", ")
       : "No set scores";
 
-  const avatarSizeClass = compact ? "h-6 w-6" : "h-8 w-8";
-  const avatarFallbackClass = compact ? "text-[10px]" : "text-xs";
+  const avatarSizeClass = "h-8 w-8";
+  const avatarFallbackClass = "text-xs";
 
   const renderPlayerLine = (
     href: string | null,
@@ -225,7 +309,9 @@ function renderMatchPreview(
   ) => {
     const isLeftSide = side === "left";
     const textAlignClass = isLeftSide ? "text-right" : "text-left";
-    const rowJustifyClass = isLeftSide ? "flex justify-end" : "flex justify-start";
+    const rowJustifyClass = isLeftSide
+      ? "flex justify-end"
+      : "flex justify-start";
 
     if (!team) {
       return (
@@ -265,9 +351,13 @@ function renderMatchPreview(
   };
 
   const team1IsWinner =
-    match.status === "completed" && match.winner_team != null && match.winner_team === 1;
+    match.status === "completed" &&
+    match.winner_team != null &&
+    match.winner_team === 1;
   const team2IsWinner =
-    match.status === "completed" && match.winner_team != null && match.winner_team === 2;
+    match.status === "completed" &&
+    match.winner_team != null &&
+    match.winner_team === 2;
 
   return (
     <div
@@ -275,9 +365,12 @@ function renderMatchPreview(
     >
       <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
         <span className="font-medium">
-          {formatMatchDate(match.date_local)} {formatMatchTime(match.time_local)}
+          {formatMatchDate(match.date_local)}{" "}
+          {formatMatchTime(match.time_local)}
         </span>
-        <span className="uppercase tracking-wide">{String(match.status || "")}</span>
+        <span className="uppercase tracking-wide">
+          {String(match.status || "")}
+        </span>
       </div>
       <div className="mt-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
         {matchTopLine(match)}
@@ -318,7 +411,10 @@ export default function MatchCalendar({
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
-  const [mobilePreviewMatchId, setMobilePreviewMatchId] = useState<number | null>(null);
+  const [mobilePreviewMatchId, setMobilePreviewMatchId] = useState<
+    number | null
+  >(null);
+  const mobileAgendaRef = useRef<HTMLDivElement | null>(null);
 
   // Allowed range: 2 months ago → 1 month ahead
   const minDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
@@ -393,6 +489,23 @@ export default function MatchCalendar({
   });
 
   const mobileDates = currentCells.map((c) => c.dateStr);
+  const todayDateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.innerWidth >= 640) {
+      return;
+    }
+
+    const isCurrentMonthView =
+      viewYear === now.getFullYear() && viewMonth === now.getMonth();
+
+    if (!isCurrentMonthView) {
+      return;
+    }
+
+    const target = document.getElementById(`mobile-day-${todayDateStr}`);
+    target?.scrollIntoView({ block: "center", behavior: "auto" });
+  }, [todayDateStr, viewMonth, viewYear]);
 
   const totalCells = leadingCells.length + currentCells.length;
   const trailingCount = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
@@ -484,7 +597,7 @@ export default function MatchCalendar({
 
       {/* Mobile agenda */}
       <div className="sm:hidden border-t border-slate-200 dark:border-slate-700">
-        <div className="max-h-[65vh] overflow-y-auto">
+        <div ref={mobileAgendaRef} className="max-h-[65vh] overflow-y-auto">
           {mobileDates.map((dateStr) => {
             const dayMatches = matchesByDate(dateStr);
             const [y, m, d] = dateStr.split("-").map(Number);
@@ -496,6 +609,7 @@ export default function MatchCalendar({
             return (
               <div
                 key={dateStr}
+                id={`mobile-day-${dateStr}`}
                 className="border-b border-slate-100 dark:border-slate-800"
               >
                 <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50/70 dark:bg-slate-950/40">
@@ -520,6 +634,17 @@ export default function MatchCalendar({
                 ) : (
                   <div className="px-2 py-2 space-y-2">
                     {dayMatches.map((match) => {
+                      const team1 = match.teams.find(
+                        (t) => t.team_number === 1,
+                      );
+                      const team2 = match.teams.find(
+                        (t) => t.team_number === 2,
+                      );
+                      const team1IsWinner =
+                        match.status === "completed" && match.winner_team === 1;
+                      const team2IsWinner =
+                        match.status === "completed" && match.winner_team === 2;
+
                       return (
                         <div key={match.match_id}>
                           <button
@@ -529,24 +654,43 @@ export default function MatchCalendar({
                                 prev === match.match_id ? null : match.match_id,
                               )
                             }
-                            className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5"
+                            className="relative w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5"
                           >
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              {matchTopLine(match)}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {matchTopLine(match)}
+                              </div>
+                              <span
+                                className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${statusBadgeClass(match.status)}`}
+                              >
+                                {match.status}
+                              </span>
                             </div>
-                            {teamLineWithWinner(
-                              match,
-                              match.teams.find((t) => t.team_number === 1),
-                              "mt-1 text-sm font-medium text-slate-800 dark:text-slate-100",
-                            )}
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
-                              {versusLabel(match)}
+
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="w-4 text-center text-sm leading-none">
+                                {team1IsWinner ? "🏆" : ""}
+                              </span>
+                              <div className="min-w-0 flex-1 text-right">
+                                {mobileTeamInline(team1, "left", team1IsWinner)}
+                              </div>
+                              <div className="shrink-0 text-xs font-bold text-slate-600 dark:text-slate-300">
+                                {versusLabel(match)}
+                              </div>
+                              <div className="min-w-0 flex-1 text-left">
+                                {mobileTeamInline(
+                                  team2,
+                                  "right",
+                                  team2IsWinner,
+                                )}
+                              </div>
+                              <span className="w-4 text-center text-sm leading-none">
+                                {team2IsWinner ? "🏆" : ""}
+                              </span>
                             </div>
-                            {teamLineWithWinner(
-                              match,
-                              match.teams.find((t) => t.team_number === 2),
-                              "text-sm font-medium text-slate-800 dark:text-slate-100",
-                            )}
+                            <span className="absolute bottom-1 right-2 text-[10px] text-slate-400 dark:text-slate-500">
+                              ▾
+                            </span>
                           </button>
                           {mobilePreviewMatchId === match.match_id && (
                             <div className="mt-1">
