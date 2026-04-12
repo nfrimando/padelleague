@@ -238,7 +238,6 @@ async function getPreMatchRating(
     .from("match_player_ratings")
     .select("rating_post,created_at")
     .eq("player_id", playerId)
-    .eq("formula_name", "v3")
     .neq("match_id", matchId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -253,7 +252,6 @@ async function getPreMatchRating(
     .select("rating_pre")
     .eq("match_id", matchId)
     .eq("player_id", playerId)
-    .eq("formula_name", "v3")
     .maybeSingle();
 
   if (
@@ -412,7 +410,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            "Missing prior v3 ratings for one or more players. Seed ratings before completing this match.",
+            "Missing prior ratings for one or more players. Seed ratings before completing this match.",
           missingPlayerIds: missingPreRatingPlayers,
         },
         { status: 400 },
