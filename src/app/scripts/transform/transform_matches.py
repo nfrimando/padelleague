@@ -60,6 +60,22 @@ def get_player_id(name):
     key = str(name).strip().lower()
     return player_map.get(key)
 
+
+def normalize_status(row):
+    raw_status = row.get("status")
+    if pd.notna(raw_status):
+        status = str(raw_status).strip().lower()
+        if status in {"scheduled", "completed", "forfeit", "cancelled"}:
+            return status
+
+    raw_is_forfeit = row.get("is_forfeit")
+    if pd.notna(raw_is_forfeit):
+        value = str(raw_is_forfeit).strip().lower()
+        if value in {"true", "1", "t", "yes", "y"}:
+            return "forfeit"
+
+    return "completed"
+
 # --- TRANSFORM ---
 for _, row in df.iterrows():
     # Skip rows with null type (incomplete matches)
@@ -94,7 +110,7 @@ for _, row in df.iterrows():
         "venue": row.get("venue"),
         "type": row.get("type"),
         "winner_team": winner_team,
-        "is_forfeit": bool(row.get("is_forfeit")) if pd.notna(row.get("is_forfeit")) else False
+        "status": normalize_status(row)
     })
 
     # --- MATCH TEAMS ---

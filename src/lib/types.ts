@@ -36,7 +36,7 @@ export type MatchWithTeams = {
   venue: string | null;
   type: string | null;
   winner_team: number | null;
-  is_forfeit: boolean;
+  status: "scheduled" | "completed" | "forfeit" | "cancelled";
   teams: TeamWithPlayers[];
   sets?: MatchSet[];
 };
