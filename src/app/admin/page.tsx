@@ -12,6 +12,13 @@ const ADMIN_PLAYER_TABS = [
   { value: "CREATE", label: "Create Player" },
   { value: "EDIT", label: "Edit Player" },
   { value: "CREATE_MATCH", label: "Schedule a Match" },
+  { value: "UPDATE_MATCH", label: "Update Match" },
+] as const;
+const MATCH_STATUS_OPTIONS = [
+  "completed",
+  "scheduled",
+  "forfeit",
+  "cancelled",
 ] as const;
 const AUTH_BOX_CLASS =
   "w-full md:w-[24rem] md:max-w-[24rem] min-h-[188px] mx-auto rounded-lg border border-slate-200 dark:border-slate-700 p-4";
@@ -55,6 +62,25 @@ export default function AdminPage() {
   const [creatingMatch, setCreatingMatch] = useState(false);
   const [createMatchError, setCreateMatchError] = useState<string | null>(null);
   const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(
+    null,
+  );
+  const [updateMatchId, setUpdateMatchId] = useState("");
+  const [updateMatchStatus, setUpdateMatchStatus] =
+    useState<(typeof MATCH_STATUS_OPTIONS)[number]>("completed");
+  const [updateMatchSeasonId, setUpdateMatchSeasonId] = useState("");
+  const [updateMatchDateLocal, setUpdateMatchDateLocal] = useState("");
+  const [updateMatchTimeLocal, setUpdateMatchTimeLocal] = useState("");
+  const [updateMatchVenue, setUpdateMatchVenue] = useState("");
+  const [updateMatchType, setUpdateMatchType] = useState("");
+  const [updateSet1Team1, setUpdateSet1Team1] = useState("");
+  const [updateSet1Team2, setUpdateSet1Team2] = useState("");
+  const [updateSet2Team1, setUpdateSet2Team1] = useState("");
+  const [updateSet2Team2, setUpdateSet2Team2] = useState("");
+  const [updateSet3Team1, setUpdateSet3Team1] = useState("");
+  const [updateSet3Team2, setUpdateSet3Team2] = useState("");
+  const [updatingMatch, setUpdatingMatch] = useState(false);
+  const [updateMatchError, setUpdateMatchError] = useState<string | null>(null);
+  const [updateMatchSuccess, setUpdateMatchSuccess] = useState<string | null>(
     null,
   );
   const {
@@ -154,6 +180,8 @@ export default function AdminPage() {
       setCreatePlayerSuccess(null);
       setCreateMatchError(null);
       setCreateMatchSuccess(null);
+      setUpdateMatchError(null);
+      setUpdateMatchSuccess(null);
       return;
     }
   }, [isAdmin]);
@@ -370,6 +398,126 @@ export default function AdminPage() {
     }
   };
 
+  const handleUpdateMatch = async () => {
+    setUpdatingMatch(true);
+    setUpdateMatchError(null);
+    setUpdateMatchSuccess(null);
+
+    try {
+      const matchId = Number.parseInt(updateMatchId, 10);
+      if (!Number.isInteger(matchId) || matchId <= 0) {
+        setUpdateMatchError("match_id must be a positive integer.");
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setUpdateMatchError("No active session found. Please sign in again.");
+        return;
+      }
+
+      const rawSetPairs = [
+        { team1: updateSet1Team1, team2: updateSet1Team2 },
+        { team1: updateSet2Team1, team2: updateSet2Team2 },
+        { team1: updateSet3Team1, team2: updateSet3Team2 },
+      ];
+
+      const sets: Array<{ team1Games: number; team2Games: number }> = [];
+      for (const pair of rawSetPairs) {
+        const t1 = pair.team1.trim();
+        const t2 = pair.team2.trim();
+
+        if (!t1 && !t2) {
+          continue;
+        }
+
+        if (!t1 || !t2) {
+          setUpdateMatchError("Each set row must have both team scores.");
+          return;
+        }
+
+        const t1Games = Number.parseInt(t1, 10);
+        const t2Games = Number.parseInt(t2, 10);
+        if (
+          !Number.isInteger(t1Games) ||
+          !Number.isInteger(t2Games) ||
+          t1Games < 0 ||
+          t2Games < 0
+        ) {
+          setUpdateMatchError("Set scores must be whole numbers >= 0.");
+          return;
+        }
+
+        sets.push({ team1Games: t1Games, team2Games: t2Games });
+      }
+
+      if (updateMatchStatus === "completed" && sets.length === 0) {
+        setUpdateMatchError(
+          "At least one set score is required for completed matches.",
+        );
+        return;
+      }
+
+      const payload: Record<string, unknown> = {
+        status: updateMatchStatus,
+      };
+
+      if (updateMatchSeasonId.trim()) {
+        const seasonId = Number.parseInt(updateMatchSeasonId.trim(), 10);
+        if (!Number.isInteger(seasonId) || seasonId <= 0) {
+          setUpdateMatchError("season_id must be a positive integer.");
+          return;
+        }
+        payload.seasonId = seasonId;
+      }
+
+      if (updateMatchDateLocal) payload.dateLocal = updateMatchDateLocal;
+      if (updateMatchTimeLocal) payload.timeLocal = updateMatchTimeLocal;
+      if (updateMatchVenue.trim()) payload.venue = updateMatchVenue.trim();
+      if (updateMatchType.trim()) payload.type = updateMatchType.trim();
+      if (updateMatchStatus === "completed") payload.sets = sets;
+
+      const response = await fetch(`/api/admin/matches/${matchId}/update`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as {
+        error?: string;
+        details?: string[];
+        message?: string;
+      };
+
+      if (!response.ok) {
+        const details = result.details?.join(" ");
+        setUpdateMatchError(
+          details || result.error || "Failed to update match.",
+        );
+        return;
+      }
+
+      setUpdateSet1Team1("");
+      setUpdateSet1Team2("");
+      setUpdateSet2Team1("");
+      setUpdateSet2Team2("");
+      setUpdateSet3Team1("");
+      setUpdateSet3Team2("");
+      setUpdateMatchSuccess(result.message || "Match updated successfully.");
+    } catch {
+      setUpdateMatchError("Unexpected error while updating match.");
+    } finally {
+      setUpdatingMatch(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -471,6 +619,8 @@ export default function AdminPage() {
                               setCreatePlayerSuccess(null);
                               setCreateMatchError(null);
                               setCreateMatchSuccess(null);
+                              setUpdateMatchError(null);
+                              setUpdateMatchSuccess(null);
                             }}
                             className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                               active
@@ -860,6 +1010,246 @@ export default function AdminPage() {
                           className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           {creatingMatch ? "Scheduling..." : "Schedule Match"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : activePlayerTab === "UPDATE_MATCH" ? (
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
+                      <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                        Update Match
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-3">
+                        <div>
+                          <label
+                            className="text-slate-500 dark:text-slate-400"
+                            htmlFor="update-match-id"
+                          >
+                            match_id:
+                          </label>
+                          <input
+                            id="update-match-id"
+                            type="number"
+                            value={updateMatchId}
+                            onChange={(e) => setUpdateMatchId(e.target.value)}
+                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="e.g. 15"
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            className="text-slate-500 dark:text-slate-400"
+                            htmlFor="update-match-status"
+                          >
+                            status:
+                          </label>
+                          <select
+                            id="update-match-status"
+                            value={updateMatchStatus}
+                            onChange={(e) =>
+                              setUpdateMatchStatus(
+                                e.target
+                                  .value as (typeof MATCH_STATUS_OPTIONS)[number],
+                              )
+                            }
+                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                          >
+                            {MATCH_STATUS_OPTIONS.map((status) => (
+                              <option key={status} value={status}>
+                                {status}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label
+                            className="text-slate-500 dark:text-slate-400"
+                            htmlFor="update-match-season-id"
+                          >
+                            season_id (optional):
+                          </label>
+                          <input
+                            id="update-match-season-id"
+                            type="number"
+                            value={updateMatchSeasonId}
+                            onChange={(e) =>
+                              setUpdateMatchSeasonId(e.target.value)
+                            }
+                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="leave blank to keep"
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            className="text-slate-500 dark:text-slate-400"
+                            htmlFor="update-match-date-local"
+                          >
+                            date_local (optional):
+                          </label>
+                          <input
+                            id="update-match-date-local"
+                            type="date"
+                            value={updateMatchDateLocal}
+                            onChange={(e) =>
+                              setUpdateMatchDateLocal(e.target.value)
+                            }
+                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            className="text-slate-500 dark:text-slate-400"
+                            htmlFor="update-match-time-local"
+                          >
+                            time_local (optional):
+                          </label>
+                          <input
+                            id="update-match-time-local"
+                            type="time"
+                            value={updateMatchTimeLocal}
+                            onChange={(e) =>
+                              setUpdateMatchTimeLocal(e.target.value)
+                            }
+                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            className="text-slate-500 dark:text-slate-400"
+                            htmlFor="update-match-type"
+                          >
+                            type (optional):
+                          </label>
+                          <input
+                            id="update-match-type"
+                            type="text"
+                            value={updateMatchType}
+                            onChange={(e) => setUpdateMatchType(e.target.value)}
+                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            placeholder="e.g. group"
+                          />
+                        </div>
+
+                        <div className="xl:col-span-3">
+                          <label
+                            className="text-slate-500 dark:text-slate-400"
+                            htmlFor="update-match-venue"
+                          >
+                            venue (optional):
+                          </label>
+                          <input
+                            id="update-match-venue"
+                            type="text"
+                            value={updateMatchVenue}
+                            onChange={(e) =>
+                              setUpdateMatchVenue(e.target.value)
+                            }
+                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                          />
+                        </div>
+                      </div>
+
+                      {updateMatchStatus === "completed" && (
+                        <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
+                          <div className="font-medium text-slate-900 dark:text-slate-100">
+                            Set Scores (required for completed)
+                          </div>
+
+                          <div className="grid gap-3 xl:grid-cols-3">
+                            <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              Set 1
+                            </div>
+                            <input
+                              type="number"
+                              value={updateSet1Team1}
+                              onChange={(e) =>
+                                setUpdateSet1Team1(e.target.value)
+                              }
+                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              placeholder="Team 1 games"
+                            />
+                            <input
+                              type="number"
+                              value={updateSet1Team2}
+                              onChange={(e) =>
+                                setUpdateSet1Team2(e.target.value)
+                              }
+                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              placeholder="Team 2 games"
+                            />
+
+                            <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              Set 2
+                            </div>
+                            <input
+                              type="number"
+                              value={updateSet2Team1}
+                              onChange={(e) =>
+                                setUpdateSet2Team1(e.target.value)
+                              }
+                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              placeholder="Team 1 games"
+                            />
+                            <input
+                              type="number"
+                              value={updateSet2Team2}
+                              onChange={(e) =>
+                                setUpdateSet2Team2(e.target.value)
+                              }
+                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              placeholder="Team 2 games"
+                            />
+
+                            <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              Set 3 (optional)
+                            </div>
+                            <input
+                              type="number"
+                              value={updateSet3Team1}
+                              onChange={(e) =>
+                                setUpdateSet3Team1(e.target.value)
+                              }
+                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              placeholder="Team 1 games"
+                            />
+                            <input
+                              type="number"
+                              value={updateSet3Team2}
+                              onChange={(e) =>
+                                setUpdateSet3Team2(e.target.value)
+                              }
+                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              placeholder="Team 2 games"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {updateMatchError && (
+                        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
+                          {updateMatchError}
+                        </div>
+                      )}
+
+                      {updateMatchSuccess && (
+                        <div className="rounded bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-2 text-emerald-700 dark:text-emerald-300">
+                          {updateMatchSuccess}
+                        </div>
+                      )}
+
+                      <div>
+                        <button
+                          type="button"
+                          onClick={handleUpdateMatch}
+                          disabled={updatingMatch}
+                          className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {updatingMatch ? "Updating..." : "Update Match"}
                         </button>
                       </div>
                     </div>
