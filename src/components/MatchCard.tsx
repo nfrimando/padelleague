@@ -24,14 +24,14 @@ export default function MatchCard({
         : match.status === "cancelled"
           ? "text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700"
           : "text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40";
-    const statusCardClass =
-      match.status === "scheduled"
-        ? "border-sky-300 dark:border-sky-700 ring-1 ring-sky-200 dark:ring-sky-900/60"
-        : match.status === "forfeit"
-          ? "border-red-300 dark:border-red-700 ring-1 ring-red-200 dark:ring-red-900/60"
-          : match.status === "cancelled"
-            ? "border-slate-300 dark:border-slate-600 ring-1 ring-slate-200 dark:ring-slate-800"
-            : "border-emerald-300 dark:border-emerald-700 ring-1 ring-emerald-200 dark:ring-emerald-900/60";
+  const statusCardClass =
+    match.status === "scheduled"
+      ? "border-sky-300 dark:border-sky-700 ring-1 ring-sky-200 dark:ring-sky-900/60"
+      : match.status === "forfeit"
+        ? "border-red-300 dark:border-red-700 ring-1 ring-red-200 dark:ring-red-900/60"
+        : match.status === "cancelled"
+          ? "border-slate-300 dark:border-slate-600 ring-1 ring-slate-200 dark:ring-slate-800"
+          : "border-emerald-300 dark:border-emerald-700 ring-1 ring-emerald-200 dark:ring-emerald-900/60";
   const team1 = match.teams.find((t) => t.team_number === 1);
   const team2 = match.teams.find((t) => t.team_number === 2);
 

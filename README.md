@@ -220,6 +220,29 @@ python3 src/app/scripts/load/load_reset_matches_sequence.py
 - Admin functionality currently available:
   - player lookup by name/nickname
   - edit `players` fields (`name`, `nickname`, `image_link`)
+  - create scheduled matches via `POST /api/admin/matches/create`
+
+Create match API request body:
+
+```json
+{
+  "seasonId": 1,
+  "dateLocal": "2026-04-12",
+  "timeLocal": "19:30",
+  "venue": "Club United",
+  "type": "americano",
+  "team1": {
+    "player1Id": 101,
+    "player2Id": 102
+  },
+  "team2": {
+    "player1Id": 201,
+    "player2Id": 202
+  }
+}
+```
+
+The endpoint requires the caller's Supabase access token in the `Authorization: Bearer ...` header, verifies that the user exists in `admin_users`, creates the `matches` row with `status = 'scheduled'`, and then creates two `match_teams` rows.
 
 Recommended DB setup for admin auth:
 
