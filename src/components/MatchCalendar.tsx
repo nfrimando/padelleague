@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { MatchWithTeams } from "@/lib/types";
+import { formatMatchDate, formatMatchTime } from "@/lib/utils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -18,6 +20,97 @@ function playerLabel(p: { name: string; nickname: string } | null): string {
 function teamLabel(team: MatchWithTeams["teams"][number] | undefined): string {
   if (!team) return "TBA";
   return `${playerLabel(team.player_1)} / ${playerLabel(team.player_2)}`;
+}
+
+function teamLineWithWinner(
+  match: MatchWithTeams,
+  team: MatchWithTeams["teams"][number] | undefined,
+  className: string,
+  withImages = false,
+) {
+  if (!team) return <span className={className}>TBA</span>;
+
+  const isWinningTeam =
+    match.status === "completed" &&
+    match.winner_team != null &&
+    team.team_number === match.winner_team;
+
+  const firstHref = team.player_1?.player_id
+    ? `/players?playerId=${encodeURIComponent(String(team.player_1.player_id))}`
+    : null;
+  const secondHref = team.player_2?.player_id
+    ? `/players?playerId=${encodeURIComponent(String(team.player_2.player_id))}`
+    : null;
+
+  const firstName = playerLabel(team.player_1);
+  const secondName = playerLabel(team.player_2);
+
+  const renderPlayer = (
+    href: string | null,
+    player: MatchWithTeams["teams"][number]["player_1"],
+    label: string,
+  ) => {
+    const content = withImages ? (
+      <span className="inline-flex items-center gap-1 align-middle">
+        {player?.image_link ? (
+          <img
+            src={player.image_link}
+            alt={label}
+            className="h-4 w-4 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+          />
+        ) : (
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[9px] font-semibold text-slate-500 dark:text-slate-400">
+            {label.charAt(0).toUpperCase()}
+          </span>
+        )}
+        <span>{label}</span>
+      </span>
+    ) : (
+      <span>{label}</span>
+    );
+
+    if (!href) {
+      return content;
+    }
+
+    return (
+      <Link
+        href={href}
+        className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 rounded"
+      >
+        {content}
+      </Link>
+    );
+  };
+
+  return (
+    <div className={className}>
+      {isWinningTeam ? "🏆 " : ""}
+      {renderPlayer(firstHref, team.player_1, firstName)}
+      <span> / </span>
+      {renderPlayer(secondHref, team.player_2, secondName)}
+    </div>
+  );
+}
+
+function matchTopLine(match: MatchWithTeams): string {
+  if (match.status === "completed" && match.sets && match.sets.length > 0) {
+    return [...match.sets]
+      .sort((a, b) => a.set_number - b.set_number)
+      .map((s) => `${s.team_1_games}-${s.team_2_games}`)
+      .join(", ");
+  }
+
+  const venue = match.venue || "No venue";
+  const time = formatMatchTime(match.time_local);
+  return time ? `${venue} · ${time}` : venue;
+}
+
+function versusLabel(match: MatchWithTeams): string {
+  const type = String(match.type || "").toLowerCase();
+  if (type === "kotc") return "👑";
+  if (type === "duel") return "⚔️";
+  return "vs";
 }
 
 function viewStartSunday(year: number, month: number): string {
@@ -69,6 +162,154 @@ function dayLabel(dateStr: string) {
   });
 }
 
+function renderMatchPreview(
+  match: MatchWithTeams,
+  compact: boolean,
+) {
+  const t1 = match.teams.find((t) => t.team_number === 1);
+  const t2 = match.teams.find((t) => t.team_number === 2);
+  const setScores =
+    match.sets && match.sets.length > 0
+      ? [...match.sets]
+          .sort((a, b) => a.set_number - b.set_number)
+          .map((s) => `${s.team_1_games}-${s.team_2_games}`)
+          .join(", ")
+      : "No set scores";
+
+  const avatarSizeClass = compact ? "h-6 w-6" : "h-8 w-8";
+  const avatarFallbackClass = compact ? "text-[10px]" : "text-xs";
+
+  const renderPlayerLine = (
+    href: string | null,
+    player: MatchWithTeams["teams"][number]["player_1"],
+    label: string,
+    avatarAfter: boolean,
+  ) => {
+    const avatar = player?.image_link ? (
+      <img
+        src={player.image_link}
+        alt={label}
+        className={`${avatarSizeClass} rounded-full object-cover border border-slate-200 dark:border-slate-700`}
+      />
+    ) : (
+      <span
+        className={`inline-flex ${avatarSizeClass} items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 ${avatarFallbackClass} font-semibold text-slate-500 dark:text-slate-400`}
+      >
+        {label.charAt(0).toUpperCase()}
+      </span>
+    );
+
+    const content = (
+      <span className="inline-flex items-center gap-1.5 align-middle">
+        {avatarAfter ? <span className="truncate">{label}</span> : avatar}
+        {avatarAfter ? avatar : <span className="truncate">{label}</span>}
+      </span>
+    );
+
+    if (!href) return content;
+
+    return (
+      <Link
+        href={href}
+        className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 rounded"
+      >
+        {content}
+      </Link>
+    );
+  };
+
+  const renderTeamBlock = (
+    team: MatchWithTeams["teams"][number] | undefined,
+    isWinner: boolean,
+    side: "left" | "right",
+  ) => {
+    const isLeftSide = side === "left";
+    const textAlignClass = isLeftSide ? "text-right" : "text-left";
+    const rowJustifyClass = isLeftSide ? "flex justify-end" : "flex justify-start";
+
+    if (!team) {
+      return (
+        <div className={`min-w-0 flex-1 ${textAlignClass}`}>
+          <div className="text-xs text-slate-500 dark:text-slate-400">TBA</div>
+        </div>
+      );
+    }
+
+    const p1Name = playerLabel(team.player_1);
+    const p2Name = playerLabel(team.player_2);
+    const p1Href = team.player_1?.player_id
+      ? `/players?playerId=${encodeURIComponent(String(team.player_1.player_id))}`
+      : null;
+    const p2Href = team.player_2?.player_id
+      ? `/players?playerId=${encodeURIComponent(String(team.player_2.player_id))}`
+      : null;
+
+    return (
+      <div
+        className={`min-w-0 flex-1 rounded-md p-1 ${textAlignClass} ${
+          isWinner
+            ? "bg-emerald-50 dark:bg-emerald-900/25 border border-emerald-200 dark:border-emerald-700"
+            : ""
+        }`}
+      >
+        <div className="space-y-1">
+          <div className={rowJustifyClass}>
+            {renderPlayerLine(p1Href, team.player_1, p1Name, isLeftSide)}
+          </div>
+          <div className={rowJustifyClass}>
+            {renderPlayerLine(p2Href, team.player_2, p2Name, isLeftSide)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const team1IsWinner =
+    match.status === "completed" && match.winner_team != null && match.winner_team === 1;
+  const team2IsWinner =
+    match.status === "completed" && match.winner_team != null && match.winner_team === 2;
+
+  return (
+    <div
+      className={`rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl ${compact ? "p-2" : "p-2.5"}`}
+    >
+      <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+        <span className="font-medium">
+          {formatMatchDate(match.date_local)} {formatMatchTime(match.time_local)}
+        </span>
+        <span className="uppercase tracking-wide">{String(match.status || "")}</span>
+      </div>
+      <div className="mt-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+        {matchTopLine(match)}
+      </div>
+      {match.status === "completed" ? (
+        <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+          Venue: {match.venue || "No venue"}
+        </div>
+      ) : (
+        <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+          Sets: {setScores}
+        </div>
+      )}
+      <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {match.type || "match"}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        {renderTeamBlock(t1, team1IsWinner, "left")}
+        <div className="shrink-0 self-stretch px-1 text-center flex flex-col items-center justify-center">
+          <div className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            {versusLabel(match)}
+          </div>
+          <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+            {t1?.sets_won ?? 0} - {t2?.sets_won ?? 0}
+          </div>
+        </div>
+        {renderTeamBlock(t2, team2IsWinner, "right")}
+      </div>
+    </div>
+  );
+}
+
 export default function MatchCalendar({
   className,
   matches,
@@ -77,6 +318,7 @@ export default function MatchCalendar({
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const [mobilePreviewMatchId, setMobilePreviewMatchId] = useState<number | null>(null);
 
   // Allowed range: 2 months ago → 1 month ahead
   const minDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
@@ -173,7 +415,7 @@ export default function MatchCalendar({
 
   return (
     <div
-      className={`relative rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden ${className ?? ""}`}
+      className={`relative rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-visible ${className ?? ""}`}
     >
       {loading && (
         <div className="absolute inset-0 z-10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-[1px] flex items-start justify-center pt-6">
@@ -266,7 +508,8 @@ export default function MatchCalendar({
                     </span>
                   </div>
                   <span className="text-xs text-slate-500 dark:text-slate-400">
-                    {dayMatches.length} match{dayMatches.length === 1 ? "" : "es"}
+                    {dayMatches.length} match
+                    {dayMatches.length === 1 ? "" : "es"}
                   </span>
                 </div>
 
@@ -277,24 +520,39 @@ export default function MatchCalendar({
                 ) : (
                   <div className="px-2 py-2 space-y-2">
                     {dayMatches.map((match) => {
-                      const t1 = match.teams.find((t) => t.team_number === 1);
-                      const t2 = match.teams.find((t) => t.team_number === 2);
-
                       return (
-                        <div
-                          key={match.match_id}
-                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5"
-                        >
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            {match.venue || "No venue"}
-                          </div>
-                          <div className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-100">
-                            {teamLabel(t1)}
-                          </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">vs</div>
-                          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
-                            {teamLabel(t2)}
-                          </div>
+                        <div key={match.match_id}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMobilePreviewMatchId((prev) =>
+                                prev === match.match_id ? null : match.match_id,
+                              )
+                            }
+                            className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5"
+                          >
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              {matchTopLine(match)}
+                            </div>
+                            {teamLineWithWinner(
+                              match,
+                              match.teams.find((t) => t.team_number === 1),
+                              "mt-1 text-sm font-medium text-slate-800 dark:text-slate-100",
+                            )}
+                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                              {versusLabel(match)}
+                            </div>
+                            {teamLineWithWinner(
+                              match,
+                              match.teams.find((t) => t.team_number === 2),
+                              "text-sm font-medium text-slate-800 dark:text-slate-100",
+                            )}
+                          </button>
+                          {mobilePreviewMatchId === match.match_id && (
+                            <div className="mt-1">
+                              {renderMatchPreview(match, true)}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -365,20 +623,28 @@ export default function MatchCalendar({
                 return (
                   <div
                     key={i}
-                    className="mt-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1 py-0.5 text-center"
+                    className="group relative mt-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1 py-0.5 text-center"
                     title={`${teamLabel(t1)} vs ${teamLabel(t2)}`}
                   >
                     <div className="text-[9px] font-semibold leading-tight text-slate-500 dark:text-slate-400 truncate uppercase tracking-wide">
-                      {m.venue || ""}
+                      {matchTopLine(m)}
                     </div>
-                    <div className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-100 truncate">
-                      {teamLabel(t1)}
-                    </div>
+                    {teamLineWithWinner(
+                      m,
+                      t1,
+                      "text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-100 truncate",
+                    )}
                     <div className="text-[9px] leading-tight text-slate-500 dark:text-slate-400">
-                      vs
+                      {versusLabel(m)}
                     </div>
-                    <div className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-100 truncate">
-                      {teamLabel(t2)}
+                    {teamLineWithWinner(
+                      m,
+                      t2,
+                      "text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-100 truncate",
+                    )}
+
+                    <div className="pointer-events-none hidden sm:block absolute z-30 left-1/2 -translate-x-1/2 top-full mt-2 w-72 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      {renderMatchPreview(m, false)}
                     </div>
                   </div>
                 );
