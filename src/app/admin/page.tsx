@@ -1650,34 +1650,29 @@ export default function AdminPage() {
                           >
                             season_id:
                           </label>
-                          <select
+                          <input
                             id="create-match-season-id"
+                            type="number"
                             value={createMatchSeasonId}
                             onChange={(e) =>
                               setCreateMatchSeasonId(e.target.value)
                             }
+                            list="create-match-season-options"
                             className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                            disabled={
-                              matchSeasonsLoading || matchSeasons.length === 0
+                            placeholder={
+                              matchSeasonsLoading
+                                ? "Loading seasons..."
+                                : "Enter season id"
                             }
-                          >
-                            {matchSeasons.length === 0 ? (
-                              <option value="">
-                                {matchSeasonsLoading
-                                  ? "Loading seasons..."
-                                  : "No seasons available"}
-                              </option>
-                            ) : (
-                              matchSeasons
-                                .slice()
-                                .sort((a, b) => b - a)
-                                .map((season) => (
-                                  <option key={season} value={String(season)}>
-                                    {season}
-                                  </option>
-                                ))
-                            )}
-                          </select>
+                          />
+                          <datalist id="create-match-season-options">
+                            {matchSeasons
+                              .slice()
+                              .sort((a, b) => b - a)
+                              .map((season) => (
+                                <option key={season} value={String(season)} />
+                              ))}
+                          </datalist>
                         </div>
                         <div>
                           <label
