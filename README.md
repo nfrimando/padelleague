@@ -69,6 +69,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
     - `data/outputs/matches.csv`
     - `data/outputs/match_teams.csv`
   - Maps player names/nicknames to Supabase `player_id` values and formats match fields.
+  - Outputs `status` for matches (`scheduled`, `completed`, `forfeit`, `cancelled`).
 
 - `src/app/scripts/load/load_players_to_supabase_full_refresh.py`
   - Loads `data/outputs/players.csv` into the `players` table.
@@ -81,7 +82,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 - `src/app/scripts/load/load_matches_to_supabase_full_refresh.py`
   - Truncates `match_player_ratings`, `match_sets`, `match_teams`, `matches` (with RESTART IDENTITY CASCADE).
-  - Loads `data/outputs/matches.csv` into `matches`.
+  - Loads `data/outputs/matches.csv` into `matches` (including `status`).
 
 - `src/app/scripts/load/load_match_teams_to_supabase_full_refresh.py`
   - Loads `data/outputs/match_teams.csv` into `match_teams`.
@@ -225,7 +226,9 @@ Recommended DB setup for admin auth:
 ```sql
 create table if not exists public.admin_users (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  email text,
+  updated_at timestamptz not null default now()
 );
 
 alter table public.admin_users enable row level security;

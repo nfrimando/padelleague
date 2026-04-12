@@ -1,15 +1,17 @@
 from time import perf_counter
 
-from load_common import MATCHES_CSV, clean_bool, clean_int, clean_text, get_database_url, log, psycopg, read_csv_dict_rows
+from load_common import MATCHES_CSV, clean_int, clean_text, get_database_url, log, psycopg, read_csv_dict_rows
 
 
-def read_matches() -> list[tuple[int, int | None, str | None, str | None, str | None, str | None, int | None, bool]]:
+def read_matches() -> list[tuple[int, int | None, str | None, str | None, str | None, str | None, int | None, str]]:
     log(f"Reading matches CSV: {MATCHES_CSV}")
-    rows: list[tuple[int, int | None, str | None, str | None, str | None, str | None, int | None, bool]] = []
+    rows: list[tuple[int, int | None, str | None, str | None, str | None, str | None, int | None, str]] = []
     for row in read_csv_dict_rows(MATCHES_CSV):
         match_id = clean_int(row.get("match_id"))
         if match_id is None:
             continue
+
+        status = clean_text(row.get("status")) or "completed"
 
         rows.append(
             (
@@ -20,7 +22,7 @@ def read_matches() -> list[tuple[int, int | None, str | None, str | None, str | 
                 clean_text(row.get("venue")),
                 clean_text(row.get("type")),
                 clean_int(row.get("winner_team")),
-                clean_bool(row.get("is_forfeit")),
+                status,
             )
         )
     log(f"Prepared {len(rows)} match rows")
@@ -54,7 +56,7 @@ def main() -> None:
                     venue,
                     type,
                     winner_team,
-                    is_forfeit
+                    status
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
