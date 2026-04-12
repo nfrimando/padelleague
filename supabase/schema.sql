@@ -66,6 +66,7 @@ CREATE TABLE public.players (
   nickname text UNIQUE,
   image_link text,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  initial_rating numeric CHECK (initial_rating IS NULL OR initial_rating >= 0::numeric),
   CONSTRAINT players_pkey PRIMARY KEY (player_id)
 );
 CREATE TABLE public.teams (

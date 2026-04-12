@@ -234,17 +234,53 @@ async function getPreMatchRating(
   matchId: number,
   playerId: number,
 ): Promise<number | null> {
-  const { data: latest, error: latestError } = await supabase
+  const { data: latestRows, error: latestRowsError } = await supabase
     .from("match_player_ratings")
-    .select("rating_post,created_at")
+    .select("match_id,rating_post,formula_name")
     .eq("player_id", playerId)
-    .neq("match_id", matchId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .neq("match_id", matchId);
 
-  if (!latestError && latest && typeof latest.rating_post === "number") {
-    return latest.rating_post;
+  if (!latestRowsError && (latestRows?.length ?? 0) > 0) {
+    const preferredByMatch = new Map<
+      number,
+      { ratingPost: number; priority: number }
+    >();
+
+    for (const row of latestRows ?? []) {
+      const matchIdForRow = Number(row.match_id);
+      const ratingPost = Number(row.rating_post);
+      if (!Number.isFinite(matchIdForRow) || !Number.isFinite(ratingPost)) {
+        continue;
+      }
+
+      const formula = String(row.formula_name || "").toLowerCase();
+      const priority = formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
+      const existing = preferredByMatch.get(matchIdForRow);
+
+      if (!existing || priority >= existing.priority) {
+        preferredByMatch.set(matchIdForRow, { ratingPost, priority });
+      }
+    }
+
+    if (preferredByMatch.size > 0) {
+      const { data: matchesForRatings, error: matchesForRatingsError } =
+        await supabase
+          .from("matches")
+          .select("match_id,date_local,time_local")
+          .in("match_id", Array.from(preferredByMatch.keys()))
+          .order("date_local", { ascending: false, nullsFirst: false })
+          .order("time_local", { ascending: false, nullsFirst: false })
+          .order("match_id", { ascending: false });
+
+      if (!matchesForRatingsError) {
+        for (const row of matchesForRatings ?? []) {
+          const candidate = preferredByMatch.get(Number(row.match_id));
+          if (candidate) {
+            return candidate.ratingPost;
+          }
+        }
+      }
+    }
   }
 
   const { data: existingForMatch, error: existingForMatchError } = await supabase
@@ -260,6 +296,16 @@ async function getPreMatchRating(
     typeof existingForMatch.rating_pre === "number"
   ) {
     return existingForMatch.rating_pre;
+  }
+
+  const { data: playerRow, error: playerError } = await supabase
+    .from("players")
+    .select("initial_rating")
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  if (!playerError && typeof playerRow?.initial_rating === "number") {
+    return playerRow.initial_rating;
   }
 
   return null;

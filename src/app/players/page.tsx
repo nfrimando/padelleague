@@ -359,7 +359,10 @@ function PlayersPageContent() {
                 <PlayerCard
                   player={{
                     ...selectedPlayer,
-                    latest_rating: selectedPlayerLatestRating,
+                    latest_rating:
+                      selectedPlayerLatestRating ??
+                      selectedPlayer.initial_rating ??
+                      null,
                     latest_match_date: selectedPlayerLatestMatchDate,
                   }}
                   size="lg"

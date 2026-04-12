@@ -10,6 +10,7 @@ type UpdatePlayerRequest = {
   name: string;
   nickname: string;
   imageLink?: string | null;
+  initialRating?: number | null;
 };
 
 type ValidationResult =
@@ -29,6 +30,20 @@ function validatePayload(payload: unknown): ValidationResult {
   const name = normalizeOptionalString(payload.name);
   const nickname = normalizeOptionalString(payload.nickname);
   const imageLink = normalizeOptionalString(payload.imageLink);
+  let initialRating: number | null = null;
+
+  if (
+    payload.initialRating !== undefined &&
+    payload.initialRating !== null &&
+    payload.initialRating !== ""
+  ) {
+    const parsed = Number(payload.initialRating);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      errors.push("initialRating must be a non-negative number or null.");
+    } else {
+      initialRating = parsed;
+    }
+  }
 
   if (!name) {
     errors.push("name is required.");
@@ -48,6 +63,7 @@ function validatePayload(payload: unknown): ValidationResult {
       name,
       nickname,
       imageLink,
+      initialRating,
     },
   };
 }
@@ -97,6 +113,7 @@ export async function PATCH(
       name: validation.value.name,
       nickname: validation.value.nickname,
       image_link: validation.value.imageLink,
+      initial_rating: validation.value.initialRating,
     })
     .eq("player_id", playerId)
     .select("*")
