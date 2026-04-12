@@ -1,50 +1,134 @@
-// app/page.tsx
+import { supabase } from "@/lib/supabase";
+import { CarouselSlide } from "@/lib/types";
+import HeroCarousel from "@/components/HeroCarousel";
 import Link from "next/link";
-import Image from "next/image";
 
-const WEBSITE_VERSION = "v0.2.5";
+async function getCarouselSlides(): Promise<CarouselSlide[]> {
+  try {
+    const { data } = await supabase
+      .from("carousel_slides")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order");
+    return data || [];
+  } catch {
+    return [];
+  }
+}
 
-export default function HomePage() {
+async function getStats() {
+  try {
+    const [players, matches, seasons] = await Promise.all([
+      supabase.from("players").select("player_id", { count: "exact", head: true }),
+      supabase.from("matches").select("match_id", { count: "exact", head: true }).eq("status", "completed"),
+      supabase.from("matches").select("season_id").order("season_id", { ascending: false }).limit(1),
+    ]);
+    return {
+      players: players.count ?? 0,
+      matches: matches.count ?? 0,
+      activeSeason: seasons.data?.[0]?.season_id ?? "S8",
+    };
+  } catch {
+    return { players: 0, matches: 0, activeSeason: "S8" };
+  }
+}
+
+export default async function HomePage() {
+  const [slides, stats] = await Promise.all([getCarouselSlides(), getStats()]);
+
+  const statTiles = [
+    { label: "Players", value: stats.players || "—" },
+    { label: "Matches Played", value: stats.matches || "—" },
+    { label: "Active Season", value: stats.activeSeason },
+    { label: "Match Types", value: "4" },
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 font-sans">
-      {/* Hero Section */}
-      <div className="relative w-full max-w-4xl rounded-lg overflow-hidden shadow-lg">
-        {/* Background image */}
-        <div className="relative h-96 w-full">
-          <Image
-            src="/home-bg.jpg"
-            alt="Home Background"
-            fill
-            className="object-cover"
-          />
-
-          {/* Overlay for readability */}
-          <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/70 flex flex-col items-center justify-center p-8 space-y-8">
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white text-center tracking-wide">
-              Padel League Philippines
-            </h1>
-
-            <div className="flex flex-col sm:flex-row gap-6">
-              <Link
-                href="/players"
-                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
-              >
-                Players
-              </Link>
-
-              <Link
-                href="/leaderboard"
-                className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow font-semibold text-center transition duration-200"
-              >
-                Leaderboard
-              </Link>
-            </div>
-          </div>
-        </div>
+    <div className="max-w-6xl mx-auto px-4 py-0 space-y-8 pb-12">
+      {/* Hero Carousel — full bleed */}
+      <div className="-mx-4">
+        <HeroCarousel slides={slides} />
       </div>
 
-      <div className="fixed bottom-3 right-3 text-[11px] text-gray-500 dark:text-gray-400">
-        {WEBSITE_VERSION}
+      {/* Stats row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {statTiles.map((t) => (
+          <div
+            key={t.label}
+            className="bg-surface border border-bdr rounded-xl p-4 text-center"
+          >
+            <div className="font-display text-3xl text-accent italic">
+              {t.value}
+            </div>
+            <div className="text-xs text-sec mt-1">{t.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick nav */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link
+          href="/players"
+          className="group bg-surface border border-bdr hover:border-accent/50 rounded-xl p-6 flex items-center gap-4 transition-colors"
+        >
+          <div className="w-12 h-12 bg-accent-dim rounded-xl flex items-center justify-center text-2xl">
+            👥
+          </div>
+          <div>
+            <div className="font-semibold text-white group-hover:text-accent transition-colors">
+              Players
+            </div>
+            <div className="text-xs text-sec mt-0.5">
+              Browse all league members
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          href="/leaderboard"
+          className="group bg-surface border border-bdr hover:border-accent/50 rounded-xl p-6 flex items-center gap-4 transition-colors"
+        >
+          <div className="w-12 h-12 bg-accent-dim rounded-xl flex items-center justify-center text-2xl">
+            🏆
+          </div>
+          <div>
+            <div className="font-semibold text-white group-hover:text-accent transition-colors">
+              Leaderboard
+            </div>
+            <div className="text-xs text-sec mt-0.5">
+              Rankings, ratings, and stats
+            </div>
+          </div>
+        </Link>
+      </div>
+
+      {/* League benefits */}
+      <div className="border border-dashed border-bdr rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-white uppercase tracking-wider">
+            League Member Benefits
+          </h2>
+          <span className="text-xs bg-gold-bg text-gold border border-gold/30 px-2 py-0.5 rounded font-mono">
+            Coming Soon
+          </span>
+        </div>
+        <p className="text-xs text-muted mb-4">Powered by our sponsors</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { icon: "🎾", title: "Gear Discounts", desc: "Exclusive deals on padel equipment" },
+            { icon: "💪", title: "Health & Wellness", desc: "Partner gym and physio access" },
+            { icon: "🏟️", title: "Court Access", desc: "Priority court booking for members" },
+          ].map((b) => (
+            <div
+              key={b.title}
+              className="bg-elevated rounded-lg p-4 opacity-60"
+            >
+              <div className="text-2xl mb-2">{b.icon}</div>
+              <div className="text-sm font-medium text-white">{b.title}</div>
+              <div className="text-xs text-sec mt-1">{b.desc}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
