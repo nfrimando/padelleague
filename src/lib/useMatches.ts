@@ -41,7 +41,7 @@ const chunkMatchIds = (matchIds: Array<string | number>) => {
   return chunks;
 };
 
-export function useMatches(enabled = true) {
+export function useMatches(limit = 10, enabled = true) {
   const [matches, setMatches] = useState<MatchWithTeams[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,13 +61,17 @@ export function useMatches(enabled = true) {
       setError(null);
 
       try {
+        const safeLimit =
+          Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
+
         const { data: matchesData, error: matchesError } = await supabase
           .from("matches")
           .select("*")
-          .order("season_id", { ascending: false, nullsFirst: false })
           .order("date_local", { ascending: false, nullsFirst: false })
           .order("time_local", { ascending: false, nullsFirst: false })
-          .order("match_id", { ascending: false });
+          .order("season_id", { ascending: false, nullsFirst: false })
+          .order("match_id", { ascending: false })
+          .limit(safeLimit);
 
         if (matchesError) {
           throw new Error(matchesError.message || "Failed to load matches.");
@@ -239,7 +243,7 @@ export function useMatches(enabled = true) {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, limit]);
 
   return {
     matches,
