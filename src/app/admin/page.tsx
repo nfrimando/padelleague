@@ -303,7 +303,7 @@ export default function AdminPage() {
       return;
     }
 
-    setCreateMatchSeasonId(String(matchSeasons[matchSeasons.length - 1]));
+    setCreateMatchSeasonId(String(matchSeasons[0]));
   }, [isAdmin, createMatchSeasonId, matchSeasons]);
 
   useEffect(() => {
@@ -950,7 +950,7 @@ export default function AdminPage() {
 
       setCreateMatchSeasonId(
         matchSeasons.length > 0
-          ? String(matchSeasons[matchSeasons.length - 1])
+          ? String(matchSeasons[0])
           : "",
       );
       setCreateMatchDateLocal("");
