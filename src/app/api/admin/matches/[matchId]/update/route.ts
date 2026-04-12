@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  type AdminSupabaseClient,
   getAuthorizedAdminClient,
   isRecord,
   normalizeOptionalPositiveInteger,
@@ -229,12 +230,7 @@ function calculateV3Ratings(input: {
 }
 
 async function getPreMatchRating(
-  supabase: Awaited<ReturnType<typeof getAuthorizedAdminClient>> extends {
-    ok: true;
-    supabase: infer S;
-  }
-    ? S
-    : never,
+  supabase: AdminSupabaseClient,
   matchId: number,
   playerId: number,
 ): Promise<number | null> {

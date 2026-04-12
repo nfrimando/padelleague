@@ -45,7 +45,7 @@ export function normalizeOptionalString(value: unknown): string | null {
 type AuthorizedAdminClientResult =
   | {
       ok: true;
-      supabase: ReturnType<typeof createClient>;
+      supabase: ReturnType<typeof getSupabaseClient>;
       userId: string;
     }
   | {
@@ -69,6 +69,8 @@ function getSupabaseClient(authorization: string) {
     },
   });
 }
+
+export type AdminSupabaseClient = ReturnType<typeof getSupabaseClient>;
 
 export async function getAuthorizedAdminClient(
   request: Request,
