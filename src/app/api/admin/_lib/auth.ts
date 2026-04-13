@@ -70,6 +70,17 @@ function getSupabaseClient(authorization: string) {
   });
 }
 
+function getSupabaseServiceClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey);
+}
+
 export type AdminSupabaseClient = ReturnType<typeof getSupabaseClient>;
 
 export async function getAuthorizedAdminClient(
@@ -87,9 +98,9 @@ export async function getAuthorizedAdminClient(
     };
   }
 
-  let supabase;
+  let userSupabase;
   try {
-    supabase = getSupabaseClient(authorization);
+    userSupabase = getSupabaseClient(authorization);
   } catch (error) {
     return {
       ok: false,
@@ -108,7 +119,7 @@ export async function getAuthorizedAdminClient(
   const {
     data: { user },
     error: userError,
-  } = await supabase.auth.getUser();
+  } = await userSupabase.auth.getUser();
 
   if (userError || !user) {
     return {
@@ -120,7 +131,7 @@ export async function getAuthorizedAdminClient(
     };
   }
 
-  const { data: adminRow, error: adminError } = await supabase
+  const { data: adminRow, error: adminError } = await userSupabase
     .from("admin_users")
     .select("user_id")
     .eq("user_id", user.id)
@@ -146,9 +157,11 @@ export async function getAuthorizedAdminClient(
     };
   }
 
+  const adminSupabase = getSupabaseServiceClient() ?? userSupabase;
+
   return {
     ok: true,
-    supabase,
+    supabase: adminSupabase,
     userId: user.id,
   };
 }
