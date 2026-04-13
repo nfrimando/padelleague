@@ -469,6 +469,8 @@ export async function PATCH(
   }
 
   if (validation.value.status === "completed") {
+    const now = new Date().toISOString();
+
     const { data: currentMatchRow, error: currentMatchError } = await supabase
       .from("matches")
       .select("status,season_id,date_local,time_local,venue,type,winner_team")
@@ -682,6 +684,7 @@ export async function PATCH(
       .update({
         ...matchUpdates,
         winner_team: calculation.winnerTeam,
+        updated_at: now,
       })
       .eq("match_id", matchId);
 
@@ -722,7 +725,7 @@ export async function PATCH(
 
     const { error: team1UpdateError } = await supabase
       .from("match_teams")
-      .update({ sets_won: calculation.team1SetsWon })
+      .update({ sets_won: calculation.team1SetsWon, updated_at: now })
       .eq("uuid", team1.uuid);
     if (team1UpdateError) {
       return rollbackCompletedFlow(
@@ -732,7 +735,7 @@ export async function PATCH(
 
     const { error: team2UpdateError } = await supabase
       .from("match_teams")
-      .update({ sets_won: calculation.team2SetsWon })
+      .update({ sets_won: calculation.team2SetsWon, updated_at: now })
       .eq("uuid", team2.uuid);
     if (team2UpdateError) {
       return rollbackCompletedFlow(
@@ -793,6 +796,7 @@ export async function PATCH(
     .update({
       ...matchUpdates,
       winner_team: null,
+      updated_at: new Date().toISOString(),
     })
     .eq("match_id", matchId);
 

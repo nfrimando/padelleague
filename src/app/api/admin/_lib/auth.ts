@@ -70,6 +70,27 @@ function getSupabaseClient(authorization: string) {
   });
 }
 
+/**
+ * Returns a Supabase client that bypasses RLS using the service role key.
+ * This is used for admin DB operations after the user's identity has already
+ * been verified via their JWT. Falls back to null when the key is not set.
+ */
+function getSupabaseServiceRoleClient(): ReturnType<typeof getSupabaseClient> | null {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }) as ReturnType<typeof getSupabaseClient>;
+}
+
 export type AdminSupabaseClient = ReturnType<typeof getSupabaseClient>;
 
 export async function getAuthorizedAdminClient(
@@ -87,9 +108,9 @@ export async function getAuthorizedAdminClient(
     };
   }
 
-  let supabase;
+  let userClient;
   try {
-    supabase = getSupabaseClient(authorization);
+    userClient = getSupabaseClient(authorization);
   } catch (error) {
     return {
       ok: false,
@@ -108,7 +129,7 @@ export async function getAuthorizedAdminClient(
   const {
     data: { user },
     error: userError,
-  } = await supabase.auth.getUser();
+  } = await userClient.auth.getUser();
 
   if (userError || !user) {
     return {
@@ -120,7 +141,12 @@ export async function getAuthorizedAdminClient(
     };
   }
 
-  const { data: adminRow, error: adminError } = await supabase
+  // Use the service role client for DB operations when available so that admin
+  // writes are not silently blocked by Supabase RLS UPDATE policies. Identity
+  // verification above is always done with the user's own JWT.
+  const dbClient = getSupabaseServiceRoleClient() ?? userClient;
+
+  const { data: adminRow, error: adminError } = await dbClient
     .from("admin_users")
     .select("user_id")
     .eq("user_id", user.id)
@@ -148,7 +174,7 @@ export async function getAuthorizedAdminClient(
 
   return {
     ok: true,
-    supabase,
+    supabase: dbClient,
     userId: user.id,
   };
 }
