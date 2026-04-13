@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import { supabase } from "@/lib/supabase";
@@ -91,13 +92,29 @@ type ScheduledMatchOption = {
 const AUTH_BOX_CLASS =
   "w-full md:w-[24rem] md:max-w-[24rem] min-h-[188px] mx-auto rounded-lg border border-slate-200 dark:border-slate-700 p-4";
 
-export default function AdminPage() {
+function AdminPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const TAB_VALUES = useMemo(() => ADMIN_PLAYER_TABS.map((t) => t.value), []);
+  const rawTab = searchParams.get("tab");
+  const activePlayerTab: (typeof ADMIN_PLAYER_TABS)[number]["value"] =
+    TAB_VALUES.includes(rawTab as (typeof ADMIN_PLAYER_TABS)[number]["value"])
+      ? (rawTab as (typeof ADMIN_PLAYER_TABS)[number]["value"])
+      : "SCHEDULE_MATCH";
+
+  const setActivePlayerTab = (
+    tab: (typeof ADMIN_PLAYER_TABS)[number]["value"],
+  ) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.push(`/admin?${params.toString()}`);
+  };
+
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activePlayerTab, setActivePlayerTab] =
-    useState<(typeof ADMIN_PLAYER_TABS)[number]["value"]>("SCHEDULE_MATCH");
   const [search, setSearch] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [editName, setEditName] = useState("");
@@ -278,7 +295,9 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!isAdmin) {
-      setActivePlayerTab("SCHEDULE_MATCH");
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tab");
+      router.replace(`/admin?${params.toString()}`);
       setSelectedPlayer(null);
       setSearch("");
       setSavePlayerError(null);
@@ -2909,5 +2928,13 @@ export default function AdminPage() {
         )}
       </div>
     </>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense>
+      <AdminPageContent />
+    </Suspense>
   );
 }
