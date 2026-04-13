@@ -63,6 +63,8 @@ type LoadedMatchDetails = {
   venue: string | null;
   type: string | null;
   winnerTeam: number | null;
+  team1SetsWon: number | null;
+  team2SetsWon: number | null;
   team1: {
     player1: MatchPlayerSummary | null;
     player2: MatchPlayerSummary | null;
@@ -140,6 +142,10 @@ export default function AdminPage() {
   const [updateMatchTimeLocal, setUpdateMatchTimeLocal] = useState("");
   const [updateMatchVenue, setUpdateMatchVenue] = useState("");
   const [updateMatchType, setUpdateMatchType] = useState("");
+  const [updateMatchTeam1Player1, setUpdateMatchTeam1Player1] = useState("");
+  const [updateMatchTeam1Player2, setUpdateMatchTeam1Player2] = useState("");
+  const [updateMatchTeam2Player1, setUpdateMatchTeam2Player1] = useState("");
+  const [updateMatchTeam2Player2, setUpdateMatchTeam2Player2] = useState("");
   const [updateSet1Team1, setUpdateSet1Team1] = useState("");
   const [updateSet1Team2, setUpdateSet1Team2] = useState("");
   const [updateSet2Team1, setUpdateSet2Team1] = useState("");
@@ -430,6 +436,10 @@ export default function AdminPage() {
     if (!Number.isInteger(matchId) || matchId <= 0) {
       setLoadedMatchDetails(null);
       setUpdateMatchDetailsError(null);
+      setUpdateMatchTeam1Player1("");
+      setUpdateMatchTeam1Player2("");
+      setUpdateMatchTeam2Player1("");
+      setUpdateMatchTeam2Player2("");
       return;
     }
 
@@ -467,7 +477,7 @@ export default function AdminPage() {
 
       const { data: teams, error: teamsError } = await supabase
         .from("match_teams")
-        .select("team_number,player_1_id,player_2_id")
+        .select("team_number,player_1_id,player_2_id,sets_won")
         .eq("match_id", matchId);
 
       if (cancelled) return;
@@ -627,6 +637,18 @@ export default function AdminPage() {
       setUpdateMatchTimeLocal(matchRow.time_local || "");
       setUpdateMatchVenue(matchRow.venue || "");
       setUpdateMatchType(matchRow.type || "");
+      setUpdateMatchTeam1Player1(
+        typeof team1?.player_1_id === "number" ? String(team1.player_1_id) : "",
+      );
+      setUpdateMatchTeam1Player2(
+        typeof team1?.player_2_id === "number" ? String(team1.player_2_id) : "",
+      );
+      setUpdateMatchTeam2Player1(
+        typeof team2?.player_1_id === "number" ? String(team2.player_1_id) : "",
+      );
+      setUpdateMatchTeam2Player2(
+        typeof team2?.player_2_id === "number" ? String(team2.player_2_id) : "",
+      );
 
       const sets = setsRows ?? [];
       setUpdateSet1Team1(sets[0] ? String(sets[0].team_1_games) : "");
@@ -645,6 +667,10 @@ export default function AdminPage() {
         venue: matchRow.venue,
         type: matchRow.type,
         winnerTeam: matchRow.winner_team,
+        team1SetsWon:
+          typeof team1?.sets_won === "number" ? team1.sets_won : null,
+        team2SetsWon:
+          typeof team2?.sets_won === "number" ? team2.sets_won : null,
         team1: {
           player1:
             typeof team1?.player_1_id === "number"
@@ -1133,6 +1159,79 @@ export default function AdminPage() {
         status: updateMatchStatus,
       };
 
+      const participantInputs = [
+        resolvedUpdateMatchTeam1Player1.trim(),
+        resolvedUpdateMatchTeam1Player2.trim(),
+        resolvedUpdateMatchTeam2Player1.trim(),
+        resolvedUpdateMatchTeam2Player2.trim(),
+      ];
+      const hasAnyParticipantInput = participantInputs.some(Boolean);
+
+      if (hasAnyParticipantInput) {
+        if (participantInputs.some((value) => !value)) {
+          setUpdateMatchError("All four participant player IDs are required.");
+          return;
+        }
+
+        const parsedParticipantIds = participantInputs.map((value) =>
+          Number.parseInt(value, 10),
+        );
+
+        if (
+          parsedParticipantIds.some(
+            (playerId) => !Number.isInteger(playerId) || playerId <= 0,
+          )
+        ) {
+          setUpdateMatchError(
+            "Participant player IDs must be positive integers.",
+          );
+          return;
+        }
+
+        if (new Set(parsedParticipantIds).size !== 4) {
+          setUpdateMatchError("All four participants must be unique.");
+          return;
+        }
+
+        const teamsResponse = await fetch(
+          `/api/admin/matches/${matchId}/teams`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              team1: {
+                player1Id: parsedParticipantIds[0],
+                player2Id: parsedParticipantIds[1],
+                setsWon: loadedMatchDetails?.team1SetsWon ?? null,
+              },
+              team2: {
+                player1Id: parsedParticipantIds[2],
+                player2Id: parsedParticipantIds[3],
+                setsWon: loadedMatchDetails?.team2SetsWon ?? null,
+              },
+            }),
+          },
+        );
+
+        const teamsResult = (await teamsResponse.json()) as {
+          error?: string;
+          details?: string[];
+        };
+
+        if (!teamsResponse.ok) {
+          const details = teamsResult.details?.join(" ");
+          setUpdateMatchError(
+            details ||
+              teamsResult.error ||
+              "Failed to update match participants.",
+          );
+          return;
+        }
+      }
+
       if (updateMatchSeasonId.trim()) {
         const seasonId = Number.parseInt(updateMatchSeasonId.trim(), 10);
         if (!Number.isInteger(seasonId) || seasonId <= 0) {
@@ -1345,11 +1444,30 @@ export default function AdminPage() {
       : null;
   const updateMatchRatingPreviewRows =
     updateMatchRatingPreviewWithRows?.rows ?? [];
+  const resolvedUpdateMatchTeam1Player1 =
+    updateMatchTeam1Player1 ||
+    (loadedMatchDetails?.team1.player1
+      ? String(loadedMatchDetails.team1.player1.player_id)
+      : "");
+  const resolvedUpdateMatchTeam1Player2 =
+    updateMatchTeam1Player2 ||
+    (loadedMatchDetails?.team1.player2
+      ? String(loadedMatchDetails.team1.player2.player_id)
+      : "");
+  const resolvedUpdateMatchTeam2Player1 =
+    updateMatchTeam2Player1 ||
+    (loadedMatchDetails?.team2.player1
+      ? String(loadedMatchDetails.team2.player1.player_id)
+      : "");
+  const resolvedUpdateMatchTeam2Player2 =
+    updateMatchTeam2Player2 ||
+    (loadedMatchDetails?.team2.player2
+      ? String(loadedMatchDetails.team2.player2.player_id)
+      : "");
   const completeMatchWinnerTeamDisplay =
     (completeMatchCalculated
       ? updateMatchRatingPreviewWithRows?.winnerTeam
       : null) ?? loadedMatchDetails?.winnerTeam;
-
   const handleCalculateOutcome = () => {
     setCompleteMatchError(null);
     setCompleteMatchSuccess(null);
@@ -2308,7 +2426,12 @@ export default function AdminPage() {
                                 e.target.value as MatchStatusValue,
                               )
                             }
-                            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                            disabled={updateMatchLoadingDetails}
+                            className={`mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-slate-900 dark:text-slate-100 ${
+                              updateMatchLoadingDetails
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                : "bg-white dark:bg-slate-900"
+                            }`}
                           >
                             {updateMatchStatus === "completed" && (
                               <option value="completed" disabled>
@@ -2327,6 +2450,13 @@ export default function AdminPage() {
                       {updateMatchLoadingDetails && (
                         <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
                           Loading match details...
+                        </div>
+                      )}
+
+                      {updateMatchLoadingDetails && (
+                        <div className="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/60 px-3 py-2 text-slate-600 dark:text-slate-300">
+                          Fields below are temporarily locked while match
+                          details load.
                         </div>
                       )}
 
@@ -2390,7 +2520,14 @@ export default function AdminPage() {
                         </div>
                       )}
 
-                      <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
+                      <fieldset
+                        disabled={updateMatchLoadingDetails}
+                        className={`rounded-md p-3 space-y-3 transition-opacity ${
+                          updateMatchLoadingDetails
+                            ? "bg-slate-100 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-600 opacity-60"
+                            : "bg-slate-50 dark:bg-slate-800/40"
+                        }`}
+                      >
                         <div className="font-medium text-slate-900 dark:text-slate-100">
                           Update-able Match Details
                         </div>
@@ -2507,7 +2644,125 @@ export default function AdminPage() {
                             </select>
                           </div>
                         </div>
-                      </div>
+
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          <div className="rounded-md bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 p-3 space-y-3">
+                            <div className="font-medium text-slate-900 dark:text-slate-100">
+                              Team 1 Participants
+                            </div>
+                            <div>
+                              <label
+                                className="text-slate-500 dark:text-slate-400"
+                                htmlFor="update-match-team1-player1"
+                              >
+                                player_1_id:
+                              </label>
+                              <select
+                                id="update-match-team1-player1"
+                                value={resolvedUpdateMatchTeam1Player1}
+                                onChange={(e) =>
+                                  setUpdateMatchTeam1Player1(e.target.value)
+                                }
+                                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              >
+                                <option value="">Select player</option>
+                                {players.map((player) => (
+                                  <option
+                                    key={player.player_id}
+                                    value={player.player_id}
+                                  >
+                                    {player.name} ({player.nickname})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label
+                                className="text-slate-500 dark:text-slate-400"
+                                htmlFor="update-match-team1-player2"
+                              >
+                                player_2_id:
+                              </label>
+                              <select
+                                id="update-match-team1-player2"
+                                value={resolvedUpdateMatchTeam1Player2}
+                                onChange={(e) =>
+                                  setUpdateMatchTeam1Player2(e.target.value)
+                                }
+                                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              >
+                                <option value="">Select player</option>
+                                {players.map((player) => (
+                                  <option
+                                    key={player.player_id}
+                                    value={player.player_id}
+                                  >
+                                    {player.name} ({player.nickname})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="rounded-md bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 p-3 space-y-3">
+                            <div className="font-medium text-slate-900 dark:text-slate-100">
+                              Team 2 Participants
+                            </div>
+                            <div>
+                              <label
+                                className="text-slate-500 dark:text-slate-400"
+                                htmlFor="update-match-team2-player1"
+                              >
+                                player_1_id:
+                              </label>
+                              <select
+                                id="update-match-team2-player1"
+                                value={resolvedUpdateMatchTeam2Player1}
+                                onChange={(e) =>
+                                  setUpdateMatchTeam2Player1(e.target.value)
+                                }
+                                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              >
+                                <option value="">Select player</option>
+                                {players.map((player) => (
+                                  <option
+                                    key={player.player_id}
+                                    value={player.player_id}
+                                  >
+                                    {player.name} ({player.nickname})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label
+                                className="text-slate-500 dark:text-slate-400"
+                                htmlFor="update-match-team2-player2"
+                              >
+                                player_2_id:
+                              </label>
+                              <select
+                                id="update-match-team2-player2"
+                                value={resolvedUpdateMatchTeam2Player2}
+                                onChange={(e) =>
+                                  setUpdateMatchTeam2Player2(e.target.value)
+                                }
+                                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                              >
+                                <option value="">Select player</option>
+                                {players.map((player) => (
+                                  <option
+                                    key={player.player_id}
+                                    value={player.player_id}
+                                  >
+                                    {player.name} ({player.nickname})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      </fieldset>
 
                       {updateMatchError && (
                         <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
@@ -2525,7 +2780,7 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={handleUpdateMatch}
-                          disabled={updatingMatch}
+                          disabled={updatingMatch || updateMatchLoadingDetails}
                           className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           {updatingMatch ? "Updating..." : "Update Match"}

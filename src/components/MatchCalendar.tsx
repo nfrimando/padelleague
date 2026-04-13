@@ -283,10 +283,12 @@ function renderMatchPreview(match: MatchWithTeams, compact: boolean) {
       </span>
     );
 
+    const labelNode = <span className="min-w-0 flex-1 truncate">{label}</span>;
+
     const content = (
-      <span className="inline-flex items-center gap-1.5 align-middle">
-        {avatarAfter ? <span className="truncate">{label}</span> : avatar}
-        {avatarAfter ? avatar : <span className="truncate">{label}</span>}
+      <span className="flex min-w-0 max-w-full items-center gap-1.5 align-middle">
+        {avatarAfter ? labelNode : avatar}
+        {avatarAfter ? avatar : labelNode}
       </span>
     );
 
@@ -295,7 +297,7 @@ function renderMatchPreview(match: MatchWithTeams, compact: boolean) {
     return (
       <Link
         href={href}
-        className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 rounded"
+        className="block min-w-0 max-w-full hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 rounded"
       >
         {content}
       </Link>
@@ -332,7 +334,7 @@ function renderMatchPreview(match: MatchWithTeams, compact: boolean) {
 
     return (
       <div
-        className={`min-w-0 flex-1 rounded-md p-1 ${textAlignClass} ${
+        className={`min-w-0 flex-1 rounded-md p-1 text-[11px] leading-tight ${textAlignClass} ${
           isWinner
             ? "bg-emerald-50 dark:bg-emerald-900/25 border border-emerald-200 dark:border-emerald-700"
             : ""
