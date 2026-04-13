@@ -174,11 +174,26 @@ function validatePayload(payload: unknown): ValidationResult {
     valid: true,
     value: {
       status,
-      seasonId,
-      dateLocal: normalizeOptionalString(payload.dateLocal),
-      timeLocal: normalizeOptionalString(payload.timeLocal),
-      venue,
-      type,
+      seasonId:
+        payload.seasonId === undefined
+          ? undefined
+          : normalizeOptionalPositiveInteger(payload.seasonId),
+      dateLocal:
+        payload.dateLocal === undefined
+          ? undefined
+          : normalizeOptionalString(payload.dateLocal),
+      timeLocal:
+        payload.timeLocal === undefined
+          ? undefined
+          : normalizeOptionalString(payload.timeLocal),
+      venue:
+        payload.venue === undefined
+          ? undefined
+          : normalizeOptionalString(payload.venue),
+      type:
+        payload.type === undefined
+          ? undefined
+          : normalizeOptionalString(payload.type),
       sets: parsedSets,
     },
   };
@@ -677,17 +692,23 @@ export async function PATCH(
       },
     });
 
-    const { error: matchUpdateError } = await supabase
+    const { data: updatedMatchRow, error: matchUpdateError } = await supabase
       .from("matches")
       .update({
         ...matchUpdates,
         winner_team: calculation.winnerTeam,
       })
-      .eq("match_id", matchId);
+      .eq("match_id", matchId)
+      .select("match_id")
+      .maybeSingle();
 
-    if (matchUpdateError) {
+    if (matchUpdateError || !updatedMatchRow) {
       return NextResponse.json(
-        { error: matchUpdateError.message || "Failed to update match." },
+        {
+          error:
+            matchUpdateError?.message ||
+            "Failed to update match. Ensure admin write permissions are configured.",
+        },
         { status: 500 },
       );
     }
@@ -720,23 +741,29 @@ export async function PATCH(
       );
     }
 
-    const { error: team1UpdateError } = await supabase
+    const { data: updatedTeam1Row, error: team1UpdateError } = await supabase
       .from("match_teams")
       .update({ sets_won: calculation.team1SetsWon })
-      .eq("uuid", team1.uuid);
-    if (team1UpdateError) {
+      .eq("uuid", team1.uuid)
+      .select("uuid")
+      .maybeSingle();
+    if (team1UpdateError || !updatedTeam1Row) {
       return rollbackCompletedFlow(
-        team1UpdateError.message || "Failed to update team 1 sets won.",
+        team1UpdateError?.message ||
+          "Failed to update team 1 sets won. Ensure admin write permissions are configured.",
       );
     }
 
-    const { error: team2UpdateError } = await supabase
+    const { data: updatedTeam2Row, error: team2UpdateError } = await supabase
       .from("match_teams")
       .update({ sets_won: calculation.team2SetsWon })
-      .eq("uuid", team2.uuid);
-    if (team2UpdateError) {
+      .eq("uuid", team2.uuid)
+      .select("uuid")
+      .maybeSingle();
+    if (team2UpdateError || !updatedTeam2Row) {
       return rollbackCompletedFlow(
-        team2UpdateError.message || "Failed to update team 2 sets won.",
+        team2UpdateError?.message ||
+          "Failed to update team 2 sets won. Ensure admin write permissions are configured.",
       );
     }
 
@@ -788,17 +815,23 @@ export async function PATCH(
     );
   }
 
-  const { error: updateError } = await supabase
+  const { data: updatedMatchRow, error: updateError } = await supabase
     .from("matches")
     .update({
       ...matchUpdates,
       winner_team: null,
     })
-    .eq("match_id", matchId);
+    .eq("match_id", matchId)
+    .select("match_id")
+    .maybeSingle();
 
-  if (updateError) {
+  if (updateError || !updatedMatchRow) {
     return NextResponse.json(
-      { error: updateError.message || "Failed to update match." },
+      {
+        error:
+          updateError?.message ||
+          "Failed to update match. Ensure admin write permissions are configured.",
+      },
       { status: 500 },
     );
   }
