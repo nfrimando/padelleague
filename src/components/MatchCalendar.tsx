@@ -180,9 +180,21 @@ function mobileTeamInline(
   side: "left" | "right",
   isWinner: boolean,
 ) {
+  const sideJustifyClass = side === "left" ? "justify-end" : "justify-start";
+
   if (!team) {
     return (
-      <span className="text-xs text-slate-500 dark:text-slate-400">TBA</span>
+      <span className={`flex w-full min-w-0 ${sideJustifyClass}`}>
+        <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+          <span>TBA</span>
+          <span
+            aria-hidden="true"
+            className={`w-4 text-center text-sm leading-none ${isWinner ? "" : "invisible"}`}
+          >
+            🏆
+          </span>
+        </span>
+      </span>
     );
   }
 
@@ -192,15 +204,40 @@ function mobileTeamInline(
     ? `/players?playerId=${encodeURIComponent(String(team.player_1.player_id))}`
     : null;
 
-  const avatar = team.player_1?.image_link ? (
-    <img
-      src={team.player_1.image_link}
-      alt={firstName}
-      className="h-5 w-5 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-    />
-  ) : (
-    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-      {firstName.charAt(0).toUpperCase()}
+  const renderAvatar = (
+    player: MatchWithTeams["teams"][number]["player_1"],
+    label: string,
+  ) => {
+    if (player?.image_link) {
+      return (
+        <img
+          src={player.image_link}
+          alt={label}
+          className="h-5 w-5 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+        />
+      );
+    }
+
+    return (
+      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+        {label.charAt(0).toUpperCase()}
+      </span>
+    );
+  };
+
+  const avatars = (
+    <span className="inline-flex shrink-0 items-center -space-x-1">
+      {renderAvatar(team.player_1, firstName)}
+      {renderAvatar(team.player_2, secondName)}
+    </span>
+  );
+
+  const trophy = (
+    <span
+      aria-hidden="true"
+      className={`w-4 text-center text-sm leading-none ${isWinner ? "" : "invisible"}`}
+    >
+      🏆
     </span>
   );
 
@@ -208,24 +245,27 @@ function mobileTeamInline(
   const labelNode = href ? (
     <Link
       href={href}
-      className="truncate hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 rounded"
+      className="block hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 rounded"
     >
       {label}
     </Link>
   ) : (
-    <span className="truncate">{label}</span>
+    <span className="block">{label}</span>
   );
 
   return (
-    <span
-      className={`inline-flex min-w-0 items-center gap-1 text-xs font-medium ${
-        isWinner
-          ? "text-emerald-700 dark:text-emerald-300"
-          : "text-slate-800 dark:text-slate-100"
-      }`}
-    >
-      {side === "right" ? avatar : labelNode}
-      {side === "right" ? labelNode : avatar}
+    <span className={`flex w-full min-w-0 ${sideJustifyClass}`}>
+      <span
+        className={`grid max-w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 text-xs font-medium ${
+          isWinner
+            ? "text-emerald-700 dark:text-emerald-300"
+            : "text-slate-800 dark:text-slate-100"
+        }`}
+      >
+        {side === "left" ? trophy : avatars}
+        <span className="min-w-0 truncate">{labelNode}</span>
+        {side === "left" ? avatars : trophy}
+      </span>
     </span>
   );
 }
@@ -662,17 +702,19 @@ export default function MatchCalendar({
                               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {matchTopLine(match)}
                               </div>
-                              <span
-                                className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${statusBadgeClass(match.status)}`}
-                              >
-                                {match.status}
-                              </span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span
+                                  className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${statusBadgeClass(match.status)}`}
+                                >
+                                  {match.status}
+                                </span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                                  ▾
+                                </span>
+                              </div>
                             </div>
 
-                            <div className="mt-1 flex items-center gap-1.5">
-                              <span className="w-4 text-center text-sm leading-none">
-                                {team1IsWinner ? "🏆" : ""}
-                              </span>
+                            <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5">
                               <div className="min-w-0 flex-1 text-right">
                                 {mobileTeamInline(team1, "left", team1IsWinner)}
                               </div>
@@ -686,13 +728,7 @@ export default function MatchCalendar({
                                   team2IsWinner,
                                 )}
                               </div>
-                              <span className="w-4 text-center text-sm leading-none">
-                                {team2IsWinner ? "🏆" : ""}
-                              </span>
                             </div>
-                            <span className="absolute bottom-1 right-2 text-[10px] text-slate-400 dark:text-slate-500">
-                              ▾
-                            </span>
                           </button>
                           {mobilePreviewMatchId === match.match_id && (
                             <div className="mt-1">
