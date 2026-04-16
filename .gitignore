@@ -49,3 +49,6 @@ next-env.d.ts
 # python cache
 __pycache__/
 *.py[cod]
+
+# playwright auth session
+src/__tests__/e2e/.auth/session.json
