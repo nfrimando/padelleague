@@ -26,28 +26,65 @@ type SignupRow = {
   status: string;
   event_type: string;
   created_at: string;
-  season: Pick<Season, "season_id" | "name" | "start_date" | "end_date" | "registration_status" | "status"> | null;
+  season: Pick<
+    Season,
+    | "season_id"
+    | "name"
+    | "start_date"
+    | "end_date"
+    | "registration_status"
+    | "status"
+  > | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function seasonLabel(s: { season_id: number; name?: string | null; start_date?: string | null } | null): string {
+function seasonLabel(
+  s: {
+    season_id: number;
+    name?: string | null;
+    start_date?: string | null;
+  } | null,
+): string {
   if (!s) return "Unknown Season";
   if (s.name) return s.name;
-  if (s.start_date) return `Season ${s.season_id} · ${new Date(s.start_date).getFullYear()}`;
+  if (s.start_date)
+    return `Season ${s.season_id} · ${new Date(s.start_date).getFullYear()}`;
   return `Season ${s.season_id}`;
 }
 
 function SignupBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string; dot: string }> = {
-    registered:      { label: "Registered",      cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400", dot: "bg-emerald-400" },
-    pending_payment: { label: "Pending Payment",  cls: "bg-amber-500/10 border-amber-500/30 text-amber-400",      dot: "bg-amber-400" },
-    waitlisted:      { label: "Waitlisted",       cls: "bg-[#687FA3]/10 border-[#687FA3]/30 text-[#687FA3]",      dot: "bg-[#687FA3]" },
-    cancelled:       { label: "Cancelled",        cls: "bg-red-500/10 border-red-500/30 text-red-400",            dot: "bg-red-400" },
+    registered: {
+      label: "Registered",
+      cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
+      dot: "bg-emerald-400",
+    },
+    pending_payment: {
+      label: "Pending Payment",
+      cls: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+      dot: "bg-amber-400",
+    },
+    waitlisted: {
+      label: "Waitlisted",
+      cls: "bg-[#687FA3]/10 border-[#687FA3]/30 text-[#687FA3]",
+      dot: "bg-[#687FA3]",
+    },
+    cancelled: {
+      label: "Cancelled",
+      cls: "bg-red-500/10 border-red-500/30 text-red-400",
+      dot: "bg-red-400",
+    },
   };
-  const s = map[status] ?? { label: status, cls: "bg-white/5 border-white/10 text-white/50", dot: "bg-white/30" };
+  const s = map[status] ?? {
+    label: status,
+    cls: "bg-white/5 border-white/10 text-white/50",
+    dot: "bg-white/30",
+  };
   return (
-    <span className={`inline-flex items-center gap-1.5 border px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest ${s.cls}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 border px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest ${s.cls}`}
+    >
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
@@ -107,7 +144,9 @@ export default function DashboardPage() {
         // Open seasons — try with optional columns first, fall back to guaranteed columns
         supabase
           .from("seasons")
-          .select("season_id, name, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at")
+          .select(
+            "season_id, name, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at",
+          )
           .eq("registration_status", "open")
           .order("season_id", { ascending: false })
           .then(async (r) => {
@@ -115,7 +154,9 @@ export default function DashboardPage() {
             // Optional columns not yet present — retry with guaranteed columns only
             return supabase
               .from("seasons")
-              .select("season_id, start_date, end_date, registration_status, status, created_at, updated_at")
+              .select(
+                "season_id, start_date, end_date, registration_status, status, created_at, updated_at",
+              )
               .eq("registration_status", "open")
               .order("season_id", { ascending: false });
           }),
@@ -133,12 +174,13 @@ export default function DashboardPage() {
         const { data: created } = await supabase
           .from("players")
           .insert({
-            name:                fullName,
-            nickname:            nickname,
-            email:               user.email,
-            image_link:          (user.user_metadata?.avatar_url as string | undefined) ?? null,
+            name: fullName,
+            nickname: nickname,
+            email: user.email,
+            image_link:
+              (user.user_metadata?.avatar_url as string | undefined) ?? null,
             is_profile_complete: false,
-            auto_renew_season:   false,
+            auto_renew_season: false,
           })
           .select("*")
           .single();
@@ -152,16 +194,22 @@ export default function DashboardPage() {
         // Try to include name from the season join; fall back if column doesn't exist yet
         let supsResult = await supabase
           .from("signups")
-          .select("id, season_id, status, event_type, created_at, season:seasons(season_id, name, start_date, end_date, registration_status, status)")
+          .select(
+            "id, season_id, status, event_type, created_at, season:seasons(season_id, name, start_date, end_date, registration_status, status)",
+          )
           .eq("player_id", p.player_id)
           .order("created_at", { ascending: false });
 
         if (supsResult.error) {
-          supsResult = await supabase
+          supsResult = (await supabase
             .from("signups")
-            .select("id, season_id, status, event_type, created_at, season:seasons(season_id, start_date, end_date, registration_status, status)")
+            .select(
+              "id, season_id, status, event_type, created_at, season:seasons(season_id, start_date, end_date, registration_status, status)",
+            )
             .eq("player_id", p.player_id)
-            .order("created_at", { ascending: false }) as unknown as typeof supsResult;
+            .order("created_at", {
+              ascending: false,
+            })) as unknown as typeof supsResult;
         }
 
         // Supabase infers FK joins as arrays; cast via unknown for correct runtime shape
@@ -172,31 +220,41 @@ export default function DashboardPage() {
         // PayMongo has already received the payment. This fixes the case where
         // the user paid but navigated away before the success page could confirm
         // (or when the webhook hasn't fired on localhost).
-        const hasPending = typedSups.some((s) => s.status === "pending_payment");
+        const hasPending = typedSups.some(
+          (s) => s.status === "pending_payment",
+        );
         if (hasPending) {
           try {
-            const { data: { session } } = await supabase.auth.getSession();
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
             if (session) {
               const res = await fetch("/api/payments/confirm", {
                 method: "POST",
                 headers: { Authorization: `Bearer ${session.access_token}` },
               });
               if (res.ok) {
-                const json = await res.json() as { status: string };
+                const json = (await res.json()) as { status: string };
                 if (json.status === "registered") {
                   // Payment confirmed — re-fetch signups to get the updated status
                   let refreshed = await supabase
                     .from("signups")
-                    .select("id, season_id, status, event_type, created_at, season:seasons(season_id, name, start_date, end_date, registration_status, status)")
+                    .select(
+                      "id, season_id, status, event_type, created_at, season:seasons(season_id, name, start_date, end_date, registration_status, status)",
+                    )
                     .eq("player_id", p!.player_id)
                     .order("created_at", { ascending: false });
 
                   if (refreshed.error) {
-                    refreshed = await supabase
+                    refreshed = (await supabase
                       .from("signups")
-                      .select("id, season_id, status, event_type, created_at, season:seasons(season_id, start_date, end_date, registration_status, status)")
+                      .select(
+                        "id, season_id, status, event_type, created_at, season:seasons(season_id, start_date, end_date, registration_status, status)",
+                      )
                       .eq("player_id", p!.player_id)
-                      .order("created_at", { ascending: false }) as unknown as typeof refreshed;
+                      .order("created_at", {
+                        ascending: false,
+                      })) as unknown as typeof refreshed;
                   }
 
                   typedSups = (refreshed.data ?? []) as unknown as SignupRow[];
@@ -229,9 +287,11 @@ export default function DashboardPage() {
   }, [user]);
 
   // ── Match stats (from existing hook) ──────────────────────────────────────
-  const { matches, latestRating, loading: matchesLoading } = usePlayerMatches(
-    player ? String(player.player_id) : null,
-  );
+  const {
+    matches,
+    latestRating,
+    loading: matchesLoading,
+  } = usePlayerMatches(player ? String(player.player_id) : null);
 
   const completedMatches = matches.filter((m) => m.status === "completed");
   const wins = completedMatches.filter((m) => {
@@ -251,8 +311,13 @@ export default function DashboardPage() {
     setPayError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setPayError("Session expired. Please sign in again."); return; }
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setPayError("Session expired. Please sign in again.");
+        return;
+      }
 
       const res = await fetch("/api/payments/create-link", {
         method: "POST",
@@ -264,7 +329,10 @@ export default function DashboardPage() {
       });
 
       const json = await res.json();
-      if (!res.ok) { setPayError(json.error ?? "Something went wrong."); return; }
+      if (!res.ok) {
+        setPayError(json.error ?? "Something went wrong.");
+        return;
+      }
 
       window.location.href = json.checkout_url;
     } catch {
@@ -275,8 +343,11 @@ export default function DashboardPage() {
   }
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
-    router.push("/");
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      window.location.replace("/");
+    }
   }
 
   // ── Loading / redirect states ──────────────────────────────────────────────
@@ -291,15 +362,15 @@ export default function DashboardPage() {
 
   if (user === null) return null;
 
-  const displayName = player?.name ?? user.user_metadata?.full_name ?? user.email ?? "Player";
-  const avatarUrl   = user.user_metadata?.avatar_url as string | undefined;
+  const displayName =
+    player?.name ?? user.user_metadata?.full_name ?? user.email ?? "Player";
+  const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
   const recentMatches = matches.slice(0, 5);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#0E1523] text-white font-sans">
-
       {/* Nav */}
       <nav className="sticky top-0 z-50 bg-[#0E1523]/95 backdrop-blur-xl border-b border-[#162032]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
@@ -317,7 +388,11 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             {avatarUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt="avatar" className="w-8 h-8 rounded-full border border-white/10" />
+              <img
+                src={avatarUrl}
+                alt="avatar"
+                className="w-8 h-8 rounded-full border border-white/10"
+              />
             )}
             <span className="text-xs text-white/50 hidden sm:block max-w-[160px] truncate">
               {user.email}
@@ -334,7 +409,6 @@ export default function DashboardPage() {
       </nav>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 md:py-14 space-y-12">
-
         {/* ── Header ────────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-4">
           {avatarUrl ? (
@@ -357,7 +431,9 @@ export default function DashboardPage() {
               {displayName}
             </h1>
             {player?.nickname && (
-              <p className="text-[#687FA3] text-sm mt-1">&ldquo;{player.nickname}&rdquo;</p>
+              <p className="text-[#687FA3] text-sm mt-1">
+                &ldquo;{player.nickname}&rdquo;
+              </p>
             )}
           </div>
         </div>
@@ -368,17 +444,19 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-12">
-
             {/* ── New player: pending verification ─────────────────────────── */}
             {player && !player.is_profile_complete && (
               <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-5 flex gap-4">
                 <span className="text-2xl">⏳</span>
                 <div>
-                  <p className="font-bold text-amber-300 mb-1">Pending Verification</p>
+                  <p className="font-bold text-amber-300 mb-1">
+                    Pending Verification
+                  </p>
                   <p className="text-amber-200/60 text-sm leading-relaxed">
-                    Your account is awaiting admin approval. Once verified you&apos;ll
-                    be able to register for seasons. No action needed on your end —
-                    the league admin will review your request shortly.
+                    Your account is awaiting admin approval. Once verified
+                    you&apos;ll be able to register for seasons. No action
+                    needed on your end — the league admin will review your
+                    request shortly.
                   </p>
                 </div>
               </div>
@@ -387,23 +465,38 @@ export default function DashboardPage() {
             {/* ── Player Stats ─────────────────────────────────────────────── */}
             {player && (
               <section>
-                <SectionHeading icon={<TrendingUp size={14} />} label="Player Stats" />
+                <SectionHeading
+                  icon={<TrendingUp size={14} />}
+                  label="Player Stats"
+                />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
                   <StatCard
                     label="Rating"
                     value={
-                      matchesLoading ? "…" :
-                      latestRating !== null
-                        ? latestRating.toFixed(0)
-                        : player.latest_rating != null
-                        ? player.latest_rating.toFixed(0)
-                        : "–"
+                      matchesLoading
+                        ? "…"
+                        : latestRating !== null
+                          ? latestRating.toFixed(2)
+                          : player.latest_rating != null
+                            ? player.latest_rating.toFixed(2)
+                            : "–"
                     }
                     highlight
                   />
-                  <StatCard label="Wins"    value={matchesLoading ? "…" : String(wins)} />
-                  <StatCard label="Losses"  value={matchesLoading ? "…" : String(losses)} />
-                  <StatCard label="Matches" value={matchesLoading ? "…" : String(completedMatches.length)} />
+                  <StatCard
+                    label="Wins"
+                    value={matchesLoading ? "…" : String(wins)}
+                  />
+                  <StatCard
+                    label="Losses"
+                    value={matchesLoading ? "…" : String(losses)}
+                  />
+                  <StatCard
+                    label="Matches"
+                    value={
+                      matchesLoading ? "…" : String(completedMatches.length)
+                    }
+                  />
                 </div>
                 {player && (
                   <div className="mt-3 text-right">
@@ -420,7 +513,10 @@ export default function DashboardPage() {
 
             {/* ── Season Signup Status ──────────────────────────────────────── */}
             <section>
-              <SectionHeading icon={<Calendar size={14} />} label="Season Status" />
+              <SectionHeading
+                icon={<Calendar size={14} />}
+                label="Season Status"
+              />
 
               <div className="mt-5 space-y-3">
                 {/* Existing signups */}
@@ -435,9 +531,13 @@ export default function DashboardPage() {
                           {seasonLabel(s.season)}
                         </p>
                         <p className="text-[#687FA3] text-xs mt-0.5">
-                          {s.status === "pending_payment" ? "Payment incomplete" : "Registered"}{" "}
+                          {s.status === "pending_payment"
+                            ? "Payment incomplete"
+                            : "Registered"}{" "}
                           {new Date(s.created_at).toLocaleDateString("en-PH", {
-                            month: "short", day: "numeric", year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
                           })}
                         </p>
                       </div>
@@ -452,7 +552,9 @@ export default function DashboardPage() {
                             {payLoading ? (
                               <span className="w-3 h-3 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
                             ) : (
-                              <>Complete Payment <ChevronRight size={12} /></>
+                              <>
+                                Complete Payment <ChevronRight size={12} />
+                              </>
                             )}
                           </button>
                         )}
@@ -480,17 +582,30 @@ export default function DashboardPage() {
                           <p className="font-bold">{seasonLabel(season)}</p>
                           {season.start_date && season.end_date && (
                             <p className="text-[#687FA3] text-xs mt-0.5">
-                              {new Date(season.start_date).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                              {new Date(season.start_date).toLocaleDateString(
+                                "en-PH",
+                                { month: "short", day: "numeric" },
+                              )}
                               {" – "}
-                              {new Date(season.end_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                              {new Date(season.end_date).toLocaleDateString(
+                                "en-PH",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                },
+                              )}
                             </p>
                           )}
                           <p className="text-[#00C8DC] text-xs font-bold mt-1">
-                            ₱{(season.registration_fee ?? 5).toLocaleString()} registration fee
+                            ₱{(season.registration_fee ?? 5).toLocaleString()}{" "}
+                            registration fee
                           </p>
                         </div>
                         {!player || !player.is_profile_complete ? (
-                          <span className="text-amber-400/70 text-xs font-bold">Verification required</span>
+                          <span className="text-amber-400/70 text-xs font-bold">
+                            Verification required
+                          </span>
                         ) : (
                           <button
                             onClick={() => handleSeasonSignup(season.season_id)}
@@ -500,7 +615,9 @@ export default function DashboardPage() {
                             {payLoading ? (
                               <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
                             ) : (
-                              <>Sign Up <ChevronRight size={14} /></>
+                              <>
+                                Sign Up <ChevronRight size={14} />
+                              </>
                             )}
                           </button>
                         )}
@@ -520,13 +637,19 @@ export default function DashboardPage() {
             {/* ── Match History ─────────────────────────────────────────────── */}
             {player && (
               <section>
-                <SectionHeading icon={<Trophy size={14} />} label="Match History" />
+                <SectionHeading
+                  icon={<Trophy size={14} />}
+                  label="Match History"
+                />
 
                 <div className="mt-5">
                   {matchesLoading ? (
                     <div className="space-y-3">
                       {[...Array(3)].map((_, i) => (
-                        <div key={i} className="bg-[#162032]/50 border border-[#687FA3]/10 rounded-2xl h-20 animate-pulse" />
+                        <div
+                          key={i}
+                          className="bg-[#162032]/50 border border-[#687FA3]/10 rounded-2xl h-20 animate-pulse"
+                        />
                       ))}
                     </div>
                   ) : recentMatches.length === 0 ? (
@@ -538,8 +661,10 @@ export default function DashboardPage() {
                       {recentMatches.map((match) => {
                         const myTeam = match.teams.find(
                           (t) =>
-                            String(t.player_1?.player_id) === String(player.player_id) ||
-                            String(t.player_2?.player_id) === String(player.player_id),
+                            String(t.player_1?.player_id) ===
+                              String(player.player_id) ||
+                            String(t.player_2?.player_id) ===
+                              String(player.player_id),
                         );
                         const isWin =
                           myTeam !== undefined &&
@@ -569,13 +694,15 @@ export default function DashboardPage() {
                                 match.status !== "completed"
                                   ? "bg-[#687FA3]/20"
                                   : isWin
-                                  ? "bg-emerald-500"
-                                  : "bg-red-500/60"
+                                    ? "bg-emerald-500"
+                                    : "bg-red-500/60"
                               }`}
                             />
 
                             <div className="flex-1 min-w-0">
-                              <p className="font-bold text-sm truncate">vs {oppLabel}</p>
+                              <p className="font-bold text-sm truncate">
+                                vs {oppLabel}
+                              </p>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 <span className="text-[#687FA3] text-xs">
                                   {formatMatchDate(match.date_local)}
@@ -595,7 +722,9 @@ export default function DashboardPage() {
 
                             <div className="text-right shrink-0 space-y-0.5">
                               {match.status === "completed" ? (
-                                <p className={`text-[11px] font-black uppercase tracking-widest ${isWin ? "text-emerald-400" : "text-red-400"}`}>
+                                <p
+                                  className={`text-[11px] font-black uppercase tracking-widest ${isWin ? "text-emerald-400" : "text-red-400"}`}
+                                >
                                   {isWin ? "Win" : "Loss"}
                                 </p>
                               ) : (
@@ -618,7 +747,8 @@ export default function DashboardPage() {
                           href={`/players?playerId=${encodeURIComponent(player.player_id)}`}
                           className="flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors py-4"
                         >
-                          View all {matches.length} matches <ChevronRight size={12} />
+                          View all {matches.length} matches{" "}
+                          <ChevronRight size={12} />
                         </Link>
                       )}
                     </div>
@@ -626,7 +756,6 @@ export default function DashboardPage() {
                 </div>
               </section>
             )}
-
           </div>
         )}
       </div>
@@ -636,22 +765,42 @@ export default function DashboardPage() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function SectionHeading({ icon, label }: { icon: React.ReactNode; label: string }) {
+function SectionHeading({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
     <div className="flex items-center gap-2 text-[#687FA3] border-b border-[#687FA3]/10 pb-3">
       {icon}
-      <span className="text-[10px] font-black uppercase tracking-[0.3em]">{label}</span>
+      <span className="text-[10px] font-black uppercase tracking-[0.3em]">
+        {label}
+      </span>
     </div>
   );
 }
 
-function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function StatCard({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
   return (
     <div className="bg-[#162032] border border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 transition-all">
-      <div className={`text-3xl font-black tracking-tighter mb-1 ${highlight ? "text-[#00C8DC]" : "text-white"}`}>
+      <div
+        className={`text-3xl font-black tracking-tighter mb-1 ${highlight ? "text-[#00C8DC]" : "text-white"}`}
+      >
         {value}
       </div>
-      <div className="text-[#687FA3] text-[9px] font-black uppercase tracking-[0.2em]">{label}</div>
+      <div className="text-[#687FA3] text-[9px] font-black uppercase tracking-[0.2em]">
+        {label}
+      </div>
     </div>
   );
 }
