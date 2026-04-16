@@ -13,10 +13,9 @@ type SiteHeaderProps = {
 };
 
 const NAV_LINKS = [
-  { href: "/", label: "Home" },
+  { href: "/matches", label: "Calendar" },
   { href: "/players", label: "Players" },
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/matches", label: "Calendar" },
 ] as const;
 
 export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
@@ -116,6 +115,12 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
             </div>
           ) : (
             <div className="flex md:hidden gap-6 font-bold text-[10px] uppercase tracking-[0.15em] text-[#687FA3]">
+              <Link
+                href="/matches"
+                className="hover:text-[#00C8DC] transition-colors"
+              >
+                Calendar
+              </Link>
               <Link
                 href="/players"
                 className="hover:text-[#00C8DC] transition-colors"
