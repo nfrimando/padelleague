@@ -1,3 +1,4 @@
+// app/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -48,6 +49,8 @@ const SPONSORS = [
   { name: "SPONSOR C", tagline: "Official Ball Partner" },
   { name: "SPONSOR D", tagline: "Community Partner" },
 ];
+
+const WEBSITE_VERSION = "v1.1.0";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -606,11 +609,11 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
-
-        <div className="mt-10 text-center text-[#687FA3]/30 text-[9px] font-bold tracking-widest uppercase">
-          PADELPH.COM · ALL RIGHTS RESERVED
-        </div>
       </footer>
+
+      <div className="fixed bottom-3 right-3 text-[11px] text-gray-500 dark:text-gray-400">
+        {WEBSITE_VERSION}
+      </div>
     </div>
   );
 }
