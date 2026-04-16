@@ -4,7 +4,7 @@ import PlayerCard from "./PlayerCard";
 interface TeamCardProps {
   team: TeamWithPlayers | undefined;
   isWinner: boolean;
-  highlightPlayerId?: string;
+  highlightPlayerId?: string | number;
 }
 
 export default function TeamCard({

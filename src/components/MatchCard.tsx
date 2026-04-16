@@ -7,7 +7,7 @@ import TeamCard from "./TeamCard";
 
 interface MatchCardProps {
   match: MatchWithTeams;
-  highlightPlayerId?: string;
+  highlightPlayerId?: string | number;
 }
 
 export default function MatchCard({

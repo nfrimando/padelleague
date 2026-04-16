@@ -11,6 +11,8 @@ import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { usePlayers } from "@/lib/usePlayers";
 
 const ADMIN_PLAYER_TABS = [
+  { value: "MEMBERS", label: "Members" },
+  { value: "SEASONS", label: "Seasons" },
   { value: "CREATE", label: "Create Player" },
   { value: "EDIT", label: "Edit Player" },
   { value: "SCHEDULE_MATCH", label: "Schedule Match" },
@@ -110,6 +112,44 @@ function AdminPageContent() {
     params.set("tab", tab);
     router.push(`/admin?${params.toString()}`);
   };
+
+  // ── Members tab state ────────────────────────────────────────────────────
+  type PendingMember = {
+    player_id: number;
+    name: string;
+    nickname: string;
+    email: string;
+    image_link: string | null;
+    created_at: string;
+  };
+  type SeasonRow = {
+    season_id: number;
+    name?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    registration_fee?: number | null;
+    registration_status: string;
+    status: string;
+    created_at: string;
+  };
+
+  const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [verifyingId, setVerifyingId] = useState<number | null>(null);
+
+  // ── Seasons tab state ─────────────────────────────────────────────────────
+  const [seasons, setSeasons] = useState<SeasonRow[]>([]);
+  const [seasonsLoading, setSeasonsLoading] = useState(false);
+  const [newSeasonName, setNewSeasonName] = useState("");
+  const [newSeasonStart, setNewSeasonStart] = useState("");
+  const [newSeasonEnd, setNewSeasonEnd] = useState("");
+  const [newSeasonFee, setNewSeasonFee] = useState("1000");
+  const [newSeasonRegStatus, setNewSeasonRegStatus] = useState<"open" | "closed">("open");
+  const [newSeasonStatus, setNewSeasonStatus] = useState<"upcoming" | "ongoing" | "completed">("upcoming");
+  const [creatingSeasonLoading, setCreatingSeasonLoading] = useState(false);
+  const [seasonError, setSeasonError] = useState<string | null>(null);
+  const [seasonSuccess, setSeasonSuccess] = useState<string | null>(null);
+  const [updatingSeasonId, setUpdatingSeasonId] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
@@ -736,6 +776,126 @@ function AdminPageContent() {
     setEditNickname(selectedPlayer?.nickname || "");
     setEditImageLink(selectedPlayer?.image_link || "");
   }, [selectedPlayer]);
+
+  // ── Load pending members when MEMBERS tab is active ───────────────────────
+  useEffect(() => {
+    if (!isAdmin || activePlayerTab !== "MEMBERS") return;
+    let cancelled = false;
+    setMembersLoading(true);
+    supabase
+      .from("players")
+      .select("player_id, name, nickname, email, image_link, created_at")
+      .eq("is_profile_complete", false)
+      .not("email", "is", null)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (!cancelled) {
+          setPendingMembers((data ?? []) as PendingMember[]);
+          setMembersLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [isAdmin, activePlayerTab]);
+
+  // ── Load seasons when SEASONS tab is active ───────────────────────────────
+  useEffect(() => {
+    if (!isAdmin || activePlayerTab !== "SEASONS") return;
+    let cancelled = false;
+    setSeasonsLoading(true);
+    supabase
+      .from("seasons")
+      .select("*")
+      .order("season_id", { ascending: false })
+      .then(({ data }) => {
+        if (!cancelled) {
+          setSeasons((data ?? []) as SeasonRow[]);
+          setSeasonsLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [isAdmin, activePlayerTab]);
+
+  const handleVerifyMember = async (
+    playerId: number,
+    verified: boolean,
+    session: { access_token: string } | null,
+  ) => {
+    if (!session) return;
+    setVerifyingId(playerId);
+    const res = await fetch(`/api/admin/players/${playerId}/verify`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ verified }),
+    });
+    if (res.ok) {
+      setPendingMembers((prev) => prev.filter((m) => m.player_id !== playerId));
+    }
+    setVerifyingId(null);
+  };
+
+  const handleCreateSeason = async (session: { access_token: string } | null) => {
+    if (!session || !newSeasonStart || !newSeasonEnd) {
+      setSeasonError("Start date and end date are required.");
+      return;
+    }
+    setCreatingSeasonLoading(true);
+    setSeasonError(null);
+    setSeasonSuccess(null);
+    const res = await fetch("/api/admin/seasons", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        name:                newSeasonName || undefined,
+        start_date:          newSeasonStart,
+        end_date:            newSeasonEnd,
+        registration_fee:    newSeasonFee ? Number(newSeasonFee) : 1000,
+        registration_status: newSeasonRegStatus,
+        status:              newSeasonStatus,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setSeasonError(json.error ?? "Failed to create season.");
+    } else {
+      setSeasonSuccess(`Season created (ID ${json.season.season_id}).`);
+      setSeasons((prev) => [json.season as SeasonRow, ...prev]);
+      setNewSeasonName("");
+      setNewSeasonStart("");
+      setNewSeasonEnd("");
+      setNewSeasonFee("1000");
+    }
+    setCreatingSeasonLoading(false);
+  };
+
+  const handleToggleSeasonReg = async (
+    season: SeasonRow,
+    session: { access_token: string } | null,
+  ) => {
+    if (!session) return;
+    setUpdatingSeasonId(season.season_id);
+    const newStatus = season.registration_status === "open" ? "closed" : "open";
+    const res = await fetch("/api/admin/seasons", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ season_id: season.season_id, registration_status: newStatus }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      setSeasons((prev) =>
+        prev.map((s) => (s.season_id === season.season_id ? (json.season as SeasonRow) : s)),
+      );
+    }
+    setUpdatingSeasonId(null);
+  };
 
   const handleSavePlayer = async () => {
     if (!selectedPlayer) {
@@ -2806,7 +2966,7 @@ function AdminPageContent() {
                         </button>
                       </div>
                     </div>
-                  ) : (
+                  ) : activePlayerTab === "CREATE" ? (
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
                       <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
                         Create New Player
@@ -2903,7 +3063,46 @@ function AdminPageContent() {
                         </button>
                       </div>
                     </div>
-                  )}
+                  ) : activePlayerTab === "MEMBERS" ? (
+                    <MembersTab
+                      pendingMembers={pendingMembers}
+                      loading={membersLoading}
+                      verifyingId={verifyingId}
+                      onVerify={async (id, verified) => {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        handleVerifyMember(id, verified, session);
+                      }}
+                    />
+                  ) : activePlayerTab === "SEASONS" ? (
+                    <SeasonsTab
+                      seasons={seasons}
+                      loading={seasonsLoading}
+                      updatingSeasonId={updatingSeasonId}
+                      newSeasonName={newSeasonName}
+                      setNewSeasonName={setNewSeasonName}
+                      newSeasonStart={newSeasonStart}
+                      setNewSeasonStart={setNewSeasonStart}
+                      newSeasonEnd={newSeasonEnd}
+                      setNewSeasonEnd={setNewSeasonEnd}
+                      newSeasonFee={newSeasonFee}
+                      setNewSeasonFee={setNewSeasonFee}
+                      newSeasonRegStatus={newSeasonRegStatus}
+                      setNewSeasonRegStatus={setNewSeasonRegStatus}
+                      newSeasonStatus={newSeasonStatus}
+                      setNewSeasonStatus={setNewSeasonStatus}
+                      creating={creatingSeasonLoading}
+                      error={seasonError}
+                      success={seasonSuccess}
+                      onCreate={async () => {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        handleCreateSeason(session);
+                      }}
+                      onToggleReg={async (season) => {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        handleToggleSeasonReg(season, session);
+                      }}
+                    />
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -2928,6 +3127,275 @@ function AdminPageContent() {
         )}
       </div>
     </>
+  );
+}
+
+// ─── MembersTab ───────────────────────────────────────────────────────────────
+
+type PendingMemberItem = {
+  player_id: number;
+  name: string;
+  nickname: string;
+  email: string;
+  image_link: string | null;
+  created_at: string;
+};
+
+function MembersTab({
+  pendingMembers,
+  loading,
+  verifyingId,
+  onVerify,
+}: {
+  pendingMembers: PendingMemberItem[];
+  loading: boolean;
+  verifyingId: number | null;
+  onVerify: (id: number, verified: boolean) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
+      <div>
+        <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          Pending Verification
+        </div>
+        <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
+          New members who signed up via Google and are awaiting approval.
+          Verified members can register for seasons.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="text-slate-500 dark:text-slate-400 animate-pulse">Loading…</div>
+      ) : pendingMembers.length === 0 ? (
+        <div className="rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-3 text-emerald-700 dark:text-emerald-300">
+          ✓ No members pending verification.
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+          {pendingMembers.map((m) => (
+            <div
+              key={m.player_id}
+              className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900"
+            >
+              {m.image_link ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.image_link} alt="avatar" className="w-9 h-9 rounded-full shrink-0" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 shrink-0 flex items-center justify-center text-slate-400 font-bold text-sm">
+                  {m.name.charAt(0)}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{m.name}</p>
+                <p className="text-slate-500 dark:text-slate-400 text-xs truncate">{m.email}</p>
+                <p className="text-slate-400 dark:text-slate-500 text-xs">
+                  Joined {new Date(m.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={verifyingId === m.player_id}
+                  onClick={() => onVerify(m.player_id, true)}
+                  className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {verifyingId === m.player_id ? "…" : "Verify"}
+                </button>
+                <button
+                  type="button"
+                  disabled={verifyingId === m.player_id}
+                  onClick={() => onVerify(m.player_id, false)}
+                  className="inline-flex items-center rounded-md bg-slate-200 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SeasonsTab ───────────────────────────────────────────────────────────────
+
+type SeasonRowItem = {
+  season_id: number;
+  name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  registration_fee?: number | null;
+  registration_status: string;
+  status: string;
+  created_at: string;
+};
+
+function SeasonsTab({
+  seasons,
+  loading,
+  updatingSeasonId,
+  newSeasonName, setNewSeasonName,
+  newSeasonStart, setNewSeasonStart,
+  newSeasonEnd, setNewSeasonEnd,
+  newSeasonFee, setNewSeasonFee,
+  newSeasonRegStatus, setNewSeasonRegStatus,
+  newSeasonStatus, setNewSeasonStatus,
+  creating,
+  error,
+  success,
+  onCreate,
+  onToggleReg,
+}: {
+  seasons: SeasonRowItem[];
+  loading: boolean;
+  updatingSeasonId: number | null;
+  newSeasonName: string; setNewSeasonName: (v: string) => void;
+  newSeasonStart: string; setNewSeasonStart: (v: string) => void;
+  newSeasonEnd: string; setNewSeasonEnd: (v: string) => void;
+  newSeasonFee: string; setNewSeasonFee: (v: string) => void;
+  newSeasonRegStatus: "open" | "closed"; setNewSeasonRegStatus: (v: "open" | "closed") => void;
+  newSeasonStatus: "upcoming" | "ongoing" | "completed"; setNewSeasonStatus: (v: "upcoming" | "ongoing" | "completed") => void;
+  creating: boolean;
+  error: string | null;
+  success: string | null;
+  onCreate: () => void;
+  onToggleReg: (s: SeasonRowItem) => void;
+}) {
+  const inputCls = "mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-slate-900 dark:text-slate-100 text-sm";
+  const labelCls = "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide";
+
+  const regBadge = (status: string) =>
+    status === "open"
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+
+  const statusBadge = (s: string) => {
+    if (s === "ongoing")   return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
+    if (s === "completed") return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+    return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-6 text-sm">
+
+      {/* ── Existing seasons ── */}
+      <div>
+        <div className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-3">
+          All Seasons
+        </div>
+        {loading ? (
+          <div className="text-slate-500 animate-pulse">Loading…</div>
+        ) : seasons.length === 0 ? (
+          <p className="text-slate-500 dark:text-slate-400">No seasons yet. Create one below.</p>
+        ) : (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            {seasons.map((s) => {
+              const label = s.name ?? `Season ${s.season_id}`;
+              return (
+                <div key={s.season_id} className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">{label}</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+                      {s.start_date && s.end_date
+                        ? `${s.start_date} → ${s.end_date}`
+                        : "Dates TBD"}
+                      {s.registration_fee != null && ` · ₱${s.registration_fee.toLocaleString()}`}
+                    </p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${statusBadge(s.status)}`}>
+                    {s.status}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${regBadge(s.registration_status)}`}>
+                    Reg: {s.registration_status}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={updatingSeasonId === s.season_id}
+                    onClick={() => onToggleReg(s)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 text-slate-700 dark:text-slate-300"
+                  >
+                    {updatingSeasonId === s.season_id
+                      ? "…"
+                      : s.registration_status === "open"
+                      ? "Close Registration"
+                      : "Open Registration"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Create season ── */}
+      <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
+        <div className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">
+          Create Season
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label className={labelCls}>Name (optional)</label>
+            <input type="text" className={inputCls} placeholder="e.g. Season 11"
+              value={newSeasonName} onChange={(e) => setNewSeasonName(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Start Date</label>
+            <input type="date" className={inputCls}
+              value={newSeasonStart} onChange={(e) => setNewSeasonStart(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>End Date</label>
+            <input type="date" className={inputCls}
+              value={newSeasonEnd} onChange={(e) => setNewSeasonEnd(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Registration Fee (₱)</label>
+            <input type="number" className={inputCls} placeholder="1000"
+              value={newSeasonFee} onChange={(e) => setNewSeasonFee(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Registration</label>
+            <select className={inputCls}
+              value={newSeasonRegStatus}
+              onChange={(e) => setNewSeasonRegStatus(e.target.value as "open" | "closed")}>
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Status</label>
+            <select className={inputCls}
+              value={newSeasonStatus}
+              onChange={(e) => setNewSeasonStatus(e.target.value as "upcoming" | "ongoing" | "completed")}>
+              <option value="upcoming">Upcoming</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-3 rounded bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-rose-700 dark:text-rose-300 text-xs">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mt-3 rounded bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-emerald-700 dark:text-emerald-300 text-xs">
+            ✓ {success}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={creating || !newSeasonStart || !newSeasonEnd}
+          className="mt-4 inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {creating ? "Creating…" : "Create Season"}
+        </button>
+      </div>
+    </div>
   );
 }
 
