@@ -50,7 +50,7 @@ const SPONSORS = [
   { name: "SPONSOR D", tagline: "Community Partner" },
 ];
 
-const WEBSITE_VERSION = "v1.1.0";
+const WEBSITE_VERSION = "0.6.0";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -325,9 +325,12 @@ export default function HomePage() {
 
           {/* Desktop links */}
           <div className="hidden md:flex items-center gap-10 font-bold text-[11px] uppercase tracking-[0.2em] text-[#687FA3]">
-            <span className="text-white border-b-2 border-[#00C8DC] pb-1 cursor-default">
-              Home
-            </span>
+            <Link
+              href="/matches"
+              className="hover:text-[#00C8DC] transition-colors"
+            >
+              Calendar
+            </Link>
             <Link
               href="/players"
               className="hover:text-[#00C8DC] transition-colors"
@@ -339,12 +342,6 @@ export default function HomePage() {
               className="hover:text-[#00C8DC] transition-colors"
             >
               Leaderboard
-            </Link>
-            <Link
-              href="/matches"
-              className="hover:text-[#00C8DC] transition-colors"
-            >
-              Calendar
             </Link>
             {authUser ? (
               <Link
@@ -373,6 +370,12 @@ export default function HomePage() {
 
           {/* Mobile links */}
           <div className="flex md:hidden items-center gap-5 font-bold text-[10px] uppercase tracking-[0.15em] text-[#687FA3]">
+            <Link
+              href="/matches"
+              className="hover:text-[#00C8DC] transition-colors"
+            >
+              Calendar
+            </Link>
             <Link
               href="/players"
               className="hover:text-[#00C8DC] transition-colors"
