@@ -2,19 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  Users,
-  ChevronRight,
-  Sword,
-  Zap,
-  Flame,
-  Crown,
-  Share2,
-  Shield,
-} from "lucide-react";
+import { Users, ChevronRight, Sword, Zap, Flame, Shield } from "lucide-react";
+import MatchCard from "@/components/MatchCard";
+import TopPlayersTable from "@/components/TopPlayersTable";
 import { supabase } from "@/lib/supabase";
 import { MatchWithTeams, MatchSet, Player } from "@/lib/types";
-import { formatMatchDate } from "@/lib/utils";
 import type { User } from "@supabase/supabase-js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -29,7 +21,12 @@ type LeagueStats = {
 type TopPlayer = {
   player_id: string;
   name: string;
+  nickname?: string | null;
+  image_link?: string | null;
+  latest_match_date?: string | null;
   wins: number;
+  sets_won: number;
+  sets_lost: number;
   matches_played: number;
   latest_rating: number | null;
 };
@@ -42,27 +39,6 @@ type MatchTeamRow = {
   player_1: Player | null;
   player_2: Player | null;
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getMatchScore(match: MatchWithTeams): string {
-  const t1 = match.teams.find((t) => t.team_number === 1);
-  const t2 = match.teams.find((t) => t.team_number === 2);
-  if (!t1 || !t2) return "–";
-  return `${t1.sets_won ?? 0} – ${t2.sets_won ?? 0}`;
-}
-
-function getTeamLabel(match: MatchWithTeams, teamNumber: 1 | 2): string {
-  const team = match.teams.find((t) => t.team_number === teamNumber);
-  if (!team) return "TBD";
-  const parts = [team.player_1?.name, team.player_2?.name].filter(Boolean);
-  return parts.join(" & ") || "TBD";
-}
-
-function getSetScores(match: MatchWithTeams): string {
-  if (!match.sets || match.sets.length === 0) return "";
-  return match.sets.map((s) => `${s.team_1_games}‑${s.team_2_games}`).join("  ");
-}
 
 // ─── Sponsor placeholder data ─────────────────────────────────────────────────
 
@@ -83,6 +59,16 @@ export default function HomePage() {
   const [lastSeason, setLastSeason] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [authUser, setAuthUser] = useState<User | null>(null);
+
+  const handleGoogleSignIn = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/`,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+  };
 
   // Sticky nav shadow
   useEffect(() => {
@@ -189,26 +175,85 @@ export default function HomePage() {
 
       // ── 3. Top players of last season (by rating) ────────────────────────
       if (latestSeason !== null) {
-        const { data: lbData } = await supabase.rpc("get_leaderboard_ratings", {
-          season_filter: latestSeason,
-          type_filter: null,
-          formula_filter: null,
-          min_matches: 3,
-        });
+        const minGames = 5;
+        const seasonTypes = ["group", "semis", "finals"];
+        const rpcResults = await Promise.all(
+          seasonTypes.map((type) =>
+            supabase.rpc("get_leaderboard_ratings", {
+              season_filter: latestSeason,
+              type_filter: type,
+              formula_filter: null,
+              min_matches: 1,
+            }),
+          ),
+        );
 
-        if (lbData && !cancelled) {
-          const top5: TopPlayer[] = (lbData as any[])
-            .slice(0, 5)
-            .map((row) => ({
-              player_id: String(row.player_id),
-              name: row.name ?? "Unknown",
-              wins: Number(row.wins ?? 0),
-              matches_played: Number(row.matches_played ?? 0),
-              latest_rating:
-                row.latest_rating !== null && row.latest_rating !== undefined
-                  ? Number(row.latest_rating)
-                  : null,
-            }));
+        const combinedRows = rpcResults.flatMap((result) => result.data ?? []);
+
+        if (combinedRows.length > 0 && !cancelled) {
+          const playerMap = new Map<string, any>();
+
+          for (const row of combinedRows as any[]) {
+            const playerId = String(row.player_id);
+            const existing = playerMap.get(playerId);
+
+            if (existing) {
+              existing.matches_played += Number(row.matches_played ?? 0);
+              existing.wins += Number(row.wins ?? 0);
+              existing.sets_won += Number(row.sets_won ?? 0);
+              existing.sets_lost += Number(row.sets_lost ?? 0);
+
+              const existingDate = Date.parse(existing.latest_match_date ?? "");
+              const incomingDate = Date.parse(row.latest_match_date ?? "");
+              if (
+                Number.isFinite(incomingDate) &&
+                (!Number.isFinite(existingDate) || incomingDate >= existingDate)
+              ) {
+                existing.latest_match_date = row.latest_match_date ?? null;
+                existing.latest_rating =
+                  row.latest_rating !== null && row.latest_rating !== undefined
+                    ? Number(row.latest_rating)
+                    : existing.latest_rating;
+              }
+            } else {
+              playerMap.set(playerId, {
+                player_id: playerId,
+                name: row.name ?? "Unknown",
+                nickname: row.nickname ?? null,
+                image_link: row.image_link ?? null,
+                latest_match_date: row.latest_match_date ?? null,
+                wins: Number(row.wins ?? 0),
+                sets_won: Number(row.sets_won ?? 0),
+                sets_lost: Number(row.sets_lost ?? 0),
+                matches_played: Number(row.matches_played ?? 0),
+                latest_rating:
+                  row.latest_rating !== null && row.latest_rating !== undefined
+                    ? Number(row.latest_rating)
+                    : null,
+              });
+            }
+          }
+
+          const top5: TopPlayer[] = Array.from(playerMap.values())
+            .filter((player) => player.matches_played >= minGames)
+            .sort((a, b) => {
+              const winRateA =
+                a.matches_played > 0 ? a.wins / a.matches_played : 0;
+              const winRateB =
+                b.matches_played > 0 ? b.wins / b.matches_played : 0;
+              if (winRateB !== winRateA) return winRateB - winRateA;
+              if (b.wins !== a.wins) return b.wins - a.wins;
+              if (b.sets_won !== a.sets_won) return b.sets_won - a.sets_won;
+              if (a.sets_lost !== b.sets_lost) return a.sets_lost - b.sets_lost;
+              if (b.matches_played !== a.matches_played) {
+                return b.matches_played - a.matches_played;
+              }
+              const ratingA = a.latest_rating ?? Number.NEGATIVE_INFINITY;
+              const ratingB = b.latest_rating ?? Number.NEGATIVE_INFINITY;
+              return ratingB - ratingA;
+            })
+            .slice(0, 5);
+
           setTopPlayers(top5);
         }
       }
@@ -231,7 +276,8 @@ export default function HomePage() {
     },
     {
       label: "MATCHES",
-      value: stats?.completedMatches != null ? String(stats.completedMatches) : "–",
+      value:
+        stats?.completedMatches != null ? String(stats.completedMatches) : "–",
       icon: Sword,
     },
     {
@@ -248,7 +294,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#0E1523] text-white font-sans selection:bg-[#00C8DC] selection:text-[#0E1523]">
-
       {/* ── Navigation ───────────────────────────────────────────────────── */}
       <nav
         className={`fixed w-full z-50 transition-all duration-500 ${
@@ -280,14 +325,23 @@ export default function HomePage() {
             <span className="text-white border-b-2 border-[#00C8DC] pb-1 cursor-default">
               Home
             </span>
-            <Link href="/players" className="hover:text-[#00C8DC] transition-colors">
+            <Link
+              href="/players"
+              className="hover:text-[#00C8DC] transition-colors"
+            >
               Players
             </Link>
-            <Link href="/leaderboard" className="hover:text-[#00C8DC] transition-colors">
+            <Link
+              href="/leaderboard"
+              className="hover:text-[#00C8DC] transition-colors"
+            >
               Leaderboard
             </Link>
-            <Link href="/admin" className="hover:text-[#00C8DC] transition-colors">
-              Admin
+            <Link
+              href="/matches"
+              className="hover:text-[#00C8DC] transition-colors"
+            >
+              Calendar
             </Link>
             {authUser ? (
               <Link
@@ -305,31 +359,43 @@ export default function HomePage() {
                 My Dashboard
               </Link>
             ) : (
-              <Link
-                href="/register"
+              <button
+                onClick={handleGoogleSignIn}
                 className="bg-[#00C8DC] text-[#0E1523] px-4 py-2 rounded-full hover:bg-white transition-all"
               >
                 Sign In
-              </Link>
+              </button>
             )}
           </div>
 
           {/* Mobile links */}
           <div className="flex md:hidden items-center gap-5 font-bold text-[10px] uppercase tracking-[0.15em] text-[#687FA3]">
-            <Link href="/players" className="hover:text-[#00C8DC] transition-colors">
+            <Link
+              href="/players"
+              className="hover:text-[#00C8DC] transition-colors"
+            >
               Players
             </Link>
-            <Link href="/leaderboard" className="hover:text-[#00C8DC] transition-colors">
+            <Link
+              href="/leaderboard"
+              className="hover:text-[#00C8DC] transition-colors"
+            >
               Board
             </Link>
             {authUser ? (
-              <Link href="/dashboard" className="text-[#00C8DC] hover:text-white transition-colors">
+              <Link
+                href="/dashboard"
+                className="text-[#00C8DC] hover:text-white transition-colors"
+              >
                 Me
               </Link>
             ) : (
-              <Link href="/register" className="text-[#00C8DC] hover:text-white transition-colors">
+              <button
+                onClick={handleGoogleSignIn}
+                className="text-[#00C8DC] hover:text-white transition-colors"
+              >
                 Join
-              </Link>
+              </button>
             )}
           </div>
         </div>
@@ -343,11 +409,6 @@ export default function HomePage() {
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-gradient-to-t from-[#0E1523] via-[#0E1523]/60 to-transparent z-10" />
           <div className="absolute inset-0 bg-[#0E1523]/40 z-10" />
-          <img
-            src="https://images.unsplash.com/photo-1599423300746-b625028aa721?q=80&w=2070&auto=format&fit=crop"
-            className="w-full h-full object-cover opacity-30 grayscale-[0.5]"
-            alt="Padel Court"
-          />
         </div>
 
         {/* Hero content — fills available height, centers text vertically */}
@@ -355,14 +416,16 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full pt-24">
             <div className="max-w-3xl space-y-4 md:space-y-6">
               <div className="inline-block bg-[#00C8DC]/10 text-[#00C8DC] px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase">
-                {stats?.latestSeason ? `Season ${stats.latestSeason} · Now Live` : "Philippines' Premier Circuit"}
+                {stats?.latestSeason
+                  ? `Season ${stats.latestSeason} · Now Live`
+                  : "Philippines' Premier Circuit"}
               </div>
               <h1 className="text-5xl sm:text-7xl md:text-[9rem] font-black italic leading-[0.85] tracking-tighter uppercase">
-                Padel League{" "}
-                <span className="text-[#00C8DC]">PH.</span>
+                Padel League <span className="text-[#00C8DC]">PH.</span>
               </h1>
               <p className="text-base md:text-xl text-[#687FA3] font-medium leading-relaxed max-w-xl">
-                Track every match, climb the rankings, and follow the best padel players in the Philippines.
+                Track every match, climb the rankings, and follow the best padel
+                players in the Philippines.
               </p>
               <div className="flex flex-wrap gap-3 md:gap-4 pt-2 md:pt-4 pb-12 md:pb-16">
                 <Link
@@ -380,12 +443,12 @@ export default function HomePage() {
                     MY DASHBOARD
                   </Link>
                 ) : (
-                  <Link
-                    href="/register"
+                  <button
+                    onClick={handleGoogleSignIn}
                     className="bg-[#162032] border border-[#687FA3]/20 text-white px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:border-[#00C8DC] transition-all"
                   >
                     JOIN THE LEAGUE
-                  </Link>
+                  </button>
                 )}
               </div>
             </div>
@@ -402,7 +465,9 @@ export default function HomePage() {
               >
                 <div className="text-3xl md:text-4xl font-black mb-1 tracking-tighter group-hover:text-[#00C8DC] transition-colors">
                   {loading ? (
-                    <span className="text-[#687FA3] text-xl animate-pulse">...</span>
+                    <span className="text-[#687FA3] text-xl animate-pulse">
+                      ...
+                    </span>
                   ) : (
                     stat.value
                   )}
@@ -440,78 +505,14 @@ export default function HomePage() {
               ))}
             </div>
           ) : recentMatches.length === 0 ? (
-            <p className="text-[#687FA3] text-sm font-medium">No completed matches yet.</p>
+            <p className="text-[#687FA3] text-sm font-medium">
+              No completed matches yet.
+            </p>
           ) : (
             <div className="space-y-3">
-              {recentMatches.map((match) => {
-                const isWinnerTeam1 = match.winner_team === 1;
-                const setScores = getSetScores(match);
-
-                return (
-                  <div
-                    key={match.match_id}
-                    className="bg-[#162032]/50 border border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 md:p-6 transition-all duration-300"
-                  >
-                    {/* Meta row */}
-                    <div className="flex flex-wrap items-center gap-2 mb-4">
-                      <span className="text-[#687FA3] text-[10px] font-black uppercase tracking-widest">
-                        {formatMatchDate(match.date_local)}
-                      </span>
-                      {match.season_id && (
-                        <span className="bg-[#00C8DC]/10 text-[#00C8DC] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-                          S{match.season_id}
-                        </span>
-                      )}
-                      {match.type && (
-                        <span className="bg-[#687FA3]/10 text-[#687FA3] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-                          {match.type}
-                        </span>
-                      )}
-                      {match.venue && (
-                        <span className="text-[#687FA3]/50 text-[10px] font-bold ml-auto hidden md:block">
-                          {match.venue}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Teams vs score */}
-                    <div className="flex items-center gap-3 md:gap-6">
-                      <div className={`flex-1 text-right ${isWinnerTeam1 ? "text-white" : "text-[#687FA3]"}`}>
-                        <div className="font-black text-sm md:text-base leading-tight">
-                          {getTeamLabel(match, 1)}
-                        </div>
-                        {isWinnerTeam1 && (
-                          <div className="text-[#00C8DC] text-[9px] font-black uppercase tracking-widest mt-0.5">
-                            Winner
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col items-center shrink-0">
-                        <div className="bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2 font-black text-lg md:text-xl tracking-tighter text-[#00C8DC]">
-                          {getMatchScore(match)}
-                        </div>
-                        {setScores && (
-                          <div className="text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
-                            {setScores}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className={`flex-1 ${!isWinnerTeam1 ? "text-white" : "text-[#687FA3]"}`}>
-                        <div className="font-black text-sm md:text-base leading-tight">
-                          {getTeamLabel(match, 2)}
-                        </div>
-                        {!isWinnerTeam1 && match.winner_team !== null && (
-                          <div className="text-[#00C8DC] text-[9px] font-black uppercase tracking-widest mt-0.5">
-                            Winner
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {recentMatches.map((match) => (
+                <MatchCard key={match.match_id} match={match} />
+              ))}
             </div>
           )}
         </div>
@@ -538,70 +539,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="bg-[#162032]/50 border border-[#687FA3]/10 rounded-3xl overflow-hidden backdrop-blur-sm">
-            {loading ? (
-              <div className="p-12 flex items-center justify-center">
-                <span className="text-[#687FA3] text-sm font-bold uppercase tracking-widest animate-pulse">
-                  Loading rankings...
-                </span>
-              </div>
-            ) : topPlayers.length === 0 ? (
-              <div className="p-12 text-center text-[#687FA3] text-sm font-medium">
-                No ranking data available.
-              </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-[#687FA3]/10 text-[#687FA3] text-[10px] font-black tracking-[0.2em] uppercase">
-                    <th className="px-6 md:px-8 py-5">#</th>
-                    <th className="px-6 md:px-8 py-5">Player</th>
-                    <th className="px-6 md:px-8 py-5 text-center hidden sm:table-cell">W</th>
-                    <th className="px-6 md:px-8 py-5 text-center hidden sm:table-cell">Played</th>
-                    <th className="px-6 md:px-8 py-5 text-right">Rating</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topPlayers.map((player, index) => (
-                    <tr
-                      key={player.player_id}
-                      className="border-b border-[#687FA3]/5 hover:bg-[#00C8DC]/5 transition-colors"
-                    >
-                      <td className="px-6 md:px-8 py-5 font-black text-[#00C8DC] italic text-lg">
-                        {index === 0 ? (
-                          <Crown className="w-5 h-5 text-amber-400 inline" />
-                        ) : (
-                          index + 1
-                        )}
-                      </td>
-                      <td className="px-6 md:px-8 py-5">
-                        <Link
-                          href={`/players?playerId=${encodeURIComponent(player.player_id)}`}
-                          className="font-bold hover:text-[#00C8DC] transition-colors"
-                        >
-                          {player.name}
-                        </Link>
-                      </td>
-                      <td className="px-6 md:px-8 py-5 text-center text-[#687FA3] font-mono hidden sm:table-cell">
-                        {player.wins}
-                      </td>
-                      <td className="px-6 md:px-8 py-5 text-center text-[#687FA3] font-mono hidden sm:table-cell">
-                        {player.matches_played}
-                      </td>
-                      <td className="px-6 md:px-8 py-5 text-right font-mono font-black text-[#00C8DC] tracking-tighter">
-                        {player.latest_rating !== null ? (
-                          <span className="bg-[#00C8DC]/10 px-3 py-1 rounded-md">
-                            {player.latest_rating.toFixed(0)}
-                          </span>
-                        ) : (
-                          <span className="text-[#687FA3]">–</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          <TopPlayersTable rows={topPlayers} loading={loading} />
         </div>
       </section>
 
@@ -648,24 +586,24 @@ export default function HomePage() {
           </div>
 
           <div className="flex gap-8 text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
-            <Link href="/leaderboard" className="hover:text-white transition-colors">
+            <Link
+              href="/leaderboard"
+              className="hover:text-white transition-colors"
+            >
               Leaderboard
             </Link>
-            <Link href="/players" className="hover:text-white transition-colors">
+            <Link
+              href="/players"
+              className="hover:text-white transition-colors"
+            >
               Players
             </Link>
-            <Link href="/admin" className="hover:text-white transition-colors">
-              Admin
+            <Link
+              href="/matches"
+              className="hover:text-white transition-colors"
+            >
+              Calendar
             </Link>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="w-10 h-10 border border-[#687FA3]/20 rounded-full flex items-center justify-center hover:bg-[#00C8DC] hover:text-[#0E1523] transition-all cursor-pointer">
-              <Share2 size={16} />
-            </div>
-            <div className="w-10 h-10 border border-[#687FA3]/20 rounded-full flex items-center justify-center hover:bg-[#00C8DC] hover:text-[#0E1523] transition-all cursor-pointer">
-              <Share2 size={16} />
-            </div>
           </div>
         </div>
 

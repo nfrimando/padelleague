@@ -35,7 +35,7 @@ export default function MatchesPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-4">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Match Calendar
+            Calendar
           </h1>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
             Click/Hover match to view details
