@@ -156,7 +156,11 @@ export default function PlayerCard({
         isMatchCompact
           ? "flex flex-col items-center gap-2 w-[72px] lg:w-[140px]"
           : "flex items-center gap-4 flex-1"
-      } ${highlight ? "ring-2 ring-blue-400 dark:ring-blue-500 bg-blue-50 dark:bg-blue-900/30" : ""}`}
+      } ${
+        highlight
+          ? "ring-2 ring-blue-400 dark:ring-blue-500 bg-blue-50 dark:bg-blue-900/30"
+          : "bg-white text-slate-900 dark:bg-slate-900/40 dark:text-slate-100"
+      }`}
     >
       {playerHref ? (
         <Link
