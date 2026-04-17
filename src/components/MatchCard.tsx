@@ -64,6 +64,25 @@ function PlayerAvatar({
   );
 }
 
+function TeamAvatarStack({
+  player1,
+  player2,
+}: {
+  player1: MatchWithTeams["teams"][number]["player_1"] | undefined;
+  player2: MatchWithTeams["teams"][number]["player_2"] | undefined;
+}) {
+  return (
+    <div className="relative h-7 w-7 shrink-0">
+      <div className="absolute left-0 top-0">
+        <PlayerAvatar player={player1} />
+      </div>
+      <div className="absolute bottom-0 right-0">
+        <PlayerAvatar player={player2} />
+      </div>
+    </div>
+  );
+}
+
 function TeamLabel({
   team,
   selectedPlayerId,
@@ -170,12 +189,12 @@ export default function MatchCard({
       {/* Teams vs score */}
       <div className="flex items-center gap-3 md:gap-6">
         <div className={`flex-1 text-right ${leftTeamClass}`}>
-          <div className="flex flex-col items-end justify-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
-            <div className="flex flex-col items-end gap-1 sm:inline-flex sm:flex-row sm:items-center sm:-space-x-1.5 sm:gap-0">
-              <PlayerAvatar player={team1?.player_1} />
-              <PlayerAvatar player={team1?.player_2} />
-            </div>
-            <div className="font-black text-sm md:text-base leading-tight max-w-full">
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+            <TeamAvatarStack
+              player1={team1?.player_1}
+              player2={team1?.player_2}
+            />
+            <div className="min-w-0 font-black text-xs sm:text-sm md:text-base leading-tight max-w-full">
               <TeamLabel team={team1} selectedPlayerId={selectedPlayerId} />
             </div>
           </div>
@@ -203,12 +222,12 @@ export default function MatchCard({
         </div>
 
         <div className={`flex-1 ${rightTeamClass}`}>
-          <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2">
-            <div className="flex flex-col items-start gap-1 sm:inline-flex sm:flex-row sm:items-center sm:-space-x-1.5 sm:gap-0">
-              <PlayerAvatar player={team2?.player_1} />
-              <PlayerAvatar player={team2?.player_2} />
-            </div>
-            <div className="font-black text-sm md:text-base leading-tight max-w-full">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <TeamAvatarStack
+              player1={team2?.player_1}
+              player2={team2?.player_2}
+            />
+            <div className="min-w-0 font-black text-xs sm:text-sm md:text-base leading-tight max-w-full">
               <TeamLabel team={team2} selectedPlayerId={selectedPlayerId} />
             </div>
           </div>
