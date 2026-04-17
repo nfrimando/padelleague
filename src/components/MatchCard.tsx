@@ -1,156 +1,203 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { formatMatchDate, formatMatchTime } from "@/lib/utils";
 import { MatchWithTeams } from "@/lib/types";
-import TeamCard from "./TeamCard";
 
 interface MatchCardProps {
   match: MatchWithTeams;
   highlightPlayerId?: string | number;
 }
 
+function PlayerNamePart({
+  player,
+  selectedPlayerId,
+}: {
+  player: MatchWithTeams["teams"][number]["player_1"] | null | undefined;
+  selectedPlayerId: string | null;
+}) {
+  const name = player?.name || "TBD";
+  const isSelected =
+    selectedPlayerId !== null &&
+    player?.player_id !== null &&
+    player?.player_id !== undefined &&
+    String(player.player_id) === selectedPlayerId;
+  const baseClass = isSelected
+    ? "text-[#00C8DC]"
+    : "hover:text-[#00C8DC] transition-colors";
+
+  if (player?.player_id === null || player?.player_id === undefined) {
+    return <span>{name}</span>;
+  }
+
+  return (
+    <Link
+      href={`/players?playerId=${encodeURIComponent(String(player.player_id))}`}
+      className={baseClass}
+    >
+      {name}
+    </Link>
+  );
+}
+
+function PlayerAvatar({
+  player,
+}: {
+  player: MatchWithTeams["teams"][number]["player_1"] | undefined;
+}) {
+  const name = player?.nickname || player?.name || "?";
+
+  if (player?.image_link) {
+    return (
+      <img
+        src={player.image_link}
+        alt={name}
+        className="w-5 h-5 rounded-full object-cover border border-[#687FA3]/40"
+      />
+    );
+  }
+
+  return (
+    <span className="inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold bg-[#1e2d45] text-[#687FA3] border border-[#687FA3]/40">
+      {name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+function TeamLabel({
+  team,
+  selectedPlayerId,
+}: {
+  team: MatchWithTeams["teams"][number] | undefined;
+  selectedPlayerId: string | null;
+}) {
+  if (!team) return <span>TBD</span>;
+
+  return (
+    <>
+      <PlayerNamePart
+        player={team.player_1}
+        selectedPlayerId={selectedPlayerId}
+      />
+      <span> & </span>
+      <PlayerNamePart
+        player={team.player_2}
+        selectedPlayerId={selectedPlayerId}
+      />
+    </>
+  );
+}
+
+function getSetScores(match: MatchWithTeams): string {
+  if (!match.sets || match.sets.length === 0) return "";
+  return match.sets
+    .map((s) => `${s.team_1_games}-${s.team_2_games}`)
+    .join("  ");
+}
+
 export default function MatchCard({
   match,
   highlightPlayerId,
 }: MatchCardProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const statusLabel = String(match.status || "completed").toUpperCase();
-  const statusBadgeClass =
-    match.status === "scheduled"
-      ? "text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/40"
-      : match.status === "forfeit"
-        ? "text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40"
-        : match.status === "cancelled"
-          ? "text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700"
-          : "text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40";
-  const statusCardClass =
-    match.status === "scheduled"
-      ? "border-sky-300 dark:border-sky-700 ring-1 ring-sky-200 dark:ring-sky-900/60"
-      : match.status === "forfeit"
-        ? "border-red-300 dark:border-red-700 ring-1 ring-red-200 dark:ring-red-900/60"
-        : match.status === "cancelled"
-          ? "border-slate-300 dark:border-slate-600 ring-1 ring-slate-200 dark:ring-slate-800"
-          : "border-emerald-300 dark:border-emerald-700 ring-1 ring-emerald-200 dark:ring-emerald-900/60";
   const team1 = match.teams.find((t) => t.team_number === 1);
   const team2 = match.teams.find((t) => t.team_number === 2);
+  const isWinnerTeam1 = match.winner_team === 1;
+  const setScores = getSetScores(match);
+  const selectedPlayerId =
+    highlightPlayerId !== undefined && highlightPlayerId !== null
+      ? String(highlightPlayerId)
+      : null;
+  const team1HasSelectedPlayer =
+    selectedPlayerId !== null &&
+    !!team1 &&
+    (String(team1.player_1?.player_id) === selectedPlayerId ||
+      String(team1.player_2?.player_id) === selectedPlayerId);
+  const team2HasSelectedPlayer =
+    selectedPlayerId !== null &&
+    !!team2 &&
+    (String(team2.player_1?.player_id) === selectedPlayerId ||
+      String(team2.player_2?.player_id) === selectedPlayerId);
 
   return (
-    <div
-      key={match.match_id}
-      className={`border rounded-lg shadow p-4 bg-white dark:bg-gray-800 ${statusCardClass}`}
-    >
-      <div className="flex justify-between items-center mb-2">
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          {formatMatchDate(match.date_local)}{" "}
-          {formatMatchTime(match.time_local)}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {match.venue || "N/A"}
-          </div>
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-            aria-label={
-              isExpanded ? "Collapse match details" : "Expand match details"
-            }
-          >
-            {isExpanded ? (
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 15l7-7 7 7"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-2 flex items-center gap-2">
-        <span className="font-semibold">
-          {(match.type || "Match").charAt(0).toUpperCase() +
-            (match.type || "Match").slice(1)}
+    <div className="bg-[#162032]/50 border border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 md:p-6 transition-all duration-300">
+      {/* Meta row */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-[#687FA3] text-[10px] font-black uppercase tracking-widest">
+          {formatMatchDate(match.date_local)}
         </span>
-        {match.season_id !== null && (
-          <span className="text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 rounded-full">
-            Season {match.season_id}
+        {match.season_id && (
+          <span className="bg-[#00C8DC]/10 text-[#00C8DC] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
+            S{match.season_id}
           </span>
         )}
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
-          Match #{match.match_id}
-        </span>
-        <span
-          className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusBadgeClass}`}
-        >
-          {statusLabel}
-        </span>
+        {match.type && (
+          <span className="bg-[#687FA3]/10 text-[#687FA3] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
+            {match.type}
+          </span>
+        )}
+        {match.venue && (
+          <span className="text-[#687FA3]/50 text-[10px] font-bold ml-auto hidden md:block">
+            {match.venue}
+          </span>
+        )}
       </div>
 
-      {isExpanded && (
-        <>
-          {match.teams.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 text-center text-sm text-slate-600 dark:text-slate-400">
-              Teams not yet assigned
+      {/* Teams vs score */}
+      <div className="flex items-center gap-3 md:gap-6">
+        <div
+          className={`flex-1 text-right ${isWinnerTeam1 ? "text-white" : "text-[#687FA3]"}`}
+        >
+          <div className="flex items-center justify-end gap-2">
+            <div className="inline-flex items-center -space-x-1.5">
+              <PlayerAvatar player={team1?.player_1} />
+              <PlayerAvatar player={team1?.player_2} />
             </div>
-          ) : (
-            <div className="flex items-stretch justify-center gap-1.5 lg:gap-3 pb-1">
-              {/* Team 1 */}
-              <TeamCard
-                team={team1}
-                isWinner={match.winner_team === 1}
-                highlightPlayerId={highlightPlayerId}
-              />
-
-              <div className="flex flex-col items-center justify-center px-1 lg:px-2 min-w-[72px] lg:min-w-[124px]">
-                <div className="text-xs lg:text-base font-bold text-blue-600 dark:text-blue-400 mb-1 px-1.5 lg:px-2.5 py-0.5 lg:py-1 bg-blue-50 dark:bg-blue-900/20 rounded">
-                  {team1?.sets_won ?? 0} - {team2?.sets_won ?? 0}
-                </div>
-                <div className="text-[10px] lg:text-[11px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-300 mb-1">
-                  VS
-                </div>
-                {/* Game Scores */}
-                {match.sets && match.sets.length > 0 && (
-                  <div className="text-[10px] lg:text-[11px] text-center text-slate-600 dark:text-slate-400 leading-tight">
-                    {match.sets
-                      .map((set) => `${set.team_1_games}-${set.team_2_games}`)
-                      .join(", ")}
-                  </div>
-                )}
-              </div>
-
-              {/* Team 2 */}
-              <TeamCard
-                team={team2}
-                isWinner={match.winner_team === 2}
-                highlightPlayerId={highlightPlayerId}
-              />
+            <div className="font-black text-sm md:text-base leading-tight">
+              <TeamLabel team={team1} selectedPlayerId={selectedPlayerId} />
+            </div>
+          </div>
+          {isWinnerTeam1 && (
+            <div className="text-[#00C8DC] text-[9px] font-black uppercase tracking-widest mt-0.5">
+              Winner
             </div>
           )}
-        </>
-      )}
+        </div>
+
+        <div className="flex flex-col items-center shrink-0">
+          <div className="bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2 font-black text-lg md:text-xl tracking-tighter text-[#00C8DC]">
+            {`${team1?.sets_won ?? 0} - ${team2?.sets_won ?? 0}`}
+          </div>
+          {setScores && (
+            <div className="text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
+              {setScores}
+            </div>
+          )}
+          {!setScores && match.time_local && (
+            <div className="text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
+              {formatMatchTime(match.time_local)}
+            </div>
+          )}
+        </div>
+
+        <div
+          className={`flex-1 ${!isWinnerTeam1 ? "text-white" : "text-[#687FA3]"}`}
+        >
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center -space-x-1.5">
+              <PlayerAvatar player={team2?.player_1} />
+              <PlayerAvatar player={team2?.player_2} />
+            </div>
+            <div className="font-black text-sm md:text-base leading-tight">
+              <TeamLabel team={team2} selectedPlayerId={selectedPlayerId} />
+            </div>
+          </div>
+          {!isWinnerTeam1 && match.winner_team !== null && (
+            <div className="text-[#00C8DC] text-[9px] font-black uppercase tracking-widest mt-0.5">
+              Winner
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

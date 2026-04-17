@@ -46,7 +46,7 @@ export default function PlayerSearchBox({
       <input
         type="text"
         placeholder={placeholder}
-        className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-10 rounded"
+        className="w-full border border-slate-300 dark:border-slate-700 bg-white text-slate-900 placeholder:text-slate-400 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 px-3 py-2 pr-10 rounded"
         value={value}
         onKeyDown={(e) => {
           if (!shouldShowDropdown) {

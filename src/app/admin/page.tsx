@@ -144,8 +144,12 @@ function AdminPageContent() {
   const [newSeasonStart, setNewSeasonStart] = useState("");
   const [newSeasonEnd, setNewSeasonEnd] = useState("");
   const [newSeasonFee, setNewSeasonFee] = useState("1000");
-  const [newSeasonRegStatus, setNewSeasonRegStatus] = useState<"open" | "closed">("open");
-  const [newSeasonStatus, setNewSeasonStatus] = useState<"upcoming" | "ongoing" | "completed">("upcoming");
+  const [newSeasonRegStatus, setNewSeasonRegStatus] = useState<
+    "open" | "closed"
+  >("open");
+  const [newSeasonStatus, setNewSeasonStatus] = useState<
+    "upcoming" | "ongoing" | "completed"
+  >("upcoming");
   const [creatingSeasonLoading, setCreatingSeasonLoading] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
   const [seasonSuccess, setSeasonSuccess] = useState<string | null>(null);
@@ -794,7 +798,9 @@ function AdminPageContent() {
           setMembersLoading(false);
         }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [isAdmin, activePlayerTab]);
 
   // ── Load seasons when SEASONS tab is active ───────────────────────────────
@@ -812,7 +818,9 @@ function AdminPageContent() {
           setSeasonsLoading(false);
         }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [isAdmin, activePlayerTab]);
 
   const handleVerifyMember = async (
@@ -836,7 +844,9 @@ function AdminPageContent() {
     setVerifyingId(null);
   };
 
-  const handleCreateSeason = async (session: { access_token: string } | null) => {
+  const handleCreateSeason = async (
+    session: { access_token: string } | null,
+  ) => {
     if (!session || !newSeasonStart || !newSeasonEnd) {
       setSeasonError("Start date and end date are required.");
       return;
@@ -851,12 +861,12 @@ function AdminPageContent() {
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        name:                newSeasonName || undefined,
-        start_date:          newSeasonStart,
-        end_date:            newSeasonEnd,
-        registration_fee:    newSeasonFee ? Number(newSeasonFee) : 1000,
+        name: newSeasonName || undefined,
+        start_date: newSeasonStart,
+        end_date: newSeasonEnd,
+        registration_fee: newSeasonFee ? Number(newSeasonFee) : 1000,
         registration_status: newSeasonRegStatus,
-        status:              newSeasonStatus,
+        status: newSeasonStatus,
       }),
     });
     const json = await res.json();
@@ -886,12 +896,17 @@ function AdminPageContent() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ season_id: season.season_id, registration_status: newStatus }),
+      body: JSON.stringify({
+        season_id: season.season_id,
+        registration_status: newStatus,
+      }),
     });
     if (res.ok) {
       const json = await res.json();
       setSeasons((prev) =>
-        prev.map((s) => (s.season_id === season.season_id ? (json.season as SeasonRow) : s)),
+        prev.map((s) =>
+          s.season_id === season.season_id ? (json.season as SeasonRow) : s,
+        ),
       );
     }
     setUpdatingSeasonId(null);
@@ -1682,10 +1697,14 @@ function AdminPageContent() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setEmail(null);
-    setAvatarUrl(null);
-    setIsAdmin(false);
+    try {
+      await supabase.auth.signOut();
+      setEmail(null);
+      setAvatarUrl(null);
+      setIsAdmin(false);
+    } finally {
+      window.location.replace("/");
+    }
   };
 
   return (
@@ -3069,7 +3088,9 @@ function AdminPageContent() {
                       loading={membersLoading}
                       verifyingId={verifyingId}
                       onVerify={async (id, verified) => {
-                        const { data: { session } } = await supabase.auth.getSession();
+                        const {
+                          data: { session },
+                        } = await supabase.auth.getSession();
                         handleVerifyMember(id, verified, session);
                       }}
                     />
@@ -3094,11 +3115,15 @@ function AdminPageContent() {
                       error={seasonError}
                       success={seasonSuccess}
                       onCreate={async () => {
-                        const { data: { session } } = await supabase.auth.getSession();
+                        const {
+                          data: { session },
+                        } = await supabase.auth.getSession();
                         handleCreateSeason(session);
                       }}
                       onToggleReg={async (season) => {
-                        const { data: { session } } = await supabase.auth.getSession();
+                        const {
+                          data: { session },
+                        } = await supabase.auth.getSession();
                         handleToggleSeasonReg(season, session);
                       }}
                     />
@@ -3165,7 +3190,9 @@ function MembersTab({
       </div>
 
       {loading ? (
-        <div className="text-slate-500 dark:text-slate-400 animate-pulse">Loading…</div>
+        <div className="text-slate-500 dark:text-slate-400 animate-pulse">
+          Loading…
+        </div>
       ) : pendingMembers.length === 0 ? (
         <div className="rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-3 text-emerald-700 dark:text-emerald-300">
           ✓ No members pending verification.
@@ -3179,17 +3206,30 @@ function MembersTab({
             >
               {m.image_link ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={m.image_link} alt="avatar" className="w-9 h-9 rounded-full shrink-0" />
+                <img
+                  src={m.image_link}
+                  alt="avatar"
+                  className="w-9 h-9 rounded-full shrink-0"
+                />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 shrink-0 flex items-center justify-center text-slate-400 font-bold text-sm">
                   {m.name.charAt(0)}
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{m.name}</p>
-                <p className="text-slate-500 dark:text-slate-400 text-xs truncate">{m.email}</p>
+                <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                  {m.name}
+                </p>
+                <p className="text-slate-500 dark:text-slate-400 text-xs truncate">
+                  {m.email}
+                </p>
                 <p className="text-slate-400 dark:text-slate-500 text-xs">
-                  Joined {new Date(m.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                  Joined{" "}
+                  {new Date(m.created_at).toLocaleDateString("en-PH", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
                 </p>
               </div>
               <div className="flex gap-2 shrink-0">
@@ -3235,12 +3275,18 @@ function SeasonsTab({
   seasons,
   loading,
   updatingSeasonId,
-  newSeasonName, setNewSeasonName,
-  newSeasonStart, setNewSeasonStart,
-  newSeasonEnd, setNewSeasonEnd,
-  newSeasonFee, setNewSeasonFee,
-  newSeasonRegStatus, setNewSeasonRegStatus,
-  newSeasonStatus, setNewSeasonStatus,
+  newSeasonName,
+  setNewSeasonName,
+  newSeasonStart,
+  setNewSeasonStart,
+  newSeasonEnd,
+  setNewSeasonEnd,
+  newSeasonFee,
+  setNewSeasonFee,
+  newSeasonRegStatus,
+  setNewSeasonRegStatus,
+  newSeasonStatus,
+  setNewSeasonStatus,
   creating,
   error,
   success,
@@ -3250,20 +3296,28 @@ function SeasonsTab({
   seasons: SeasonRowItem[];
   loading: boolean;
   updatingSeasonId: number | null;
-  newSeasonName: string; setNewSeasonName: (v: string) => void;
-  newSeasonStart: string; setNewSeasonStart: (v: string) => void;
-  newSeasonEnd: string; setNewSeasonEnd: (v: string) => void;
-  newSeasonFee: string; setNewSeasonFee: (v: string) => void;
-  newSeasonRegStatus: "open" | "closed"; setNewSeasonRegStatus: (v: "open" | "closed") => void;
-  newSeasonStatus: "upcoming" | "ongoing" | "completed"; setNewSeasonStatus: (v: "upcoming" | "ongoing" | "completed") => void;
+  newSeasonName: string;
+  setNewSeasonName: (v: string) => void;
+  newSeasonStart: string;
+  setNewSeasonStart: (v: string) => void;
+  newSeasonEnd: string;
+  setNewSeasonEnd: (v: string) => void;
+  newSeasonFee: string;
+  setNewSeasonFee: (v: string) => void;
+  newSeasonRegStatus: "open" | "closed";
+  setNewSeasonRegStatus: (v: "open" | "closed") => void;
+  newSeasonStatus: "upcoming" | "ongoing" | "completed";
+  setNewSeasonStatus: (v: "upcoming" | "ongoing" | "completed") => void;
   creating: boolean;
   error: string | null;
   success: string | null;
   onCreate: () => void;
   onToggleReg: (s: SeasonRowItem) => void;
 }) {
-  const inputCls = "mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-slate-900 dark:text-slate-100 text-sm";
-  const labelCls = "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide";
+  const inputCls =
+    "mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-slate-900 dark:text-slate-100 text-sm";
+  const labelCls =
+    "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide";
 
   const regBadge = (status: string) =>
     status === "open"
@@ -3271,14 +3325,15 @@ function SeasonsTab({
       : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
 
   const statusBadge = (s: string) => {
-    if (s === "ongoing")   return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
-    if (s === "completed") return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+    if (s === "ongoing")
+      return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
+    if (s === "completed")
+      return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
     return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
   };
 
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-6 text-sm">
-
       {/* ── Existing seasons ── */}
       <div>
         <div className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-3">
@@ -3287,26 +3342,38 @@ function SeasonsTab({
         {loading ? (
           <div className="text-slate-500 animate-pulse">Loading…</div>
         ) : seasons.length === 0 ? (
-          <p className="text-slate-500 dark:text-slate-400">No seasons yet. Create one below.</p>
+          <p className="text-slate-500 dark:text-slate-400">
+            No seasons yet. Create one below.
+          </p>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             {seasons.map((s) => {
               const label = s.name ?? `Season ${s.season_id}`;
               return (
-                <div key={s.season_id} className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 flex-wrap">
+                <div
+                  key={s.season_id}
+                  className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 flex-wrap"
+                >
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">{label}</p>
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">
+                      {label}
+                    </p>
                     <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
                       {s.start_date && s.end_date
                         ? `${s.start_date} → ${s.end_date}`
                         : "Dates TBD"}
-                      {s.registration_fee != null && ` · ₱${s.registration_fee.toLocaleString()}`}
+                      {s.registration_fee != null &&
+                        ` · ₱${s.registration_fee.toLocaleString()}`}
                     </p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${statusBadge(s.status)}`}>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${statusBadge(s.status)}`}
+                  >
                     {s.status}
                   </span>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${regBadge(s.registration_status)}`}>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${regBadge(s.registration_status)}`}
+                  >
                     Reg: {s.registration_status}
                   </span>
                   <button
@@ -3318,8 +3385,8 @@ function SeasonsTab({
                     {updatingSeasonId === s.season_id
                       ? "…"
                       : s.registration_status === "open"
-                      ? "Close Registration"
-                      : "Open Registration"}
+                        ? "Close Registration"
+                        : "Open Registration"}
                   </button>
                 </div>
               );
@@ -3336,38 +3403,66 @@ function SeasonsTab({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={labelCls}>Name (optional)</label>
-            <input type="text" className={inputCls} placeholder="e.g. Season 11"
-              value={newSeasonName} onChange={(e) => setNewSeasonName(e.target.value)} />
+            <input
+              type="text"
+              className={inputCls}
+              placeholder="e.g. Season 11"
+              value={newSeasonName}
+              onChange={(e) => setNewSeasonName(e.target.value)}
+            />
           </div>
           <div>
             <label className={labelCls}>Start Date</label>
-            <input type="date" className={inputCls}
-              value={newSeasonStart} onChange={(e) => setNewSeasonStart(e.target.value)} />
+            <input
+              type="date"
+              className={inputCls}
+              value={newSeasonStart}
+              onChange={(e) => setNewSeasonStart(e.target.value)}
+            />
           </div>
           <div>
             <label className={labelCls}>End Date</label>
-            <input type="date" className={inputCls}
-              value={newSeasonEnd} onChange={(e) => setNewSeasonEnd(e.target.value)} />
+            <input
+              type="date"
+              className={inputCls}
+              value={newSeasonEnd}
+              onChange={(e) => setNewSeasonEnd(e.target.value)}
+            />
           </div>
           <div>
             <label className={labelCls}>Registration Fee (₱)</label>
-            <input type="number" className={inputCls} placeholder="1000"
-              value={newSeasonFee} onChange={(e) => setNewSeasonFee(e.target.value)} />
+            <input
+              type="number"
+              className={inputCls}
+              placeholder="1000"
+              value={newSeasonFee}
+              onChange={(e) => setNewSeasonFee(e.target.value)}
+            />
           </div>
           <div>
             <label className={labelCls}>Registration</label>
-            <select className={inputCls}
+            <select
+              className={inputCls}
               value={newSeasonRegStatus}
-              onChange={(e) => setNewSeasonRegStatus(e.target.value as "open" | "closed")}>
+              onChange={(e) =>
+                setNewSeasonRegStatus(e.target.value as "open" | "closed")
+              }
+            >
               <option value="open">Open</option>
               <option value="closed">Closed</option>
             </select>
           </div>
           <div>
             <label className={labelCls}>Status</label>
-            <select className={inputCls}
+            <select
+              className={inputCls}
               value={newSeasonStatus}
-              onChange={(e) => setNewSeasonStatus(e.target.value as "upcoming" | "ongoing" | "completed")}>
+              onChange={(e) =>
+                setNewSeasonStatus(
+                  e.target.value as "upcoming" | "ongoing" | "completed",
+                )
+              }
+            >
               <option value="upcoming">Upcoming</option>
               <option value="ongoing">Ongoing</option>
               <option value="completed">Completed</option>

@@ -32,11 +32,20 @@ export default function MatchFiltersCard({
           const value = e.target.value;
           onSeasonChange(value === "ALL" ? "ALL" : Number(value));
         }}
-        className="border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white dark:bg-slate-900"
+        className="border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
       >
-        <option value="ALL">ALL</option>
+        <option
+          value="ALL"
+          className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+        >
+          ALL
+        </option>
         {seasons.map((season) => (
-          <option key={season} value={season}>
+          <option
+            key={season}
+            value={season}
+            className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+          >
             {season}
           </option>
         ))}
@@ -49,10 +58,14 @@ export default function MatchFiltersCard({
         id="type-filter"
         value={selectedTypeFilter}
         onChange={(e) => onTypeChange(e.target.value)}
-        className="border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white dark:bg-slate-900"
+        className="border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
       >
         {typeFilterOptions.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option
+            key={option.value}
+            value={option.value}
+            className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+          >
             {option.label}
           </option>
         ))}
