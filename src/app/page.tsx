@@ -51,7 +51,7 @@ const SPONSORS = [
   { name: "SPONSOR D", tagline: "Community Partner" },
 ];
 
-const WEBSITE_VERSION = "0.7.2";
+const WEBSITE_VERSION = "0.7.3";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -347,10 +347,10 @@ export default function HomePage() {
               </p>
               <div className="flex flex-wrap gap-3 md:gap-4 pt-2 md:pt-4 pb-12 md:pb-16">
                 <Link
-                  href="/leaderboard"
+                  href="/matches"
                   className="bg-[#00C8DC] text-[#0E1523] px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:bg-white transition-all flex items-center gap-2 group"
                 >
-                  VIEW RANKINGS
+                  VIEW CALENDAR
                   <ChevronRight className="group-hover:translate-x-1 transition-transform" />
                 </Link>
                 {authUser ? (

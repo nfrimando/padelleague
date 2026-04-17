@@ -139,15 +139,6 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   Me
                 </Link>
               )}
-              {!user && (
-                <button
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  className="text-[#00C8DC] hover:text-white transition-colors"
-                >
-                  Sign In
-                </button>
-              )}
               {rightSlot}
             </div>
           ) : (
