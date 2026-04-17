@@ -1,6 +1,8 @@
 // app/page.tsx
 "use client";
 
+const WEBSITE_VERSION = "0.7.5";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, ChevronRight, Sword, Flame, Shield } from "lucide-react";
@@ -50,8 +52,6 @@ const SPONSORS = [
   { name: "SPONSOR C", tagline: "Official Ball Partner" },
   { name: "SPONSOR D", tagline: "Community Partner" },
 ];
-
-const WEBSITE_VERSION = "0.7.4";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 

@@ -123,7 +123,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                 )}
                 My Dashboard
               </Link>
-            ) :
+            ) : (
               !rightSlot && (
                 <button
                   type="button"
@@ -132,7 +132,8 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                 >
                   Sign In
                 </button>
-              )}
+              )
+            )}
             {rightSlot}
           </div>
 

@@ -100,6 +100,7 @@ interface PlayerCardProps {
   disableLink?: boolean;
   showLatestRating?: boolean;
   ratingHistory?: RatingSparklinePoint[];
+  loadingRating?: boolean;
 }
 
 export default function PlayerCard({
@@ -110,6 +111,7 @@ export default function PlayerCard({
   disableLink = false,
   showLatestRating = true,
   ratingHistory,
+  loadingRating = false,
 }: PlayerCardProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -252,24 +254,37 @@ export default function PlayerCard({
               >
                 {displayLabel}
               </div>
-              {hasLatestMatchDate && (
+              {loadingRating ? (
+                <div className="mt-0.5 h-4 w-28 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+              ) : hasLatestMatchDate ? (
                 <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                   Last Match: {formatMatchDate(latestMatchDate)}
                 </div>
-              )}
+              ) : null}
             </div>
-            {(showLatestRating && hasLatestRating) ||
+            {(showLatestRating && (hasLatestRating || loadingRating)) ||
             (isLg && ratingHistory && ratingHistory.length >= 2) ? (
               <div className="flex flex-col items-end gap-1.5">
-                {showLatestRating && hasLatestRating && (
-                  <div
-                    className={`inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 dark:border-sky-700/60 dark:bg-sky-900/30 ${isLg ? "text-base" : "text-sm"} font-bold tabular-nums text-sky-700 dark:text-sky-300 whitespace-nowrap leading-none shadow-sm`}
-                  >
-                    {latestRating.toFixed(2)}
-                  </div>
-                )}
-                {isLg && ratingHistory && ratingHistory.length >= 2 && (
-                  <RatingSparkline history={ratingHistory} />
+                {showLatestRating &&
+                  (loadingRating ? (
+                    <div
+                      className={`inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-6 py-1 dark:border-sky-700/60 dark:bg-sky-900/30 ${isLg ? "text-base" : "text-sm"} font-bold tabular-nums text-sky-700 dark:text-sky-300 whitespace-nowrap leading-none shadow-sm animate-pulse`}
+                    >
+                      &nbsp;
+                    </div>
+                  ) : hasLatestRating ? (
+                    <div
+                      className={`inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 dark:border-sky-700/60 dark:bg-sky-900/30 ${isLg ? "text-base" : "text-sm"} font-bold tabular-nums text-sky-700 dark:text-sky-300 whitespace-nowrap leading-none shadow-sm`}
+                    >
+                      {latestRating.toFixed(2)}
+                    </div>
+                  ) : null)}
+                {isLg && (
+                  loadingRating ? (
+                    <div className="w-20 h-8 rounded bg-sky-100 dark:bg-sky-900/30 animate-pulse" />
+                  ) : ratingHistory && ratingHistory.length >= 2 ? (
+                    <RatingSparkline history={ratingHistory} />
+                  ) : null
                 )}
               </div>
             ) : null}
