@@ -51,7 +51,7 @@ const SPONSORS = [
   { name: "SPONSOR D", tagline: "Community Partner" },
 ];
 
-const WEBSITE_VERSION = "0.7.0";
+const WEBSITE_VERSION = "0.7.1";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 

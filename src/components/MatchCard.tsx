@@ -52,13 +52,13 @@ function PlayerAvatar({
       <img
         src={player.image_link}
         alt={name}
-        className="w-5 h-5 rounded-full object-cover border border-[#687FA3]/40"
+        className="h-5 w-5 rounded-full object-cover border border-[#687FA3]/40 sm:h-5 sm:w-5"
       />
     );
   }
 
   return (
-    <span className="inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold bg-[#1e2d45] text-[#687FA3] border border-[#687FA3]/40">
+    <span className="inline-flex h-5 w-5 rounded-full items-center justify-center text-[10px] font-bold bg-[#1e2d45] text-[#687FA3] border border-[#687FA3]/40 sm:h-5 sm:w-5">
       {name.charAt(0).toUpperCase()}
     </span>
   );
@@ -170,12 +170,12 @@ export default function MatchCard({
       {/* Teams vs score */}
       <div className="flex items-center gap-3 md:gap-6">
         <div className={`flex-1 text-right ${leftTeamClass}`}>
-          <div className="flex items-center justify-end gap-2">
-            <div className="inline-flex items-center -space-x-1.5">
+          <div className="flex flex-col items-end justify-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <div className="flex flex-col items-end gap-1 sm:inline-flex sm:flex-row sm:items-center sm:-space-x-1.5 sm:gap-0">
               <PlayerAvatar player={team1?.player_1} />
               <PlayerAvatar player={team1?.player_2} />
             </div>
-            <div className="font-black text-sm md:text-base leading-tight">
+            <div className="font-black text-sm md:text-base leading-tight max-w-full">
               <TeamLabel team={team1} selectedPlayerId={selectedPlayerId} />
             </div>
           </div>
@@ -203,12 +203,12 @@ export default function MatchCard({
         </div>
 
         <div className={`flex-1 ${rightTeamClass}`}>
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center -space-x-1.5">
+          <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <div className="flex flex-col items-start gap-1 sm:inline-flex sm:flex-row sm:items-center sm:-space-x-1.5 sm:gap-0">
               <PlayerAvatar player={team2?.player_1} />
               <PlayerAvatar player={team2?.player_2} />
             </div>
-            <div className="font-black text-sm md:text-base leading-tight">
+            <div className="font-black text-sm md:text-base leading-tight max-w-full">
               <TeamLabel team={team2} selectedPlayerId={selectedPlayerId} />
             </div>
           </div>
