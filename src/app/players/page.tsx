@@ -359,15 +359,17 @@ function PlayersPageContent() {
                 <PlayerCard
                   player={{
                     ...selectedPlayer,
-                    latest_rating:
-                      selectedPlayerLatestRating ??
-                      selectedPlayer.initial_rating ??
-                      null,
+                    latest_rating: loadingMatches
+                      ? undefined
+                      : (selectedPlayerLatestRating ??
+                        selectedPlayer.initial_rating ??
+                        null),
                     latest_match_date: selectedPlayerLatestMatchDate,
                   }}
                   size="lg"
                   disableLink
                   ratingHistory={playerRatingHistory}
+                  loadingRating={loadingMatches}
                 />
                 {!loadingMatches && matchCount > 0 && (
                   <div className="mt-4 pt-3 border-t space-y-4">
