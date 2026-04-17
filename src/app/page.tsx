@@ -3,8 +3,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, ChevronRight, Sword, Zap, Flame, Shield } from "lucide-react";
+import { Users, ChevronRight, Sword, Flame, Shield } from "lucide-react";
 import MatchCard from "@/components/MatchCard";
+import SiteHeader from "@/components/SiteHeader";
 import TopPlayersTable from "@/components/TopPlayersTable";
 import { supabase } from "@/lib/supabase";
 import { MatchWithTeams, MatchSet, Player } from "@/lib/types";
@@ -50,7 +51,7 @@ const SPONSORS = [
   { name: "SPONSOR D", tagline: "Community Partner" },
 ];
 
-const WEBSITE_VERSION = "0.6.0";
+const WEBSITE_VERSION = "0.7.0";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -297,115 +298,26 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#0E1523] text-white font-sans selection:bg-[#00C8DC] selection:text-[#0E1523]">
-      {/* ── Navigation ───────────────────────────────────────────────────── */}
-      <nav
+      <div
         className={`fixed w-full z-50 transition-all duration-500 ${
-          scrolled
-            ? "bg-[#0E1523]/95 backdrop-blur-xl border-b border-[#162032] py-3"
-            : "bg-transparent py-6"
+          scrolled ? "opacity-100" : "opacity-100"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex justify-between items-center">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="bg-[#00C8DC] p-1.5 rounded-md shadow-[0_0_15px_rgba(0,200,220,0.4)]">
-              <div className="border border-[#0E1523] p-0.5 rounded-sm">
-                <Zap className="text-[#0E1523] w-5 h-5" fill="currentColor" />
-              </div>
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="font-black text-xl tracking-tighter uppercase italic">
-                PADEL LEAGUE
-              </span>
-              <span className="font-bold text-[#687FA3] text-[9px] tracking-[0.4em] uppercase">
-                PHILIPPINES
-              </span>
-            </div>
-          </div>
-
-          {/* Desktop links */}
-          <div className="hidden md:flex items-center gap-10 font-bold text-[11px] uppercase tracking-[0.2em] text-[#687FA3]">
-            <Link
-              href="/matches"
-              className="hover:text-[#00C8DC] transition-colors"
-            >
-              Calendar
-            </Link>
-            <Link
-              href="/players"
-              className="hover:text-[#00C8DC] transition-colors"
-            >
-              Players
-            </Link>
-            <Link
-              href="/leaderboard"
-              className="hover:text-[#00C8DC] transition-colors"
-            >
-              Leaderboard
-            </Link>
-            {authUser ? (
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-2 bg-[#00C8DC]/10 border border-[#00C8DC]/30 text-[#00C8DC] px-4 py-2 rounded-full hover:bg-[#00C8DC]/20 transition-all"
-              >
-                {authUser.user_metadata?.avatar_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={authUser.user_metadata.avatar_url}
-                    alt="avatar"
-                    className="w-5 h-5 rounded-full"
-                  />
-                )}
-                My Dashboard
-              </Link>
-            ) : (
+        <SiteHeader
+          activePath="/"
+          rightSlot={
+            authUser ? undefined : (
               <button
+                type="button"
                 onClick={handleGoogleSignIn}
-                className="bg-[#00C8DC] text-[#0E1523] px-4 py-2 rounded-full hover:bg-white transition-all"
+                className="bg-[#00C8DC] text-[#0E1523] px-4 py-2 rounded-full hover:bg-white transition-all text-sm"
               >
                 Sign In
               </button>
-            )}
-          </div>
-
-          {/* Mobile links */}
-          <div className="flex md:hidden items-center gap-5 font-bold text-[10px] uppercase tracking-[0.15em] text-[#687FA3]">
-            <Link
-              href="/matches"
-              className="hover:text-[#00C8DC] transition-colors"
-            >
-              Calendar
-            </Link>
-            <Link
-              href="/players"
-              className="hover:text-[#00C8DC] transition-colors"
-            >
-              Players
-            </Link>
-            <Link
-              href="/leaderboard"
-              className="hover:text-[#00C8DC] transition-colors"
-            >
-              Board
-            </Link>
-            {authUser ? (
-              <Link
-                href="/dashboard"
-                className="text-[#00C8DC] hover:text-white transition-colors"
-              >
-                Me
-              </Link>
-            ) : (
-              <button
-                onClick={handleGoogleSignIn}
-                className="text-[#00C8DC] hover:text-white transition-colors"
-              >
-                Join
-              </button>
-            )}
-          </div>
-        </div>
-      </nav>
+            )
+          }
+        />
+      </div>
 
       {/* ── Hero + Stats (single flex-col section) ───────────────────────── */}
       {/* Stats live inside the hero as the last row so they can never
@@ -419,7 +331,7 @@ export default function HomePage() {
 
         {/* Hero content — fills available height, centers text vertically */}
         <div className="relative z-20 flex items-center min-h-[75vh] w-full">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full pt-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full pt-28">
             <div className="max-w-3xl space-y-4 md:space-y-6">
               <div className="inline-block bg-[#00C8DC]/10 text-[#00C8DC] px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase">
                 {stats?.latestSeason
@@ -583,9 +495,6 @@ export default function HomePage() {
       <footer className="py-16 border-t border-[#162032]">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-3 opacity-50">
-            <div className="bg-[#00C8DC] p-1.5 rounded-md">
-              <Zap className="text-[#0E1523] w-4 h-4" fill="currentColor" />
-            </div>
             <span className="font-black text-lg tracking-tighter uppercase italic">
               PADEL LEAGUE PH
             </span>

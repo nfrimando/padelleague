@@ -95,6 +95,19 @@ function getSetScores(match: MatchWithTeams): string {
     .join("  ");
 }
 
+function getStatusBadgeClass(status: string | null | undefined) {
+  switch (status) {
+    case "scheduled":
+      return "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300";
+    case "forfeit":
+      return "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300";
+    case "cancelled":
+      return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+    default:
+      return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
+  }
+}
+
 export default function MatchCard({
   match,
   highlightPlayerId,
@@ -117,12 +130,19 @@ export default function MatchCard({
     !!team2 &&
     (String(team2.player_1?.player_id) === selectedPlayerId ||
       String(team2.player_2?.player_id) === selectedPlayerId);
+  const leftTeamClass = isWinnerTeam1
+    ? "text-slate-900 dark:text-white"
+    : "text-slate-500 dark:text-[#687FA3]";
+  const rightTeamClass = !isWinnerTeam1
+    ? "text-slate-900 dark:text-white"
+    : "text-slate-500 dark:text-[#687FA3]";
+  const statusLabel = String(match.status || "completed").toUpperCase();
 
   return (
-    <div className="bg-[#162032]/50 border border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 md:p-6 transition-all duration-300">
+    <div className="bg-white dark:bg-[#162032]/50 border border-slate-200 dark:border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 md:p-6 transition-all duration-300 shadow-sm dark:shadow-none">
       {/* Meta row */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <span className="text-[#687FA3] text-[10px] font-black uppercase tracking-widest">
+        <span className="text-slate-500 dark:text-[#687FA3] text-[10px] font-black uppercase tracking-widest">
           {formatMatchDate(match.date_local)}
         </span>
         {match.season_id && (
@@ -131,12 +151,17 @@ export default function MatchCard({
           </span>
         )}
         {match.type && (
-          <span className="bg-[#687FA3]/10 text-[#687FA3] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
+          <span className="bg-slate-100 text-slate-600 dark:bg-[#687FA3]/10 dark:text-[#687FA3] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
             {match.type}
           </span>
         )}
+        <span
+          className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${getStatusBadgeClass(match.status)}`}
+        >
+          {statusLabel}
+        </span>
         {match.venue && (
-          <span className="text-[#687FA3]/50 text-[10px] font-bold ml-auto hidden md:block">
+          <span className="text-slate-400 dark:text-[#687FA3]/50 text-[10px] font-bold ml-auto hidden md:block">
             {match.venue}
           </span>
         )}
@@ -144,9 +169,7 @@ export default function MatchCard({
 
       {/* Teams vs score */}
       <div className="flex items-center gap-3 md:gap-6">
-        <div
-          className={`flex-1 text-right ${isWinnerTeam1 ? "text-white" : "text-[#687FA3]"}`}
-        >
+        <div className={`flex-1 text-right ${leftTeamClass}`}>
           <div className="flex items-center justify-end gap-2">
             <div className="inline-flex items-center -space-x-1.5">
               <PlayerAvatar player={team1?.player_1} />
@@ -164,24 +187,22 @@ export default function MatchCard({
         </div>
 
         <div className="flex flex-col items-center shrink-0">
-          <div className="bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2 font-black text-lg md:text-xl tracking-tighter text-[#00C8DC]">
+          <div className="bg-slate-100 dark:bg-[#0E1523] border border-slate-200 dark:border-[#687FA3]/20 rounded-xl px-4 py-2 font-black text-lg md:text-xl tracking-tighter text-[#00C8DC]">
             {`${team1?.sets_won ?? 0} - ${team2?.sets_won ?? 0}`}
           </div>
           {setScores && (
-            <div className="text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
+            <div className="text-slate-400 dark:text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
               {setScores}
             </div>
           )}
           {!setScores && match.time_local && (
-            <div className="text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
+            <div className="text-slate-400 dark:text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
               {formatMatchTime(match.time_local)}
             </div>
           )}
         </div>
 
-        <div
-          className={`flex-1 ${!isWinnerTeam1 ? "text-white" : "text-[#687FA3]"}`}
-        >
+        <div className={`flex-1 ${rightTeamClass}`}>
           <div className="flex items-center gap-2">
             <div className="inline-flex items-center -space-x-1.5">
               <PlayerAvatar player={team2?.player_1} />

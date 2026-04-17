@@ -273,7 +273,7 @@ function mobileTeamInline(
 function renderMatchPreview(match: MatchWithTeams, compact: boolean) {
   if (compact) {
     return (
-      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-2">
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 shadow-xl p-2">
         <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
           Venue: {match.venue || "No venue"}
         </div>
@@ -323,7 +323,11 @@ function renderMatchPreview(match: MatchWithTeams, compact: boolean) {
       </span>
     );
 
-    const labelNode = <span className="min-w-0 flex-1 truncate">{label}</span>;
+    const labelNode = (
+      <span className="min-w-0 flex-1 truncate text-slate-800 dark:text-slate-100">
+        {label}
+      </span>
+    );
 
     const content = (
       <span className="flex min-w-0 max-w-full items-center gap-1.5 align-middle">
@@ -374,7 +378,7 @@ function renderMatchPreview(match: MatchWithTeams, compact: boolean) {
 
     return (
       <div
-        className={`min-w-0 flex-1 rounded-md p-1 text-[11px] leading-tight ${textAlignClass} ${
+        className={`min-w-0 flex-1 rounded-md p-1 text-[11px] leading-tight text-slate-800 dark:text-slate-100 ${textAlignClass} ${
           isWinner
             ? "bg-emerald-50 dark:bg-emerald-900/25 border border-emerald-200 dark:border-emerald-700"
             : ""
@@ -403,7 +407,7 @@ function renderMatchPreview(match: MatchWithTeams, compact: boolean) {
 
   return (
     <div
-      className={`rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl ${compact ? "p-2" : "p-2.5"}`}
+      className={`rounded-lg border border-slate-200 dark:border-slate-700 bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 shadow-xl ${compact ? "p-2" : "p-2.5"}`}
     >
       <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
         <span className="font-medium">

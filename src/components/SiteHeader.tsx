@@ -22,6 +22,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
   const pathname = usePathname();
   const currentPath = activePath ?? pathname;
   const [user, setUser] = useState<User | null>(null);
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
 
   useEffect(() => {
     let mounted = true;
@@ -56,6 +57,8 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
         ? "text-white border-b-2 border-[#00C8DC] pb-1"
         : "text-[#687FA3]"
     }`;
+  const dashboardLinkClass =
+    "inline-flex items-center gap-2 rounded-full border border-[#00C8DC]/30 bg-[#00C8DC]/10 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-[#00C8DC] transition-all hover:border-[#00C8DC]/50 hover:bg-[#00C8DC]/20 hover:text-white";
 
   return (
     <nav className="sticky top-0 z-50 bg-[#0E1523]/95 backdrop-blur-xl border-b border-[#162032] py-3">
@@ -91,10 +94,18 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-4">
             {user && (
-              <Link
-                href="/dashboard"
-                className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#00C8DC] hover:text-white transition-colors"
-              >
+              <Link href="/dashboard" className={dashboardLinkClass}>
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Profile"
+                    className="h-5 w-5 rounded-full border border-white/20 object-cover"
+                  />
+                ) : (
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-[#0E1523]/40 text-[9px] font-black text-white">
+                    {user.email?.charAt(0).toUpperCase() ?? "M"}
+                  </span>
+                )}
                 My Dashboard
               </Link>
             )}
@@ -106,8 +117,15 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               {user && (
                 <Link
                   href="/dashboard"
-                  className="text-[#00C8DC] hover:text-white transition-colors"
+                  className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
                 >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Profile"
+                      className="h-4 w-4 rounded-full border border-white/20 object-cover"
+                    />
+                  ) : null}
                   Me
                 </Link>
               )}
@@ -136,8 +154,15 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               {user && (
                 <Link
                   href="/dashboard"
-                  className="text-[#00C8DC] hover:text-white transition-colors"
+                  className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
                 >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Profile"
+                      className="h-4 w-4 rounded-full border border-white/20 object-cover"
+                    />
+                  ) : null}
                   Me
                 </Link>
               )}
