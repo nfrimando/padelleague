@@ -206,17 +206,23 @@ export default function MatchCard({
         </div>
 
         <div className="flex flex-col items-center shrink-0">
-          <div className="bg-slate-100 dark:bg-[#0E1523] border border-slate-200 dark:border-[#687FA3]/20 rounded-xl px-4 py-2 font-black text-lg md:text-xl tracking-tighter text-[#00C8DC]">
-            {`${team1?.sets_won ?? 0} - ${team2?.sets_won ?? 0}`}
-          </div>
-          {setScores && (
+          {match.status === "scheduled" ? (
+            <div className="bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-700/60 rounded-xl px-4 py-2 font-semibold text-sm md:text-base tracking-tight text-sky-700 dark:text-sky-300">
+              {match.time_local ? formatMatchTime(match.time_local) : "TBD"}
+            </div>
+          ) : (
+            <div className="bg-slate-100 dark:bg-[#0E1523] border border-slate-200 dark:border-[#687FA3]/20 rounded-xl px-4 py-2 font-black text-lg md:text-xl tracking-tighter text-[#00C8DC]">
+              {`${team1?.sets_won ?? 0} - ${team2?.sets_won ?? 0}`}
+            </div>
+          )}
+          {setScores && match.status !== "scheduled" && (
             <div className="text-slate-400 dark:text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
               {setScores}
             </div>
           )}
-          {!setScores && match.time_local && (
-            <div className="text-slate-400 dark:text-[#687FA3]/60 text-[9px] font-bold mt-1 tracking-wide">
-              {formatMatchTime(match.time_local)}
+          {match.status === "scheduled" && match.time_local && match.venue && (
+            <div className="text-slate-400 dark:text-[#687FA3]/60 text-[9px] font-semibold mt-1 tracking-wide">
+              {match.venue}
             </div>
           )}
         </div>
