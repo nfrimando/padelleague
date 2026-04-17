@@ -24,6 +24,16 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
   const [user, setUser] = useState<User | null>(null);
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
 
+  const handleGoogleSignIn = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}${currentPath}`,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -129,6 +139,15 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   Me
                 </Link>
               )}
+              {!user && (
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="text-[#00C8DC] hover:text-white transition-colors"
+                >
+                  Sign In
+                </button>
+              )}
               {rightSlot}
             </div>
           ) : (
@@ -165,6 +184,15 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   ) : null}
                   Me
                 </Link>
+              )}
+              {!user && (
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="text-[#00C8DC] hover:text-white transition-colors"
+                >
+                  Sign In
+                </button>
               )}
             </div>
           )}
