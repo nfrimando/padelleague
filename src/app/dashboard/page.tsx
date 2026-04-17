@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Zap,
   ChevronRight,
   TrendingUp,
   Trophy,
@@ -12,6 +11,7 @@ import {
   LogOut,
   Users,
 } from "lucide-react";
+import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabase";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
 import { formatMatchDate } from "@/lib/utils";
@@ -371,42 +371,19 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0E1523] text-white font-sans">
-      {/* Nav */}
-      <nav className="sticky top-0 z-50 bg-[#0E1523]/95 backdrop-blur-xl border-b border-[#162032]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="bg-[#00C8DC] p-1.5 rounded-md shadow-[0_0_12px_rgba(0,200,220,0.35)]">
-              <div className="border border-[#0E1523] p-0.5 rounded-sm">
-                <Zap className="text-[#0E1523] w-4 h-4" fill="currentColor" />
-              </div>
-            </div>
-            <span className="font-black text-sm tracking-tighter uppercase italic hidden sm:block">
-              Padel League PH
-            </span>
-          </Link>
-
-          <div className="flex items-center gap-3">
-            {avatarUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarUrl}
-                alt="avatar"
-                className="w-8 h-8 rounded-full border border-white/10"
-              />
-            )}
-            <span className="text-xs text-white/50 hidden sm:block max-w-[160px] truncate">
-              {user.email}
-            </span>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors"
-            >
-              <LogOut size={13} />
-              <span className="hidden sm:inline">Sign out</span>
-            </button>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        activePath="/dashboard"
+        rightSlot={
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors"
+          >
+            <LogOut size={13} />
+            <span className="hidden sm:inline">Sign out</span>
+          </button>
+        }
+      />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 md:py-14 space-y-12">
         {/* ── Header ────────────────────────────────────────────────────────── */}
