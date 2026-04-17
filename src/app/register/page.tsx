@@ -3,14 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 import type { Season } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SignupStatus = "none" | "pending_payment" | "registered" | "waitlisted" | "cancelled";
+type SignupStatus =
+  | "none"
+  | "pending_payment"
+  | "registered"
+  | "waitlisted"
+  | "cancelled";
 type VerifyStatus = "verified" | "pending" | "unknown";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -33,7 +38,7 @@ export default function RegisterPage() {
   const [user, setUser] = useState<User | null>(null);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [selectedSeasonId, setSelectedSeasonId] = useState<number | null>(null);
-  const [playerId, setPlayerId] = useState<number | null>(null);   // matched by email
+  const [playerId, setPlayerId] = useState<number | null>(null); // matched by email
   const [playerName, setPlayerName] = useState("");
   const [signupStatus, setSignupStatus] = useState<SignupStatus>("none");
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("unknown");
@@ -44,23 +49,31 @@ export default function RegisterPage() {
   // ── Auth & initial data ────────────────────────────────────────────────────
   useEffect(() => {
     async function init() {
-      const { data: { user: u } } = await supabase.auth.getUser();
+      const {
+        data: { user: u },
+      } = await supabase.auth.getUser();
       if (u) setUser(u);
 
       // Open seasons — try with optional columns, fall back if migration not yet applied
       let seasonResult = await supabase
         .from("seasons")
-        .select("season_id, name, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at")
+        .select(
+          "season_id, name, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at",
+        )
         .eq("registration_status", "open")
         .order("season_id", { ascending: false });
 
       if (seasonResult.error) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        seasonResult = await supabase
+        seasonResult = (await supabase
           .from("seasons")
-          .select("season_id, start_date, end_date, registration_status, status, created_at, updated_at")
+          .select(
+            "season_id, start_date, end_date, registration_status, status, created_at, updated_at",
+          )
           .eq("registration_status", "open")
-          .order("season_id", { ascending: false }) as unknown as typeof seasonResult;
+          .order("season_id", {
+            ascending: false,
+          })) as unknown as typeof seasonResult;
       }
 
       const { data: seasonData } = seasonResult;
@@ -126,14 +139,16 @@ export default function RegisterPage() {
       // where the user paid but never hit the success page).
       if (status === "pending_payment") {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
           if (session) {
             const res = await fetch("/api/payments/confirm", {
               method: "POST",
               headers: { Authorization: `Bearer ${session.access_token}` },
             });
             if (res.ok) {
-              const json = await res.json() as { status: string };
+              const json = (await res.json()) as { status: string };
               if (json.status === "registered") status = "registered";
             }
           }
@@ -161,11 +176,15 @@ export default function RegisterPage() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setPlayerId(null);
-    setPlayerName("");
-    setSignupStatus("none");
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setPlayerId(null);
+      setPlayerName("");
+      setSignupStatus("none");
+    } finally {
+      window.location.replace("/");
+    }
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -176,7 +195,9 @@ export default function RegisterPage() {
     setError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         setError("Session expired. Please sign in again.");
         return;
@@ -221,24 +242,19 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-[#0E1523] text-white flex flex-col">
-
-      {/* Nav */}
-      <nav className="border-b border-white/10 px-6 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="bg-[#00C8DC] p-1 rounded-md">
-            <Zap className="text-[#0E1523] w-4 h-4" fill="currentColor" />
-          </div>
-          <span className="text-[#00C8DC] font-bold tracking-wide">PADEL LEAGUE PH</span>
-        </Link>
-        {user && (
-          <button
-            onClick={handleSignOut}
-            className="text-sm text-white/50 hover:text-white transition-colors"
-          >
-            Sign out
-          </button>
-        )}
-      </nav>
+      <SiteHeader
+        rightSlot={
+          user ? (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="text-sm text-[#687FA3] hover:text-white transition-colors"
+            >
+              Sign out
+            </button>
+          ) : undefined
+        }
+      />
 
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
@@ -288,7 +304,11 @@ export default function RegisterPage() {
               <div className="flex items-center gap-3 pb-4 border-b border-white/10">
                 {user.user_metadata?.avatar_url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.user_metadata.avatar_url} alt="avatar" className="w-9 h-9 rounded-full" />
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt="avatar"
+                    className="w-9 h-9 rounded-full"
+                  />
                 )}
                 <div>
                   <p className="text-sm font-medium">{user.email}</p>
@@ -298,10 +318,13 @@ export default function RegisterPage() {
               <div className="flex gap-3">
                 <span className="text-xl">⏳</span>
                 <div>
-                  <p className="font-bold text-amber-300 mb-1">Pending Verification</p>
+                  <p className="font-bold text-amber-300 mb-1">
+                    Pending Verification
+                  </p>
                   <p className="text-white/60 text-sm leading-relaxed">
-                    Your account is waiting for admin approval before you can register
-                    for a season. You&apos;ll be notified once you&apos;re verified.
+                    Your account is waiting for admin approval before you can
+                    register for a season. You&apos;ll be notified once
+                    you&apos;re verified.
                   </p>
                 </div>
               </div>
@@ -315,48 +338,57 @@ export default function RegisterPage() {
           )}
 
           {/* ── Already registered ── */}
-          {user && (signupStatus === "registered" || signupStatus === "pending_payment") && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
-              <p className="text-white/50 text-sm">Signed in as</p>
-              <p className="font-medium">{user.email}</p>
-              {signupStatus === "registered" ? (
-                <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
-                  ✓ Registered for {selectedSeason ? seasonLabel(selectedSeason) : "this season"}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2 rounded-lg text-sm font-bold">
-                    ⏳ Payment pending for {selectedSeason ? seasonLabel(selectedSeason) : "this season"}
+          {user &&
+            (signupStatus === "registered" ||
+              signupStatus === "pending_payment") && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
+                <p className="text-white/50 text-sm">Signed in as</p>
+                <p className="font-medium">{user.email}</p>
+                {signupStatus === "registered" ? (
+                  <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
+                    ✓ Registered for{" "}
+                    {selectedSeason
+                      ? seasonLabel(selectedSeason)
+                      : "this season"}
                   </div>
-                  <p className="text-white/50 text-sm">
-                    Your registration is reserved — complete payment to confirm your spot.
-                  </p>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={submitting}
-                    className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-sm uppercase tracking-widest py-3 px-6 rounded-xl transition-all"
-                  >
-                    {submitting ? (
-                      <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      "Complete Payment"
-                    )}
-                  </button>
-                  {error && (
-                    <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-                      {error}
+                ) : (
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2 rounded-lg text-sm font-bold">
+                      ⏳ Payment pending for{" "}
+                      {selectedSeason
+                        ? seasonLabel(selectedSeason)
+                        : "this season"}
+                    </div>
+                    <p className="text-white/50 text-sm">
+                      Your registration is reserved — complete payment to
+                      confirm your spot.
                     </p>
-                  )}
-                </div>
-              )}
-              <Link
-                href="/dashboard"
-                className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
-              >
-                Go to your dashboard →
-              </Link>
-            </div>
-          )}
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                      className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-sm uppercase tracking-widest py-3 px-6 rounded-xl transition-all"
+                    >
+                      {submitting ? (
+                        <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        "Complete Payment"
+                      )}
+                    </button>
+                    {error && (
+                      <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                        {error}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <Link
+                  href="/dashboard"
+                  className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
+                >
+                  Go to your dashboard →
+                </Link>
+              </div>
+            )}
 
           {/* ── Registration form ── */}
           {/* Shows for verified users (or brand-new users who don't have a record yet). */}
@@ -369,10 +401,16 @@ export default function RegisterPage() {
               <div className="flex items-center gap-3 pb-4 border-b border-white/10">
                 {user.user_metadata?.avatar_url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.user_metadata.avatar_url} alt="avatar" className="w-9 h-9 rounded-full" />
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt="avatar"
+                    className="w-9 h-9 rounded-full"
+                  />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{playerName || user.email}</p>
+                  <p className="text-sm font-medium truncate">
+                    {playerName || user.email}
+                  </p>
                   <p className="text-xs text-white/40">Signed in with Google</p>
                 </div>
                 <button
@@ -387,14 +425,22 @@ export default function RegisterPage() {
               {/* Season selector */}
               {seasons.length > 1 && (
                 <div>
-                  <label className="block text-sm font-medium text-white/70 mb-2">Season</label>
+                  <label className="block text-sm font-medium text-white/70 mb-2">
+                    Season
+                  </label>
                   <select
                     value={selectedSeasonId ?? ""}
-                    onChange={(e) => setSelectedSeasonId(Number(e.target.value))}
+                    onChange={(e) =>
+                      setSelectedSeasonId(Number(e.target.value))
+                    }
                     className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#00C8DC] transition-colors"
                   >
                     {seasons.map((s) => (
-                      <option key={s.season_id} value={s.season_id} className="bg-[#0E1523]">
+                      <option
+                        key={s.season_id}
+                        value={s.season_id}
+                        className="bg-[#0E1523]"
+                      >
                         {seasonLabel(s)}
                       </option>
                     ))}
@@ -405,12 +451,20 @@ export default function RegisterPage() {
               {/* Season info */}
               {selectedSeason && (
                 <div className="bg-[#162032] border border-[#687FA3]/10 rounded-xl px-4 py-3 text-sm space-y-1">
-                  <p className="font-bold text-white">{seasonLabel(selectedSeason)}</p>
+                  <p className="font-bold text-white">
+                    {seasonLabel(selectedSeason)}
+                  </p>
                   {selectedSeason.start_date && selectedSeason.end_date && (
                     <p className="text-[#687FA3]">
-                      {new Date(selectedSeason.start_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                      {new Date(selectedSeason.start_date).toLocaleDateString(
+                        "en-PH",
+                        { month: "short", day: "numeric", year: "numeric" },
+                      )}
                       {" – "}
-                      {new Date(selectedSeason.end_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                      {new Date(selectedSeason.end_date).toLocaleDateString(
+                        "en-PH",
+                        { month: "short", day: "numeric", year: "numeric" },
+                      )}
                     </p>
                   )}
                 </div>
@@ -461,10 +515,22 @@ export default function RegisterPage() {
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4" />
-      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853" />
-      <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z" fill="#FBBC05" />
-      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335" />
+      <path
+        d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z"
+        fill="#4285F4"
+      />
+      <path
+        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z"
+        fill="#34A853"
+      />
+      <path
+        d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z"
+        fill="#EA4335"
+      />
     </svg>
   );
 }
