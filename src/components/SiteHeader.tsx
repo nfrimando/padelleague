@@ -22,6 +22,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
   const pathname = usePathname();
   const currentPath = activePath ?? pathname;
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
 
   const handleGoogleSignIn = async () => {
@@ -44,6 +45,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
 
       if (mounted) {
         setUser(currentUser ?? null);
+        setLoading(false);
       }
     };
 
@@ -53,6 +55,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => {
@@ -103,7 +106,9 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
 
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-4">
-            {user && (
+            {loading ? (
+              <div className="h-8 w-28 rounded-full bg-[#22304a] animate-pulse" />
+            ) : user ? (
               <Link href="/dashboard" className={dashboardLinkClass}>
                 {avatarUrl ? (
                   <img
@@ -118,13 +123,24 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                 )}
                 My Dashboard
               </Link>
-            )}
+            ) :
+              !rightSlot && (
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="bg-[#00C8DC] text-[#0E1523] px-4 py-2 rounded-full hover:bg-white transition-all text-sm font-bold"
+                >
+                  Sign In
+                </button>
+              )}
             {rightSlot}
           </div>
 
           {rightSlot ? (
             <div className="flex md:hidden items-center gap-4 font-bold text-[10px] uppercase tracking-[0.15em] text-[#687FA3]">
-              {user && (
+              {loading ? (
+                <div className="h-6 w-16 rounded-full bg-[#22304a] animate-pulse" />
+              ) : user ? (
                 <Link
                   href="/dashboard"
                   className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
@@ -138,7 +154,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   ) : null}
                   Me
                 </Link>
-              )}
+              ) : null}
               {rightSlot}
             </div>
           ) : (
@@ -161,7 +177,9 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               >
                 Board
               </Link>
-              {user && (
+              {loading ? (
+                <div className="h-6 w-12 rounded-full bg-[#22304a] animate-pulse" />
+              ) : user ? (
                 <Link
                   href="/dashboard"
                   className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
@@ -175,8 +193,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   ) : null}
                   Me
                 </Link>
-              )}
-              {!user && (
+              ) : (
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
