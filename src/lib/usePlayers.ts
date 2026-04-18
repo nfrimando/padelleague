@@ -29,7 +29,7 @@ export function usePlayers(options: UsePlayersOptions = {}) {
       setLoading(true);
       setError(null);
 
-      let query = supabase.from("players").select("*");
+      let query = supabase.from("active_players").select("*");
 
       if (orderByName) {
         query = query.order("name", { ascending: true });

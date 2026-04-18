@@ -40,7 +40,7 @@ function PlayersPageContent() {
   >(ALL_MATCH_FILTER);
   const [selectedTypeFilter, setSelectedTypeFilter] =
     useState<string>(ALL_MATCH_FILTER);
-  const { players } = usePlayers();
+  const { players, loading } = usePlayers();
   const filtered = usePlayerSearch(players, search);
   const {
     matches: playerMatches,
@@ -262,20 +262,43 @@ function PlayersPageContent() {
           }}
         />
 
-        {!selectedPlayer &&
-          search.trim().length === 0 &&
-          randomPlayers.length > 0 && (
-            <div className="mt-6 border rounded p-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-3">
-                Explore Players...
-              </h2>
+        {!selectedPlayer && search.trim().length === 0 && (
+          <div className="mt-6 border rounded p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-3">
+              Explore Players...
+            </h2>
+            {players.length === 0 && loading ? (
+              <div className="flex items-center justify-center py-8">
+                <svg
+                  className="animate-spin h-6 w-6 text-sky-500"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  ></path>
+                </svg>
+              </div>
+            ) : randomPlayers.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {randomPlayers.map((player) => (
                   <PlayerCard key={player.player_id} player={player} />
                 ))}
               </div>
-            </div>
-          )}
+            ) : null}
+          </div>
+        )}
 
         {/* Selected Player Details */}
         {selectedPlayer &&
@@ -375,7 +398,7 @@ function PlayersPageContent() {
                   <div className="mt-4 pt-3 border-t space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                       <div className="text-center">
-                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
                           {matchCount}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -391,7 +414,7 @@ function PlayersPageContent() {
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
                           {matchCount - winCount}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -399,7 +422,7 @@ function PlayersPageContent() {
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
                           {Math.round((winCount / matchCount) * 100)}%
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -407,7 +430,7 @@ function PlayersPageContent() {
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
                           {firstSeason ?? "N/A"}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -415,7 +438,7 @@ function PlayersPageContent() {
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
                           {lastSeason ?? "N/A"}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -425,11 +448,11 @@ function PlayersPageContent() {
                     </div>
 
                     <div className="border-t pt-3">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-white mb-2">
                         Most Played Partners
                       </div>
                       {topPartners.length === 0 ? (
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                        <div className="text-xs text-slate-600 dark:text-slate-200">
                           No partner data available.
                         </div>
                       ) : (
@@ -437,21 +460,21 @@ function PlayersPageContent() {
                           {topPartners.map((partner) => (
                             <div
                               key={`${partner.player_id || partner.name}-${partner.nickname || ""}`}
-                              className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs"
+                              className="inline-flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-600 px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-800/60"
                             >
                               {partner.player_id ? (
                                 <Link
                                   href={getPlayerProfileHref(partner.player_id)}
-                                  className="text-slate-700 dark:text-slate-200 hover:underline"
+                                  className="text-slate-800 dark:text-white hover:underline"
                                 >
                                   {partner.name}
                                 </Link>
                               ) : (
-                                <span className="text-slate-700 dark:text-slate-200">
+                                <span className="text-slate-800 dark:text-white">
                                   {partner.name}
                                 </span>
                               )}
-                              <span className="text-slate-500 dark:text-slate-400">
+                              <span className="text-slate-600 dark:text-slate-200">
                                 {partner.count}x
                               </span>
                             </div>
