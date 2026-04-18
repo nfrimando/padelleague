@@ -109,10 +109,27 @@ function PlayersPageContent() {
     return latest?.date_local || null;
   }, [playerMatches]);
 
-  const randomPlayers = useMemo(() => {
+  // State for rerolling random players
+  const [randomPlayers, setRandomPlayers] = useState<Player[]>([]);
+
+  // Helper to shuffle and pick 8 players
+  const pickRandomPlayers = () => {
+    if (players.length === 0) return [];
     const shuffled = [...players].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, 8);
+  };
+
+  // On players load or reroll, pick a new set
+  useEffect(() => {
+    if (players.length > 0) {
+      setRandomPlayers(pickRandomPlayers());
+    }
   }, [players]);
+
+  // Handler for reroll button
+  const handleReroll = () => {
+    setRandomPlayers(pickRandomPlayers());
+  };
 
   const getPlayerProfileHref = (playerId: string | number) => {
     const params = new URLSearchParams(searchParamsString);
@@ -221,7 +238,10 @@ function PlayersPageContent() {
   return (
     <>
       <BackToHome />
-      <div className="p-6 max-w-xl mx-auto">
+      <div
+        className="p-6 mx-auto"
+        style={{ minWidth: "30vw", maxWidth: "32rem", width: "100%" }}
+      >
         <h1 className="text-2xl font-bold mb-4">Player Search</h1>
 
         <PlayerSearchBox
@@ -264,9 +284,20 @@ function PlayersPageContent() {
 
         {!selectedPlayer && search.trim().length === 0 && (
           <div className="mt-6 border rounded p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-3">
-              Explore Players...
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Explore Players...
+              </h2>
+              <button
+                type="button"
+                className="text-xs px-2 py-1 rounded font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-100 border border-slate-300 dark:border-slate-600 shadow-sm hover:bg-sky-100 dark:hover:bg-sky-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 transition"
+                onClick={handleReroll}
+                disabled={loading || players.length === 0}
+                aria-label="Re-roll players"
+              >
+                Re-roll
+              </button>
+            </div>
             {players.length === 0 && loading ? (
               <div className="flex items-center justify-center py-8">
                 <svg
