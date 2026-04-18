@@ -7,10 +7,11 @@ import { Player } from "@/lib/types";
 type UsePlayersOptions = {
   enabled?: boolean;
   orderByName?: boolean;
+  onlyActivePlayers?: boolean;
 };
 
 export function usePlayers(options: UsePlayersOptions = {}) {
-  const { enabled = true, orderByName = false } = options;
+  const { enabled = true, orderByName = false, onlyActivePlayers = false } = options;
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,11 +26,13 @@ export function usePlayers(options: UsePlayersOptions = {}) {
 
     let isMounted = true;
 
+
     async function fetchPlayers() {
       setLoading(true);
       setError(null);
 
-      let query = supabase.from("active_players").select("*");
+      const table = onlyActivePlayers ? "active_players" : "players";
+      let query = supabase.from(table).select("*");
 
       if (orderByName) {
         query = query.order("name", { ascending: true });
