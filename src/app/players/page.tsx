@@ -40,7 +40,7 @@ function PlayersPageContent() {
   >(ALL_MATCH_FILTER);
   const [selectedTypeFilter, setSelectedTypeFilter] =
     useState<string>(ALL_MATCH_FILTER);
-  const { players, loading } = usePlayers();
+  const { players, loading } = usePlayers({ onlyActivePlayers: true });
   const filtered = usePlayerSearch(players, search);
   const {
     matches: playerMatches,
