@@ -7,6 +7,7 @@ import {
   normalizeOptionalString,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 
 type MatchStatus = "scheduled" | "completed" | "forfeit" | "cancelled";
 
@@ -294,88 +295,6 @@ function calculateV3Ratings(input: {
   };
 }
 
-async function getPreMatchRating(
-  supabase: AdminSupabaseClient,
-  matchId: number,
-  playerId: number,
-): Promise<number | null> {
-  const { data: latestRows, error: latestRowsError } = await supabase
-    .from("match_player_ratings")
-    .select("match_id,rating_post,formula_name")
-    .eq("player_id", playerId)
-    .neq("match_id", matchId);
-
-  if (!latestRowsError && (latestRows?.length ?? 0) > 0) {
-    const preferredByMatch = new Map<
-      number,
-      { ratingPost: number; priority: number }
-    >();
-
-    for (const row of latestRows ?? []) {
-      const matchIdForRow = Number(row.match_id);
-      const ratingPost = Number(row.rating_post);
-      if (!Number.isFinite(matchIdForRow) || !Number.isFinite(ratingPost)) {
-        continue;
-      }
-
-      const formula = String(row.formula_name || "").toLowerCase();
-      const priority = formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
-      const existing = preferredByMatch.get(matchIdForRow);
-
-      if (!existing || priority >= existing.priority) {
-        preferredByMatch.set(matchIdForRow, { ratingPost, priority });
-      }
-    }
-
-    if (preferredByMatch.size > 0) {
-      const { data: matchesForRatings, error: matchesForRatingsError } =
-        await supabase
-          .from("matches")
-          .select("match_id,date_local,time_local")
-          .in("match_id", Array.from(preferredByMatch.keys()))
-          .order("date_local", { ascending: false, nullsFirst: false })
-          .order("time_local", { ascending: false, nullsFirst: false })
-          .order("match_id", { ascending: false });
-
-      if (!matchesForRatingsError) {
-        for (const row of matchesForRatings ?? []) {
-          const candidate = preferredByMatch.get(Number(row.match_id));
-          if (candidate) {
-            return candidate.ratingPost;
-          }
-        }
-      }
-    }
-  }
-
-  const { data: existingForMatch, error: existingForMatchError } = await supabase
-    .from("match_player_ratings")
-    .select("rating_pre")
-    .eq("match_id", matchId)
-    .eq("player_id", playerId)
-    .maybeSingle();
-
-  if (
-    !existingForMatchError &&
-    existingForMatch &&
-    typeof existingForMatch.rating_pre === "number"
-  ) {
-    return existingForMatch.rating_pre;
-  }
-
-  const { data: playerRow, error: playerError } = await supabase
-    .from("players")
-    .select("initial_rating")
-    .eq("player_id", playerId)
-    .maybeSingle();
-
-  if (!playerError && typeof playerRow?.initial_rating === "number") {
-    return playerRow.initial_rating;
-  }
-
-  return null;
-}
-
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ matchId: string }> },
@@ -650,8 +569,13 @@ export async function PATCH(
       team2.player_2_id,
     ];
 
-    const preRatings = await Promise.all(
-      playerIds.map((playerId) => getPreMatchRating(supabase, matchId, playerId)),
+    const preRatingsMap = await resolvePreMatchRatings(
+      supabase,
+      matchId,
+      playerIds,
+    );
+    const preRatings = playerIds.map(
+      (playerId) => preRatingsMap.get(playerId) ?? null,
     );
 
     const missingPreRatingPlayers = playerIds.filter(

@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
+import {
+  fetchPlayerByEmail,
+  PLAYER_LOOKUP_REGISTER_SELECT,
+} from "@/lib/playerLookup";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 import type { Season } from "@/lib/types";
@@ -17,6 +21,12 @@ type SignupStatus =
   | "waitlisted"
   | "cancelled";
 type VerifyStatus = "verified" | "pending" | "unknown";
+
+type RegisterLookupPlayer = {
+  player_id: number;
+  name: string;
+  is_profile_complete: boolean;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -104,11 +114,15 @@ export default function RegisterPage() {
 
     async function lookup() {
       // Find player by email
-      const { data: playerRow } = await supabase
-        .from("players")
-        .select("player_id, name, is_profile_complete")
-        .eq("email", user!.email ?? "")
-        .maybeSingle();
+      const { player: playerRow, error: playerLookupError } =
+        await fetchPlayerByEmail<RegisterLookupPlayer>({
+          email: user?.email,
+          select: PLAYER_LOOKUP_REGISTER_SELECT,
+        });
+
+      if (playerLookupError) {
+        console.error("Failed player lookup on register:", playerLookupError);
+      }
 
       const pid = playerRow?.player_id ?? null;
       setPlayerId(pid);

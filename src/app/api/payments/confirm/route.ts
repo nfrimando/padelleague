@@ -1,22 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-
-// ─── Supabase clients ─────────────────────────────────────────────────────────
-
-function getUserClient(authorization: string) {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: authorization } } },
-  );
-}
-
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
+import {
+  getPaymentsServiceClient,
+  getPaymentsUserClient,
+} from "@/app/api/payments/_lib/supabase";
 
 // ─── PayMongo link status check ───────────────────────────────────────────────
 
@@ -50,13 +36,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const userClient = getUserClient(authorization);
+  let userClient;
+  try {
+    userClient = getPaymentsUserClient(authorization);
+  } catch (error) {
+    console.error("Failed to initialize user Supabase client:", error);
+    return NextResponse.json(
+      { error: "Server misconfiguration." },
+      { status: 500 },
+    );
+  }
   const { data: { user }, error: authError } = await userClient.auth.getUser();
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const serviceClient = getServiceClient();
+  let serviceClient;
+  try {
+    serviceClient = getPaymentsServiceClient();
+  } catch (error) {
+    console.error("Failed to initialize service Supabase client:", error);
+    return NextResponse.json(
+      { error: "Server misconfiguration." },
+      { status: 500 },
+    );
+  }
 
   // 2. Find player
   const { data: player } = await serviceClient

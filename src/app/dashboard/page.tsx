@@ -12,6 +12,10 @@ import {
   Users,
 } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
+import {
+  fetchPlayerByEmail,
+  PLAYER_LOOKUP_DASHBOARD_SELECT,
+} from "@/lib/playerLookup";
 import { supabase } from "@/lib/supabase";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
 import { formatMatchDate } from "@/lib/utils";
@@ -126,21 +130,13 @@ export default function DashboardPage() {
       setDataLoading(true);
 
       const [
-        { data: playerRow },
-        { data: signupRows },
+        { player: playerRow, error: playerLookupError },
         { data: openSeasonRows },
       ] = await Promise.all([
-        // Find player linked to this Google account by email
-        supabase
-          .from("players")
-          .select("*")
-          .eq("email", user!.email ?? "")
-          .maybeSingle(),
-
-        // All signups for this player (joined with season info)
-        // We'll refetch once we have a player_id below
-        Promise.resolve({ data: null }),
-
+        fetchPlayerByEmail<Player>({
+          email: user?.email,
+          select: PLAYER_LOOKUP_DASHBOARD_SELECT,
+        }),
         // Open seasons — try with optional columns first, fall back to guaranteed columns
         supabase
           .from("seasons")
@@ -162,7 +158,11 @@ export default function DashboardPage() {
           }),
       ]);
 
-      let p = playerRow as Player | null;
+      if (playerLookupError) {
+        console.error("Failed player lookup on dashboard:", playerLookupError);
+      }
+
+      let p = playerRow;
 
       // Auto-create a player record if this Google user has never registered before
       if (!p && user?.email) {

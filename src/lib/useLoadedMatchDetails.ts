@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 import { supabase } from "@/lib/supabase";
 import { LoadedMatchDetails, MatchPlayerSummary } from "@/lib/types";
 
@@ -139,71 +140,18 @@ export function useLoadedMatchDetails({ matchId, enabled }: Options): Result {
         );
       }
 
-      const preRatingsV3: Record<number, number | null> = {};
-      for (const playerId of uniquePlayerIds) {
-        const { data: latestRows } = await supabase
-          .from("match_player_ratings")
-          .select("match_id,rating_post,formula_name")
-          .eq("player_id", playerId)
-          .neq("match_id", parsedId);
-
-        const preferredByMatch = new Map<
-          number,
-          { ratingPost: number; priority: number }
-        >();
-
-        for (const row of latestRows ?? []) {
-          const matchIdForRow = Number(row.match_id);
-          const ratingPost = Number(row.rating_post);
-          if (!Number.isFinite(matchIdForRow) || !Number.isFinite(ratingPost)) {
-            continue;
-          }
-
-          const formula = String(row.formula_name || "").toLowerCase();
-          const priority = formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
-          const existing = preferredByMatch.get(matchIdForRow);
-
-          if (!existing || priority >= existing.priority) {
-            preferredByMatch.set(matchIdForRow, { ratingPost, priority });
-          }
-        }
-
-        if (preferredByMatch.size > 0) {
-          const { data: matchesForRatings } = await supabase
-            .from("matches")
-            .select("match_id,date_local,time_local")
-            .in("match_id", Array.from(preferredByMatch.keys()))
-            .order("date_local", { ascending: false, nullsFirst: false })
-            .order("time_local", { ascending: false, nullsFirst: false })
-            .order("match_id", { ascending: false });
-
-          let foundLatest: number | null = null;
-          for (const row of matchesForRatings ?? []) {
-            const candidate = preferredByMatch.get(Number(row.match_id));
-            if (candidate) {
-              foundLatest = candidate.ratingPost;
-              break;
-            }
-          }
-
-          if (typeof foundLatest === "number") {
-            preRatingsV3[playerId] = foundLatest;
-            continue;
-          }
-        }
-
-        const { data: existingForMatch } = await supabase
-          .from("match_player_ratings")
-          .select("rating_pre")
-          .eq("match_id", parsedId)
-          .eq("player_id", playerId)
-          .maybeSingle();
-
-        preRatingsV3[playerId] =
-          typeof existingForMatch?.rating_pre === "number"
-            ? existingForMatch.rating_pre
-            : (initialRatingMap.get(playerId) ?? null);
-      }
+      const preRatingsMap = await resolvePreMatchRatings(
+        supabase,
+        parsedId,
+        uniquePlayerIds,
+        initialRatingMap,
+      );
+      const preRatingsV3 = Object.fromEntries(
+        uniquePlayerIds.map((playerId) => [
+          playerId,
+          preRatingsMap.get(playerId) ?? null,
+        ]),
+      ) as Record<number, number | null>;
 
       if (cancelled) return;
 
