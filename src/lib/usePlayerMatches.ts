@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  assembleMatchesWithTeamsAndSets,
+  buildPreMatchRatingLookup,
+  groupByMatchId,
+  MatchRow,
+  MatchTeamRow,
+  normalizeId,
+} from "@/lib/matchAssembly";
 import { supabase } from "@/lib/supabase";
-import { MatchSet, MatchWithTeams, Player } from "@/lib/types";
+import { MatchSet, MatchWithTeams } from "@/lib/types";
 
 type RatingHistoryPoint = {
   rating: number;
@@ -13,29 +21,12 @@ type MatchTeamIdRow = {
   match_id: number;
 };
 
-type MatchTeamRow = {
-  uuid: string;
-  match_id: number;
-  team_number: number | null;
-  sets_won: number | null;
-  player_1: Player | null;
-  player_2: Player | null;
-};
-
-type MatchRow = Omit<MatchWithTeams, "teams" | "sets">;
-
 type MatchRatingRow = {
   match_id: number;
-  player_id: string;
+  player_id: string | number;
   rating_pre: number | null;
   rating_post: number | null;
   formula_name: string | null;
-};
-
-type RatingEntry = {
-  rating: number;
-  formula: string;
-  priority: number;
 };
 
 export function usePlayerMatches(playerId: string | null) {
@@ -146,7 +137,7 @@ export function usePlayerMatches(playerId: string | null) {
         const typedMatchRatingsData =
           (matchRatingsData || []) as MatchRatingRow[];
 
-        const ratingLookup = new Map<string, RatingEntry>();
+        const ratingLookup = buildPreMatchRatingLookup(typedMatchRatingsData);
         const selectedPlayerRatingPostByMatch = new Map<
           number,
           { ratingPost: number; priority: number }
@@ -154,26 +145,15 @@ export function usePlayerMatches(playerId: string | null) {
 
         for (const row of typedMatchRatingsData) {
           const matchId = Number(row.match_id);
-          const rating = Number(row.rating_pre);
           const ratingPost = Number(row.rating_post);
           const formula = String(row.formula_name || "").toLowerCase();
-          const normalizedPlayerId = String(row.player_id || "");
 
-          if (
-            !Number.isFinite(matchId) ||
-            !Number.isFinite(rating) ||
-            !normalizedPlayerId
-          ) {
+          if (!Number.isFinite(matchId)) {
             continue;
           }
 
           const priority = formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
-          const key = `${matchId}:${normalizedPlayerId}`;
-          const existing = ratingLookup.get(key);
-
-          if (!existing || priority >= existing.priority) {
-            ratingLookup.set(key, { rating, formula, priority });
-          }
+          const normalizedPlayerId = normalizeId(row.player_id);
 
           if (
             normalizedPlayerId === playerId &&
@@ -216,41 +196,14 @@ export function usePlayerMatches(playerId: string | null) {
         }
         nextRatingHistory.reverse();
 
-        const attachPreMatchRating = (
-          matchId: number,
-          player: Player | null,
-        ) => {
-          if (!player) {
-            return null;
-          }
-
-          const key = `${matchId}:${String(player.player_id)}`;
-          const ratingEntry = ratingLookup.get(key);
-
-          if (!ratingEntry) {
-            return player;
-          }
-
-          return {
-            ...player,
-            pre_match_rating: ratingEntry.rating,
-            pre_match_rating_formula: ratingEntry.formula,
-          };
-        };
-
-        const nextMatches: MatchWithTeams[] = typedMatchesData.map((match) => ({
-          ...match,
-          teams: typedAllTeamsData
-            .filter((team) => team.match_id === match.match_id)
-            .map((team) => ({
-              uuid: team.uuid,
-              team_number: team.team_number,
-              sets_won: team.sets_won,
-              player_1: attachPreMatchRating(match.match_id, team.player_1),
-              player_2: attachPreMatchRating(match.match_id, team.player_2),
-            })),
-          sets: typedMatchSetsData.filter((set) => set.match_id === match.match_id),
-        }));
+        const teamsByMatchId = groupByMatchId(typedAllTeamsData);
+        const setsByMatchId = groupByMatchId(typedMatchSetsData);
+        const nextMatches: MatchWithTeams[] = assembleMatchesWithTeamsAndSets({
+          matches: typedMatchesData,
+          teamsByMatchId,
+          setsByMatchId,
+          ratingLookup,
+        });
 
         if (!isCancelled) {
           setMatches(nextMatches);

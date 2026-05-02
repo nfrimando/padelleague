@@ -75,7 +75,9 @@ function getSupabaseServiceClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return null;
+    throw new Error(
+      "Missing required Supabase service role environment variables.",
+    );
   }
 
   return createClient(supabaseUrl, serviceRoleKey);
@@ -157,7 +159,23 @@ export async function getAuthorizedAdminClient(
     };
   }
 
-  const adminSupabase = getSupabaseServiceClient() ?? userSupabase;
+  let adminSupabase;
+  try {
+    adminSupabase = getSupabaseServiceClient();
+  } catch (error) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to initialize Supabase service client.",
+        },
+        { status: 500 },
+      ),
+    };
+  }
 
   return {
     ok: true,

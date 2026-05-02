@@ -1,17 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
+import { getPaymentsServiceClient } from "@/app/api/payments/_lib/supabase";
 
 // PayMongo sends a Paymongo-Signature header with the format:
 //   t=<unix_timestamp>,te=<test_hmac>,li=<live_hmac>
 // Verification: HMAC-SHA256 of "<timestamp>.<raw_body>" using the webhook secret.
-
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
 
 function verifySignature(
   rawBody: string,
@@ -83,7 +76,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const serviceClient = getServiceClient();
+  let serviceClient;
+  try {
+    serviceClient = getPaymentsServiceClient();
+  } catch (error) {
+    console.error("Failed to initialize service Supabase client:", error);
+    return NextResponse.json(
+      { error: "Server misconfiguration." },
+      { status: 500 },
+    );
+  }
 
   // ── Idempotency check ──────────────────────────────────────────────────────
   // Use event.data.id as the unique event identifier
