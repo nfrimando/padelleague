@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-const WEBSITE_VERSION = "0.8.2";
+const WEBSITE_VERSION = "0.8.6";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
