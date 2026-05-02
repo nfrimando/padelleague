@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLoadedMatchDetails } from "@/lib/useLoadedMatchDetails";
 import { Player } from "@/lib/types";
+import { EventOption } from "@/lib/useMatchEvents";
 import {
   SCHEDULE_MATCH_TYPE_OPTIONS,
   SCHEDULE_MATCH_VENUE_OPTIONS,
@@ -13,7 +14,7 @@ import {
 
 type Props = {
   players: Player[];
-  matchSeasons: number[];
+  matchSeasons: EventOption[];
   matchSeasonsLoading: boolean;
   matchSeasonsError: string | null;
   playerNameById: Map<string, string>;
@@ -67,7 +68,7 @@ export function UpdateMatchTab({
     const { team1, team2, sets } = loadedMatchDetails;
     setUpdateMatchStatus(loadedMatchDetails.status);
     setUpdateMatchSeasonId(
-      loadedMatchDetails.seasonId ? String(loadedMatchDetails.seasonId) : "",
+      loadedMatchDetails.eventId ? String(loadedMatchDetails.eventId) : "",
     );
     setUpdateMatchDateLocal(loadedMatchDetails.dateLocal || "");
     setUpdateMatchTimeLocal(loadedMatchDetails.timeLocal || "");
@@ -211,10 +212,10 @@ export function UpdateMatchTab({
       if (updateMatchSeasonId.trim()) {
         const seasonId = Number.parseInt(updateMatchSeasonId.trim(), 10);
         if (!Number.isInteger(seasonId) || seasonId <= 0) {
-          setUpdateMatchError("season_id must be a positive integer.");
+          setUpdateMatchError("event_id must be a positive integer.");
           return;
         }
-        payload.seasonId = seasonId;
+        payload.eventId = seasonId;
       }
 
       if (updateMatchDateLocal) payload.dateLocal = updateMatchDateLocal;
@@ -401,7 +402,7 @@ export function UpdateMatchTab({
               className="text-slate-500 dark:text-slate-400"
               htmlFor="update-match-season-id"
             >
-              season_id:
+              event_id:
             </label>
             <select
               id="update-match-season-id"
@@ -412,10 +413,10 @@ export function UpdateMatchTab({
               <option value="">Keep existing</option>
               {matchSeasons
                 .slice()
-                .sort((a, b) => b - a)
+                .sort((a, b) => b.id - a.id)
                 .map((season) => (
-                  <option key={season} value={String(season)}>
-                    {season}
+                  <option key={season.id} value={String(season.id)}>
+                    {season.label}
                   </option>
                 ))}
             </select>
@@ -500,13 +501,13 @@ export function UpdateMatchTab({
 
         {matchSeasonsLoading && (
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            Loading seasons...
+            Loading events...
           </div>
         )}
 
         {matchSeasonsError && (
           <div className="text-xs text-rose-600 dark:text-rose-400">
-            Error loading seasons: {matchSeasonsError}
+            Error loading events: {matchSeasonsError}
           </div>
         )}
 

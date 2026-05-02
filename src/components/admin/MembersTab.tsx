@@ -45,7 +45,7 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
         </div>
         <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
           New members who signed up via Google and are awaiting approval.
-          Verified members can register for seasons.
+          Verified members can register for events.
         </p>
       </div>
 

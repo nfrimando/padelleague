@@ -20,8 +20,8 @@ const VERIFIED_PLAYER = {
   is_profile_complete: true,
 };
 
-const OPEN_SEASON = {
-  season_id: 1,
+const OPEN_EVENT = {
+  event_id: 1,
   registration_status: "open",
   start_date: "2026-01-01",
   end_date: "2026-06-30",
@@ -36,7 +36,7 @@ const PAYMONGO_LINK  = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeRequest(body: unknown = { season_id: 1 }, token = "Bearer valid-token") {
+function makeRequest(body: unknown = { event_id: 1 }, token = "Bearer valid-token") {
   return new Request("http://localhost:3000/api/payments/create-link", {
     method: "POST",
     headers: {
@@ -78,7 +78,7 @@ describe("POST /api/payments/create-link", () => {
     const req = new Request("http://localhost/api/payments/create-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ season_id: 1 }),
+      body: JSON.stringify({ event_id: 1 }),
     });
     const res = await POST(req);
     expect(res.status).toBe(401);
@@ -87,19 +87,19 @@ describe("POST /api/payments/create-link", () => {
 
   it("TC-5.2 returns 401 when token is invalid", async () => {
     setupClients(null, {});
-    const res = await POST(makeRequest({ season_id: 1 }));
+    const res = await POST(makeRequest({ event_id: 1 }));
     expect(res.status).toBe(401);
   });
 
   // ── Validation ────────────────────────────────────────────────────────────
 
-  it("TC-5.3 returns 400 when season_id is missing", async () => {
+  it("TC-5.3 returns 400 when event_id is missing", async () => {
     setupClients({ id: "user-1", email: "robin@example.com" }, {
       players: { data: VERIFIED_PLAYER },
     });
     const res = await POST(makeRequest({}));
     expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: expect.stringContaining("season_id") });
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("event_id") });
   });
 
   // ── Verification gate ─────────────────────────────────────────────────────
@@ -116,17 +116,17 @@ describe("POST /api/payments/create-link", () => {
 
   // ── Season gate ───────────────────────────────────────────────────────────
 
-  it("TC-5.5 returns 404 when season is closed or not found", async () => {
+  it("TC-5.5 returns 404 when event is closed or not found", async () => {
     setupClients({ id: "user-1", email: "robin@example.com" }, {
       players: { data: VERIFIED_PLAYER },
-      seasons: [
+      events: [
         { data: null },          // guaranteed columns query → not found
         { data: null },          // optional columns query
       ],
     });
     const res = await POST(makeRequest());
     expect(res.status).toBe(404);
-    expect(await res.json()).toMatchObject({ error: expect.stringContaining("Season not found") });
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("Event not found") });
   });
 
   // ── Happy path ────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ describe("POST /api/payments/create-link", () => {
   it("TC-5.6 creates payment + signup and returns checkout_url", async () => {
     setupClients({ id: "user-1", email: "robin@example.com", user_metadata: { full_name: "Robin Kwee" } }, {
       players:          { data: VERIFIED_PLAYER },
-      seasons:          [{ data: OPEN_SEASON }, { data: { name: "Season 11", registration_fee: 5 } }],
+      events:           [{ data: OPEN_EVENT }, { data: { name: "Summer Open", registration_fee: 5 } }],
       signups:          [{ data: null }, { data: SIGNUP_ROW }],       // check (none) + insert
       payments:         [{ data: PAYMENT_ROW }, { data: null }],      // insert + update ref
       payments_paymongo: { data: null },                              // insert
@@ -165,7 +165,7 @@ describe("POST /api/payments/create-link", () => {
 
     setupClients({ id: "user-1", email: "robin@example.com" }, {
       players:          { data: VERIFIED_PLAYER },
-      seasons:          [{ data: OPEN_SEASON }, { data: null }],
+      events:           [{ data: OPEN_EVENT }, { data: null }],
       signups:          { data: existingSignup },
       payments:         { data: existingPayment },
       payments_paymongo: { data: existingPmLink },
@@ -184,7 +184,7 @@ describe("POST /api/payments/create-link", () => {
   it("TC-5.8 returns 409 when player is already registered", async () => {
     setupClients({ id: "user-1", email: "robin@example.com" }, {
       players: { data: VERIFIED_PLAYER },
-      seasons: [{ data: OPEN_SEASON }, { data: null }],
+      events: [{ data: OPEN_EVENT }, { data: null }],
       signups: { data: { id: "signup-id", status: "registered" } },
     });
     const res = await POST(makeRequest());
@@ -216,7 +216,7 @@ describe("POST /api/payments/create-link", () => {
 
     setupClients({ id: "user-1", email: "robin@example.com", user_metadata: {} }, {
       players:  { data: VERIFIED_PLAYER },
-      seasons:  [{ data: OPEN_SEASON }, { data: null }],
+      events:   [{ data: OPEN_EVENT }, { data: null }],
       signups:  [{ data: null }, { data: SIGNUP_ROW }],
       payments: [{ data: PAYMENT_ROW }, { data: null }, { data: null }], // insert, update, delete (rollback)
     });

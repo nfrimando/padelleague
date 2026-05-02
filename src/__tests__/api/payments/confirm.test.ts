@@ -11,7 +11,7 @@ import { POST } from "@/app/api/payments/confirm/route";
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const PLAYER          = { player_id: 161 };
-const PENDING_SIGNUP  = { id: "signup-uuid", season_id: 1, status: "pending_payment" };
+const PENDING_SIGNUP  = { id: "signup-uuid", event_id: 1, status: "pending_payment" };
 const PAYMENT_ROW     = { payment_id: "pay-uuid", status: "pending" };
 const PM_ROW          = { paymongo_payment_intent_id: "link_abc123" };
 

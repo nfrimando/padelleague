@@ -25,6 +25,20 @@ export function matchTopLine(match: MatchWithTeams): string {
   return time ? `${venue} · ${time}` : venue;
 }
 
+export function seasonBadgeFromEvent(
+  eventLabel: string | null | undefined,
+  _eventId: number | null | undefined,
+): string | null {
+  if (eventLabel) {
+    const seasonMatch = eventLabel.match(/\bseason\s*(\d+)\b/i);
+    if (seasonMatch?.[1]) {
+      return `S${seasonMatch[1]}`;
+    }
+  }
+
+  return null;
+}
+
 export const formatMatchDate = (dateString: string | null) => {
   if (!dateString) return "N/A";
   const date = new Date(`${dateString}T00:00:00`);

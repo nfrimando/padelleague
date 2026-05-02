@@ -20,19 +20,19 @@ import { supabase } from "@/lib/supabase";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
 import { formatMatchDate } from "@/lib/utils";
 import type { User } from "@supabase/supabase-js";
-import type { Player, Season } from "@/lib/types";
+import type { Event, Player } from "@/lib/types";
 
 // ─── Local types ──────────────────────────────────────────────────────────────
 
 type SignupRow = {
   id: string;
-  season_id: number;
+  event_id: number;
   status: string;
   event_type: string;
   created_at: string;
-  season: Pick<
-    Season,
-    | "season_id"
+  event: Pick<
+    Event,
+    | "event_id"
     | "name"
     | "start_date"
     | "end_date"
@@ -43,18 +43,18 @@ type SignupRow = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function seasonLabel(
+function eventLabel(
   s: {
-    season_id: number;
+    event_id: number;
     name?: string | null;
     start_date?: string | null;
   } | null,
 ): string {
-  if (!s) return "Unknown Season";
+  if (!s) return "Unknown Event";
   if (s.name) return s.name;
   if (s.start_date)
-    return `Season ${s.season_id} · ${new Date(s.start_date).getFullYear()}`;
-  return `Season ${s.season_id}`;
+    return `Event ${s.event_id} · ${new Date(s.start_date).getFullYear()}`;
+  return `Event ${s.event_id}`;
 }
 
 function SignupBadge({ status }: { status: string }) {
@@ -104,7 +104,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [player, setPlayer] = useState<Player | null>(null);
   const [signups, setSignups] = useState<SignupRow[]>([]);
-  const [openSeasons, setOpenSeasons] = useState<Season[]>([]);
+  const [openEvents, setOpenEvents] = useState<Event[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
@@ -119,7 +119,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (user === null) router.replace("/register");
+    if (user === null) router.replace("/events/register");
   }, [user, router]);
 
   // ── Data ───────────────────────────────────────────────────────────────────
@@ -131,31 +131,19 @@ export default function DashboardPage() {
 
       const [
         { player: playerRow, error: playerLookupError },
-        { data: openSeasonRows },
+        { data: openEventRows },
       ] = await Promise.all([
         fetchPlayerByEmail<Player>({
           email: user?.email,
           select: PLAYER_LOOKUP_DASHBOARD_SELECT,
         }),
-        // Open seasons — try with optional columns first, fall back to guaranteed columns
         supabase
-          .from("seasons")
+          .from("events")
           .select(
-            "season_id, name, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at",
+            "event_id, name, event_type, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at",
           )
           .eq("registration_status", "open")
-          .order("season_id", { ascending: false })
-          .then(async (r) => {
-            if (!r.error) return r;
-            // Optional columns not yet present — retry with guaranteed columns only
-            return supabase
-              .from("seasons")
-              .select(
-                "season_id, start_date, end_date, registration_status, status, created_at, updated_at",
-              )
-              .eq("registration_status", "open")
-              .order("season_id", { ascending: false });
-          }),
+          .order("event_id", { ascending: false }),
       ]);
 
       if (playerLookupError) {
@@ -191,26 +179,13 @@ export default function DashboardPage() {
       setPlayer(p);
 
       if (p) {
-        // Try to include name from the season join; fall back if column doesn't exist yet
-        let supsResult = await supabase
+        const supsResult = await supabase
           .from("signups")
           .select(
-            "id, season_id, status, event_type, created_at, season:seasons(season_id, name, start_date, end_date, registration_status, status)",
+            "id, event_id, status, event_type, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
           )
           .eq("player_id", p.player_id)
           .order("created_at", { ascending: false });
-
-        if (supsResult.error) {
-          supsResult = (await supabase
-            .from("signups")
-            .select(
-              "id, season_id, status, event_type, created_at, season:seasons(season_id, start_date, end_date, registration_status, status)",
-            )
-            .eq("player_id", p.player_id)
-            .order("created_at", {
-              ascending: false,
-            })) as unknown as typeof supsResult;
-        }
 
         // Supabase infers FK joins as arrays; cast via unknown for correct runtime shape
         let typedSups = (supsResult.data ?? []) as unknown as SignupRow[];
@@ -237,25 +212,13 @@ export default function DashboardPage() {
                 const json = (await res.json()) as { status: string };
                 if (json.status === "registered") {
                   // Payment confirmed — re-fetch signups to get the updated status
-                  let refreshed = await supabase
+                  const refreshed = await supabase
                     .from("signups")
                     .select(
-                      "id, season_id, status, event_type, created_at, season:seasons(season_id, name, start_date, end_date, registration_status, status)",
+                      "id, event_id, status, event_type, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
                     )
                     .eq("player_id", p!.player_id)
                     .order("created_at", { ascending: false });
-
-                  if (refreshed.error) {
-                    refreshed = (await supabase
-                      .from("signups")
-                      .select(
-                        "id, season_id, status, event_type, created_at, season:seasons(season_id, start_date, end_date, registration_status, status)",
-                      )
-                      .eq("player_id", p!.player_id)
-                      .order("created_at", {
-                        ascending: false,
-                      })) as unknown as typeof refreshed;
-                  }
 
                   typedSups = (refreshed.data ?? []) as unknown as SignupRow[];
                 }
@@ -268,16 +231,16 @@ export default function DashboardPage() {
 
         setSignups(typedSups);
 
-        // Filter out seasons already signed up for
-        const signedUpSeasonIds = new Set(typedSups.map((s) => s.season_id));
-        setOpenSeasons(
-          ((openSeasonRows ?? []) as Season[]).filter(
-            (s) => !signedUpSeasonIds.has(s.season_id),
+        // Filter out events already signed up for
+        const signedUpEventIds = new Set(typedSups.map((s) => s.event_id));
+        setOpenEvents(
+          ((openEventRows ?? []) as Event[]).filter(
+            (s) => !signedUpEventIds.has(s.event_id),
           ),
         );
       } else {
         setSignups([]);
-        setOpenSeasons((openSeasonRows ?? []) as Season[]);
+        setOpenEvents((openEventRows ?? []) as Event[]);
       }
 
       setDataLoading(false);
@@ -304,8 +267,8 @@ export default function DashboardPage() {
   }).length;
   const losses = completedMatches.length - wins;
 
-  // ── Sign up for season ─────────────────────────────────────────────────────
-  async function handleSeasonSignup(seasonId: number) {
+  // ── Sign up for event ──────────────────────────────────────────────────────
+  async function handleEventSignup(eventId: number) {
     if (!user) return;
     setPayLoading(true);
     setPayError(null);
@@ -325,7 +288,7 @@ export default function DashboardPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ season_id: seasonId }),
+        body: JSON.stringify({ event_id: eventId }),
       });
 
       const json = await res.json();
@@ -431,9 +394,9 @@ export default function DashboardPage() {
                   </p>
                   <p className="text-amber-200/60 text-sm leading-relaxed">
                     Your account is awaiting admin approval. Once verified
-                    you&apos;ll be able to register for seasons. No action
-                    needed on your end — the league admin will review your
-                    request shortly.
+                    you&apos;ll be able to register for events. No action needed
+                    on your end — the league admin will review your request
+                    shortly.
                   </p>
                 </div>
               </div>
@@ -488,11 +451,11 @@ export default function DashboardPage() {
               </section>
             )}
 
-            {/* ── Season Signup Status ──────────────────────────────────────── */}
+            {/* ── Event Signup Status ───────────────────────────────────────── */}
             <section>
               <SectionHeading
                 icon={<Calendar size={14} />}
-                label="Season Status"
+                label="Event Registration Status"
               />
 
               <div className="mt-5 space-y-3">
@@ -505,7 +468,7 @@ export default function DashboardPage() {
                     >
                       <div className="min-w-0">
                         <p className="font-bold text-sm">
-                          {seasonLabel(s.season)}
+                          {eventLabel(s.event)}
                         </p>
                         <p className="text-[#687FA3] text-xs mt-0.5">
                           {s.status === "pending_payment"
@@ -522,7 +485,7 @@ export default function DashboardPage() {
                         <SignupBadge status={s.status} />
                         {s.status === "pending_payment" && (
                           <button
-                            onClick={() => handleSeasonSignup(s.season_id)}
+                            onClick={() => handleEventSignup(s.event_id)}
                             disabled={payLoading}
                             className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-full transition-all"
                           >
@@ -540,31 +503,31 @@ export default function DashboardPage() {
                   ))
                 ) : (
                   <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl p-5 text-[#687FA3] text-sm">
-                    You are not registered for any season yet.
+                    You are not registered for any event yet.
                   </div>
                 )}
 
-                {/* Open seasons CTA */}
-                {openSeasons.length > 0 && (
+                {/* Open events CTA */}
+                {openEvents.length > 0 && (
                   <div className="pt-4 space-y-3">
                     <p className="text-[#687FA3] text-[10px] font-black uppercase tracking-[0.3em]">
                       Open for Registration
                     </p>
-                    {openSeasons.map((season) => (
+                    {openEvents.map((event) => (
                       <div
-                        key={season.season_id}
+                        key={event.event_id}
                         className="bg-[#162032] border border-[#00C8DC]/20 hover:border-[#00C8DC]/40 rounded-2xl px-5 py-5 flex items-center justify-between gap-4 transition-colors"
                       >
                         <div>
-                          <p className="font-bold">{seasonLabel(season)}</p>
-                          {season.start_date && season.end_date && (
+                          <p className="font-bold">{eventLabel(event)}</p>
+                          {event.start_date && event.end_date && (
                             <p className="text-[#687FA3] text-xs mt-0.5">
-                              {new Date(season.start_date).toLocaleDateString(
+                              {new Date(event.start_date).toLocaleDateString(
                                 "en-PH",
                                 { month: "short", day: "numeric" },
                               )}
                               {" – "}
-                              {new Date(season.end_date).toLocaleDateString(
+                              {new Date(event.end_date).toLocaleDateString(
                                 "en-PH",
                                 {
                                   month: "short",
@@ -575,7 +538,7 @@ export default function DashboardPage() {
                             </p>
                           )}
                           <p className="text-[#00C8DC] text-xs font-bold mt-1">
-                            ₱{(season.registration_fee ?? 5).toLocaleString()}{" "}
+                            ₱{(event.registration_fee ?? 5).toLocaleString()}{" "}
                             registration fee
                           </p>
                         </div>
@@ -585,7 +548,7 @@ export default function DashboardPage() {
                           </span>
                         ) : (
                           <button
-                            onClick={() => handleSeasonSignup(season.season_id)}
+                            onClick={() => handleEventSignup(event.event_id)}
                             disabled={payLoading}
                             className="flex items-center gap-2 bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[11px] uppercase tracking-widest px-5 py-2.5 rounded-full transition-all shrink-0"
                           >
@@ -684,9 +647,9 @@ export default function DashboardPage() {
                                 <span className="text-[#687FA3] text-xs">
                                   {formatMatchDate(match.date_local)}
                                 </span>
-                                {match.season_id && (
+                                {match.event_id && (
                                   <span className="bg-[#00C8DC]/10 text-[#00C8DC] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-                                    S{match.season_id}
+                                    S{match.event_id}
                                   </span>
                                 )}
                                 {match.type && (

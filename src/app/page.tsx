@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-const WEBSITE_VERSION = "0.7.7";
+const WEBSITE_VERSION = "0.8.1";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -111,15 +111,15 @@ export default function HomePage() {
           .eq("status", "completed"),
         supabase
           .from("matches")
-          .select("season_id")
-          .not("season_id", "is", null)
-          .order("season_id", { ascending: false })
+          .select("event_id")
+          .not("event_id", "is", null)
+          .order("event_id", { ascending: false })
           .limit(1),
         supabase.from("match_sets").select("*", { count: "exact", head: true }),
       ]);
 
       const latestSeason: number | null =
-        latestSeasonData?.[0]?.season_id ?? null;
+        latestSeasonData?.[0]?.event_id ?? null;
 
       if (!cancelled) {
         setStats({

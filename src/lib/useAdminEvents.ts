@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-export type AdminSeasonRow = {
-  season_id: number;
+export type AdminEventRow = {
+  event_id: number;
   name?: string | null;
+  event_type: string;
   start_date?: string | null;
   end_date?: string | null;
   registration_fee?: number | null;
@@ -14,13 +15,13 @@ export type AdminSeasonRow = {
   created_at: string;
 };
 
-export function useAdminSeasons(enabled = true) {
-  const [seasons, setSeasons] = useState<AdminSeasonRow[]>([]);
+export function useAdminEvents(enabled = true) {
+  const [events, setEvents] = useState<AdminEventRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
-      setSeasons([]);
+      setEvents([]);
       setLoading(false);
       return;
     }
@@ -29,12 +30,12 @@ export function useAdminSeasons(enabled = true) {
     setLoading(true);
 
     supabase
-      .from("seasons")
+      .from("events")
       .select("*")
-      .order("season_id", { ascending: false })
+      .order("event_id", { ascending: false })
       .then(({ data }) => {
         if (!cancelled) {
-          setSeasons((data ?? []) as AdminSeasonRow[]);
+          setEvents((data ?? []) as AdminEventRow[]);
           setLoading(false);
         }
       });
@@ -45,8 +46,8 @@ export function useAdminSeasons(enabled = true) {
   }, [enabled]);
 
   return {
-    seasons,
-    setSeasons,
+    events,
+    setEvents,
     loading,
   };
 }

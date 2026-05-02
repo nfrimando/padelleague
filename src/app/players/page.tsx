@@ -10,14 +10,15 @@ import PlayerCard from "@/components/PlayerCard";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import {
   ALL_MATCH_FILTER,
-  filterMatchesBySeasonAndType,
-  getSeasonsFromMatches,
+  filterMatchesByEventAndType,
+  getEventsFromMatches,
   isValidMatchTypeFilter,
   MATCH_TYPE_FILTER_OPTIONS,
 } from "@/lib/matches";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
+import { useEventMap } from "@/lib/useEventMap";
 import { Player } from "@/lib/types";
 
 function PlayersPageContent() {
@@ -35,7 +36,7 @@ function PlayersPageContent() {
   const [pendingSelectedPlayerId, setPendingSelectedPlayerId] = useState<
     string | null
   >(null);
-  const [seasonFilter, setSeasonFilter] = useState<
+  const [eventFilter, setEventFilter] = useState<
     number | typeof ALL_MATCH_FILTER
   >(ALL_MATCH_FILTER);
   const [selectedTypeFilter, setSelectedTypeFilter] =
@@ -52,6 +53,7 @@ function PlayersPageContent() {
 
   const { players, loading } = usePlayers({ onlyActivePlayers: true });
   const filtered = usePlayerSearch(players, search);
+  const { eventMap, events } = useEventMap();
   const {
     matches: playerMatches,
     latestRating: selectedPlayerLatestRating,
@@ -64,13 +66,13 @@ function PlayersPageContent() {
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
     const seasonParam = params.get("season");
-    const parsedSeason = seasonParam ? Number(seasonParam) : Number.NaN;
+    const parsedEvent = seasonParam ? Number(seasonParam) : Number.NaN;
 
-    const nextSeason: number | typeof ALL_MATCH_FILTER =
+    const nextEvent: number | typeof ALL_MATCH_FILTER =
       seasonParam === ALL_MATCH_FILTER
         ? ALL_MATCH_FILTER
-        : !Number.isNaN(parsedSeason)
-          ? parsedSeason
+        : !Number.isNaN(parsedEvent)
+          ? parsedEvent
           : ALL_MATCH_FILTER;
 
     const typeParam = params.get("type");
@@ -78,9 +80,7 @@ function PlayersPageContent() {
       ? (typeParam as string)
       : ALL_MATCH_FILTER;
 
-    setSeasonFilter((current) =>
-      current === nextSeason ? current : nextSeason,
-    );
+    setEventFilter((current) => (current === nextEvent ? current : nextEvent));
     setSelectedTypeFilter((current) =>
       current === nextType ? current : nextType,
     );
@@ -88,7 +88,7 @@ function PlayersPageContent() {
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
-    params.set("season", String(seasonFilter));
+    params.set("season", String(eventFilter));
     params.set("type", selectedTypeFilter);
 
     const nextQuery = params.toString();
@@ -98,19 +98,22 @@ function PlayersPageContent() {
 
     const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
     router.replace(nextUrl, { scroll: false });
-  }, [pathname, router, searchParamsString, seasonFilter, selectedTypeFilter]);
+  }, [pathname, router, searchParamsString, eventFilter, selectedTypeFilter]);
 
-  const seasonOptions = useMemo(() => {
-    return getSeasonsFromMatches(playerMatches);
-  }, [playerMatches]);
+  const eventOptions = useMemo(() => {
+    return getEventsFromMatches(playerMatches).map((id) => ({
+      id,
+      label: eventMap[id] ?? `Event ${id}`,
+    }));
+  }, [playerMatches, eventMap]);
 
   const filteredMatches = useMemo(() => {
-    return filterMatchesBySeasonAndType(
+    return filterMatchesByEventAndType(
       playerMatches,
-      seasonFilter,
+      eventFilter,
       selectedTypeFilter,
     );
-  }, [playerMatches, seasonFilter, selectedTypeFilter]);
+  }, [playerMatches, eventFilter, selectedTypeFilter]);
 
   const selectedPlayerLatestMatchDate = useMemo(() => {
     const latest = playerMatches.find(
@@ -412,15 +415,69 @@ function PlayersPageContent() {
               .sort((a, b) => b.count - a.count)
               .slice(0, 3);
 
-            const seasons = playerMatches
-              .map((m) => m.season_id)
-              .filter((s): s is number => s !== null)
-              .map((s) => Number(s))
-              .filter((s) => !Number.isNaN(s));
+            const normalizeEventId = (value: unknown): number | null => {
+              if (typeof value === "number") {
+                return Number.isInteger(value) && value > 0 ? value : null;
+              }
+              if (typeof value === "bigint") {
+                const normalized = Number(value);
+                return Number.isInteger(normalized) && normalized > 0
+                  ? normalized
+                  : null;
+              }
+              if (typeof value === "string") {
+                const parsed = Number.parseInt(value, 10);
+                return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+              }
+              return null;
+            };
 
-            const firstSeason =
-              seasons.length > 0 ? Math.min(...seasons) : null;
-            const lastSeason = seasons.length > 0 ? Math.max(...seasons) : null;
+            const playerEventIds = new Set(
+              playerMatches
+                .map((m) => normalizeEventId(m.event_id))
+                .filter((id): id is number => id !== null),
+            );
+
+            const mostRecentEvent = events
+              .map((event) => ({
+                ...event,
+                normalizedEventId: normalizeEventId(event.event_id),
+              }))
+              .filter(
+                (event) =>
+                  event.normalizedEventId !== null &&
+                  playerEventIds.has(event.normalizedEventId),
+              )
+              .sort((a, b) => {
+                const createdAtA = a.created_at
+                  ? new Date(a.created_at).getTime()
+                  : Number.NEGATIVE_INFINITY;
+                const createdAtB = b.created_at
+                  ? new Date(b.created_at).getTime()
+                  : Number.NEGATIVE_INFINITY;
+
+                if (createdAtA !== createdAtB) {
+                  return createdAtB - createdAtA;
+                }
+
+                const nameA = (a.name ?? "").trim();
+                const nameB = (b.name ?? "").trim();
+                const nameCompare = nameB.localeCompare(nameA, undefined, {
+                  sensitivity: "base",
+                });
+                if (nameCompare !== 0) {
+                  return nameCompare;
+                }
+
+                return (b.normalizedEventId ?? 0) - (a.normalizedEventId ?? 0);
+              })[0];
+
+            const mostRecentEventLabel = mostRecentEvent
+              ? mostRecentEvent.name?.trim() ||
+                (mostRecentEvent.normalizedEventId
+                  ? (eventMap[mostRecentEvent.normalizedEventId] ?? null)
+                  : null)
+              : null;
 
             return (
               <div className="mt-6 border p-4 rounded">
@@ -441,53 +498,48 @@ function PlayersPageContent() {
                 />
                 {!loadingMatches && matchCount > 0 && (
                   <div className="mt-4 pt-3 border-t space-y-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                      <div className="h-20 min-w-0 text-center flex flex-col justify-center">
+                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200 leading-tight">
                           {matchCount}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
                           Matches
                         </div>
                       </div>
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                      <div className="h-20 min-w-0 text-center flex flex-col justify-center">
+                        <div className="text-lg font-bold text-green-600 dark:text-green-400 leading-tight">
                           {winCount}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
                           Wins
                         </div>
                       </div>
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
+                      <div className="h-20 min-w-0 text-center flex flex-col justify-center">
+                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200 leading-tight">
                           {matchCount - winCount}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
                           Losses
                         </div>
                       </div>
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
+                      <div className="h-20 min-w-0 text-center flex flex-col justify-center">
+                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200 leading-tight">
                           {Math.round((winCount / matchCount) * 100)}%
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
                           Win Rate
                         </div>
                       </div>
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
-                          {firstSeason ?? "N/A"}
+                      <div className="h-20 min-w-0 text-center flex flex-col justify-center">
+                        <div
+                          className="text-sm sm:text-base font-bold text-sky-700 dark:text-sky-200 leading-tight truncate"
+                          title={mostRecentEventLabel ?? "N/A"}
+                        >
+                          {mostRecentEventLabel ?? "N/A"}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
-                          First Season
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-sky-700 dark:text-sky-200">
-                          {lastSeason ?? "N/A"}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
-                          Last Season
+                          Most Recent Event
                         </div>
                       </div>
                     </div>
@@ -541,11 +593,11 @@ function PlayersPageContent() {
             <h2 className="text-xl font-bold">Matches</h2>
             <div className="mt-3">
               <MatchFiltersCard
-                seasonFilter={seasonFilter}
-                seasons={seasonOptions}
+                eventFilter={eventFilter}
+                events={eventOptions}
                 selectedTypeFilter={selectedTypeFilter}
                 typeFilterOptions={MATCH_TYPE_FILTER_OPTIONS}
-                onSeasonChange={(value) => setSeasonFilter(value)}
+                onEventChange={(value) => setEventFilter(value)}
                 onTypeChange={(value) => setSelectedTypeFilter(value)}
               />
             </div>
@@ -572,6 +624,11 @@ function PlayersPageContent() {
                     key={match.match_id}
                     match={match}
                     highlightPlayerId={selectedPlayer?.player_id}
+                    seasonLabel={
+                      match.event_id != null
+                        ? (eventMap[match.event_id] ?? undefined)
+                        : undefined
+                    }
                   />
                 ))}
               </div>

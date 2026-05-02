@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import {
@@ -10,9 +9,7 @@ import {
 } from "@/lib/playerLookup";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
-import type { Season } from "@/lib/types";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import type { Event } from "@/lib/types";
 
 type SignupStatus =
   | "none"
@@ -28,27 +25,19 @@ type RegisterLookupPlayer = {
   is_profile_complete: boolean;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Derives a display label for a season, falling back to "Season {id}". */
-function seasonLabel(s: Season): string {
-  if (s.name) return s.name;
-  if (s.start_date) {
-    const year = new Date(s.start_date).getFullYear();
-    return `Season ${s.season_id} · ${year}`;
+function eventLabel(e: Event): string {
+  if (e.name) return e.name;
+  if (e.start_date) {
+    const year = new Date(e.start_date).getFullYear();
+    return `Event ${e.event_id} · ${year}`;
   }
-  return `Season ${s.season_id}`;
+  return `Event ${e.event_id}`;
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function RegisterPage() {
-  const router = useRouter();
-
   const [user, setUser] = useState<User | null>(null);
-  const [seasons, setSeasons] = useState<Season[]>([]);
-  const [selectedSeasonId, setSelectedSeasonId] = useState<number | null>(null);
-  const [playerId, setPlayerId] = useState<number | null>(null); // matched by email
+  const [events, setEvents] = useState<Event[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [signupStatus, setSignupStatus] = useState<SignupStatus>("none");
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("unknown");
@@ -56,7 +45,6 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Auth & initial data ────────────────────────────────────────────────────
   useEffect(() => {
     async function init() {
       const {
@@ -64,33 +52,16 @@ export default function RegisterPage() {
       } = await supabase.auth.getUser();
       if (u) setUser(u);
 
-      // Open seasons — try with optional columns, fall back if migration not yet applied
-      let seasonResult = await supabase
-        .from("seasons")
+      const { data: eventData } = await supabase
+        .from("events")
         .select(
-          "season_id, name, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at",
+          "event_id, name, event_type, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at",
         )
         .eq("registration_status", "open")
-        .order("season_id", { ascending: false });
-
-      if (seasonResult.error) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        seasonResult = (await supabase
-          .from("seasons")
-          .select(
-            "season_id, start_date, end_date, registration_status, status, created_at, updated_at",
-          )
-          .eq("registration_status", "open")
-          .order("season_id", {
-            ascending: false,
-          })) as unknown as typeof seasonResult;
-      }
-
-      const { data: seasonData } = seasonResult;
-
-      if (seasonData && seasonData.length > 0) {
-        setSeasons(seasonData as Season[]);
-        setSelectedSeasonId(seasonData[0].season_id);
+        .order("event_id", { ascending: false });
+      if (eventData && eventData.length > 0) {
+        setEvents(eventData as Event[]);
+        setSelectedEventId(eventData[0].event_id);
       }
 
       setLoading(false);
@@ -104,16 +75,13 @@ export default function RegisterPage() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // ── Player lookup + signup check whenever user / season changes ────────────
   useEffect(() => {
     if (!user) {
-      setPlayerId(null);
       setSignupStatus("none");
       return;
     }
 
     async function lookup() {
-      // Find player by email
       const { player: playerRow, error: playerLookupError } =
         await fetchPlayerByEmail<RegisterLookupPlayer>({
           email: user?.email,
@@ -125,32 +93,27 @@ export default function RegisterPage() {
       }
 
       const pid = playerRow?.player_id ?? null;
-      setPlayerId(pid);
       setPlayerName(playerRow?.name ?? user!.user_metadata?.full_name ?? "");
       if (playerRow) {
         setVerifyStatus(playerRow.is_profile_complete ? "verified" : "pending");
       } else {
-        setVerifyStatus("unknown"); // new user, will be created on submit
+        setVerifyStatus("unknown");
       }
 
-      if (!pid || !selectedSeasonId) {
+      if (!pid || !selectedEventId) {
         setSignupStatus("none");
         return;
       }
 
-      // Check existing signup in the `signups` table
       const { data: existing } = await supabase
         .from("signups")
         .select("status")
         .eq("player_id", pid)
-        .eq("season_id", selectedSeasonId)
+        .eq("event_id", selectedEventId)
         .maybeSingle();
 
       let status = (existing?.status as SignupStatus) ?? "none";
 
-      // Auto-reconcile: if the DB still says pending_payment, ask the confirm
-      // API whether PayMongo has already received the money (fixes the case
-      // where the user paid but never hit the success page).
       if (status === "pending_payment") {
         try {
           const {
@@ -167,7 +130,7 @@ export default function RegisterPage() {
             }
           }
         } catch {
-          // Confirm failed — keep the DB status
+          // Keep DB state when confirm fails.
         }
       }
 
@@ -175,15 +138,13 @@ export default function RegisterPage() {
     }
 
     lookup();
-  }, [user, selectedSeasonId]);
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  }, [user, selectedEventId]);
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/register`,
+        redirectTo: `${window.location.origin}/events/register`,
         queryParams: { prompt: "select_account" },
       },
     });
@@ -193,7 +154,6 @@ export default function RegisterPage() {
     try {
       await supabase.auth.signOut();
       setUser(null);
-      setPlayerId(null);
       setPlayerName("");
       setSignupStatus("none");
     } finally {
@@ -203,7 +163,7 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!user || !selectedSeasonId) return;
+    if (!user || !selectedEventId) return;
 
     setSubmitting(true);
     setError(null);
@@ -223,11 +183,10 @@ export default function RegisterPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ season_id: selectedSeasonId }),
+        body: JSON.stringify({ event_id: selectedEventId }),
       });
 
       const json = await res.json();
-
       if (!res.ok) {
         setError(json.error ?? "Something went wrong. Please try again.");
         return;
@@ -241,10 +200,8 @@ export default function RegisterPage() {
     }
   };
 
-  const selectedSeason = seasons.find((s) => s.season_id === selectedSeasonId);
-  const fee = selectedSeason?.registration_fee ?? 5;
-
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const selectedEvent = events.find((e) => e.event_id === selectedEventId);
+  const fee = selectedEvent?.registration_fee ?? 5;
 
   if (loading) {
     return (
@@ -273,13 +230,12 @@ export default function RegisterPage() {
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <h1 className="text-3xl font-black italic uppercase tracking-tighter mb-2">
-            Season Registration
+            Event Registration
           </h1>
           <p className="text-white/50 mb-8 text-sm">
-            Register and pay to join the upcoming season.
+            Register and pay to join the upcoming event.
           </p>
 
-          {/* ── Not signed in ── */}
           {!user && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
               <p className="text-white/70 mb-6">
@@ -295,13 +251,12 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ── No open seasons ── */}
-          {user && seasons.length === 0 && (
+          {user && events.length === 0 && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-3">
               <p className="text-white/50 text-sm">Signed in as</p>
               <p className="font-medium">{user.email}</p>
               <p className="text-white/70 text-sm mt-4">
-                No seasons are open for registration right now. Check back soon!
+                No events are open for registration right now. Check back soon!
               </p>
               <Link
                 href="/dashboard"
@@ -312,7 +267,6 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ── Pending verification ── */}
           {user && verifyStatus === "pending" && signupStatus === "none" && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-5">
               <div className="flex items-center gap-3 pb-4 border-b border-white/10">
@@ -337,7 +291,7 @@ export default function RegisterPage() {
                   </p>
                   <p className="text-white/60 text-sm leading-relaxed">
                     Your account is waiting for admin approval before you can
-                    register for a season. You&apos;ll be notified once
+                    register for an event. You&apos;ll be notified once
                     you&apos;re verified.
                   </p>
                 </div>
@@ -351,7 +305,6 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ── Already registered ── */}
           {user &&
             (signupStatus === "registered" ||
               signupStatus === "pending_payment") && (
@@ -361,17 +314,13 @@ export default function RegisterPage() {
                 {signupStatus === "registered" ? (
                   <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
                     ✓ Registered for{" "}
-                    {selectedSeason
-                      ? seasonLabel(selectedSeason)
-                      : "this season"}
+                    {selectedEvent ? eventLabel(selectedEvent) : "this event"}
                   </div>
                 ) : (
                   <div className="space-y-4">
                     <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2 rounded-lg text-sm font-bold">
                       ⏳ Payment pending for{" "}
-                      {selectedSeason
-                        ? seasonLabel(selectedSeason)
-                        : "this season"}
+                      {selectedEvent ? eventLabel(selectedEvent) : "this event"}
                     </div>
                     <p className="text-white/50 text-sm">
                       Your registration is reserved — complete payment to
@@ -404,14 +353,11 @@ export default function RegisterPage() {
               </div>
             )}
 
-          {/* ── Registration form ── */}
-          {/* Shows for verified users (or brand-new users who don't have a record yet). */}
           {user && signupStatus === "none" && verifyStatus !== "pending" && (
             <form
               onSubmit={handleSubmit}
               className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6"
             >
-              {/* User header */}
               <div className="flex items-center gap-3 pb-4 border-b border-white/10">
                 {user.user_metadata?.avatar_url && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -436,46 +382,42 @@ export default function RegisterPage() {
                 </button>
               </div>
 
-              {/* Season selector */}
-              {seasons.length > 1 && (
+              {events.length > 1 && (
                 <div>
                   <label className="block text-sm font-medium text-white/70 mb-2">
-                    Season
+                    Event
                   </label>
                   <select
-                    value={selectedSeasonId ?? ""}
-                    onChange={(e) =>
-                      setSelectedSeasonId(Number(e.target.value))
-                    }
+                    value={selectedEventId ?? ""}
+                    onChange={(e) => setSelectedEventId(Number(e.target.value))}
                     className="w-full bg-white text-slate-900 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-[#00C8DC] dark:bg-white/10 dark:text-white transition-colors"
                   >
-                    {seasons.map((s) => (
+                    {events.map((event) => (
                       <option
-                        key={s.season_id}
-                        value={s.season_id}
+                        key={event.event_id}
+                        value={event.event_id}
                         className="bg-white text-slate-900 dark:bg-[#0E1523] dark:text-white"
                       >
-                        {seasonLabel(s)}
+                        {eventLabel(event)}
                       </option>
                     ))}
                   </select>
                 </div>
               )}
 
-              {/* Season info */}
-              {selectedSeason && (
+              {selectedEvent && (
                 <div className="bg-[#162032] border border-[#687FA3]/10 rounded-xl px-4 py-3 text-sm space-y-1">
                   <p className="font-bold text-white">
-                    {seasonLabel(selectedSeason)}
+                    {eventLabel(selectedEvent)}
                   </p>
-                  {selectedSeason.start_date && selectedSeason.end_date && (
+                  {selectedEvent.start_date && selectedEvent.end_date && (
                     <p className="text-[#687FA3]">
-                      {new Date(selectedSeason.start_date).toLocaleDateString(
+                      {new Date(selectedEvent.start_date).toLocaleDateString(
                         "en-PH",
                         { month: "short", day: "numeric", year: "numeric" },
                       )}
                       {" – "}
-                      {new Date(selectedSeason.end_date).toLocaleDateString(
+                      {new Date(selectedEvent.end_date).toLocaleDateString(
                         "en-PH",
                         { month: "short", day: "numeric", year: "numeric" },
                       )}
@@ -490,7 +432,6 @@ export default function RegisterPage() {
                 </p>
               )}
 
-              {/* Fee summary */}
               <div className="flex items-center justify-between text-sm py-3 border-t border-white/10">
                 <span className="text-white/60">Registration fee</span>
                 <span className="font-bold text-[#00C8DC]">
@@ -523,8 +464,6 @@ export default function RegisterPage() {
     </div>
   );
 }
-
-// ─── Google icon ──────────────────────────────────────────────────────────────
 
 function GoogleIcon() {
   return (

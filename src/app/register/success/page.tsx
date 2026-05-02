@@ -15,7 +15,7 @@ const POLL_MS = 2500;
 export default function RegisterSuccessPage() {
   const router = useRouter();
   const [state, setState] = useState<ConfirmState>("loading");
-  const [seasonName, setSeasonName] = useState<string | null>(null);
+  const [eventName, setEventName] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +27,7 @@ export default function RegisterSuccessPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        router.replace("/register");
+        router.replace("/events/register");
         return;
       }
 
@@ -49,29 +49,27 @@ export default function RegisterSuccessPage() {
             };
 
             if (json.status === "registered") {
-              // Fetch season name for the confirmed signup
+              // Fetch event name for the confirmed signup
               if (json.signup_id) {
                 const { data: signup } = await supabase
                   .from("signups")
-                  .select(
-                    "season_id, season:seasons(season_id, name, start_date)",
-                  )
+                  .select("event_id, event:events(event_id, name, start_date)")
                   .eq("id", json.signup_id)
                   .maybeSingle();
 
-                const s = signup?.season as unknown as {
-                  season_id: number;
+                const e = signup?.event as unknown as {
+                  event_id: number;
                   name?: string | null;
                   start_date?: string | null;
                 } | null;
-                const label = s?.name
-                  ? s.name
-                  : s?.start_date
-                    ? `Season ${s.season_id} · ${new Date(s.start_date).getFullYear()}`
+                const label = e?.name
+                  ? e.name
+                  : e?.start_date
+                    ? `Event ${e.event_id} · ${new Date(e.start_date).getFullYear()}`
                     : signup
-                      ? `Season ${signup.season_id}`
+                      ? `Event ${signup.event_id}`
                       : null;
-                setSeasonName(label);
+                setEventName(label);
               }
               setState("confirmed");
               return;
@@ -135,12 +133,12 @@ export default function RegisterSuccessPage() {
                 </h1>
                 <p className="text-[#687FA3] text-sm leading-relaxed">
                   Payment confirmed.
-                  {seasonName && (
+                  {eventName && (
                     <>
                       {" "}
                       Your registration for{" "}
                       <span className="text-white font-semibold">
-                        {seasonName}
+                        {eventName}
                       </span>{" "}
                       is locked in.
                     </>

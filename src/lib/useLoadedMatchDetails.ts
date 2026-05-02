@@ -47,9 +47,8 @@ export function useLoadedMatchDetails({ matchId, enabled }: Options): Result {
       const { data: matchRow, error: matchError } = await supabase
         .from("matches")
         .select(
-          "match_id,status,season_id,date_local,time_local,venue,type,winner_team",
+          "match_id,status,event_id,date_local,time_local,venue,type,winner_team",
         )
-        .eq("match_id", parsedId)
         .maybeSingle();
 
       if (cancelled) return;
@@ -166,7 +165,7 @@ export function useLoadedMatchDetails({ matchId, enabled }: Options): Result {
       setLoadedMatchDetails({
         matchId: parsedId,
         status: nextStatus,
-        seasonId: matchRow.season_id,
+        eventId: matchRow.event_id,
         dateLocal: matchRow.date_local,
         timeLocal: matchRow.time_local,
         venue: matchRow.venue,

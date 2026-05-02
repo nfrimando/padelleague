@@ -5,6 +5,7 @@ import BackToHome from "@/components/BackToHome";
 import MatchCalendar from "@/components/MatchCalendar";
 import MatchCard from "@/components/MatchCard";
 import { useMatches } from "@/lib/useMatches";
+import { useEventMap } from "@/lib/useEventMap";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -28,6 +29,7 @@ export default function MatchesPage() {
     loading: calendarLoading,
     error: calendarError,
   } = useMatches({ dateGte: calendarRangeStart, dateLte: calendarRangeEnd });
+  const { eventMap } = useEventMap();
 
   return (
     <>
@@ -93,7 +95,15 @@ export default function MatchesPage() {
             ) : (
               <div className="space-y-4">
                 {matches.map((match) => (
-                  <MatchCard key={match.match_id} match={match} />
+                  <MatchCard
+                    key={match.match_id}
+                    match={match}
+                    seasonLabel={
+                      match.event_id != null
+                        ? (eventMap[match.event_id] ?? undefined)
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
             )}
