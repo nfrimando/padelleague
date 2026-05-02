@@ -53,7 +53,7 @@ function PlayersPageContent() {
 
   const { players, loading } = usePlayers({ onlyActivePlayers: true });
   const filtered = usePlayerSearch(players, search);
-  const { eventMap, events } = useEventMap();
+  const { eventMap } = useEventMap();
   const {
     matches: playerMatches,
     latestRating: selectedPlayerLatestRating,
@@ -432,51 +432,60 @@ function PlayersPageContent() {
               return null;
             };
 
-            const playerEventIds = new Set(
-              playerMatches
-                .map((m) => normalizeEventId(m.event_id))
-                .filter((id): id is number => id !== null),
-            );
+            const mostRecentEventFromMatch = playerMatches
+              .map((match) => {
+                const normalizedEventId = normalizeEventId(match.event_id);
+                if (normalizedEventId === null) {
+                  return null;
+                }
 
-            const mostRecentEvent = events
-              .map((event) => ({
-                ...event,
-                normalizedEventId: normalizeEventId(event.event_id),
-              }))
+                const datePart =
+                  typeof match.date_local === "string"
+                    ? match.date_local.trim()
+                    : "";
+                const timePart =
+                  typeof match.time_local === "string"
+                    ? match.time_local.trim()
+                    : "";
+
+                let recencyValue = Number.NEGATIVE_INFINITY;
+                if (datePart) {
+                  const withTime = Date.parse(
+                    `${datePart}T${timePart || "00:00:00"}`,
+                  );
+                  const dateOnly = Date.parse(datePart);
+
+                  recencyValue = Number.isFinite(withTime)
+                    ? withTime
+                    : Number.isFinite(dateOnly)
+                      ? dateOnly
+                      : Number.NEGATIVE_INFINITY;
+                }
+
+                return {
+                  normalizedEventId,
+                  recencyValue,
+                };
+              })
               .filter(
-                (event) =>
-                  event.normalizedEventId !== null &&
-                  playerEventIds.has(event.normalizedEventId),
+                (
+                  entry,
+                ): entry is {
+                  normalizedEventId: number;
+                  recencyValue: number;
+                } => entry !== null,
               )
               .sort((a, b) => {
-                const createdAtA = a.created_at
-                  ? new Date(a.created_at).getTime()
-                  : Number.NEGATIVE_INFINITY;
-                const createdAtB = b.created_at
-                  ? new Date(b.created_at).getTime()
-                  : Number.NEGATIVE_INFINITY;
-
-                if (createdAtA !== createdAtB) {
-                  return createdAtB - createdAtA;
+                if (a.recencyValue !== b.recencyValue) {
+                  return b.recencyValue - a.recencyValue;
                 }
 
-                const nameA = (a.name ?? "").trim();
-                const nameB = (b.name ?? "").trim();
-                const nameCompare = nameB.localeCompare(nameA, undefined, {
-                  sensitivity: "base",
-                });
-                if (nameCompare !== 0) {
-                  return nameCompare;
-                }
-
-                return (b.normalizedEventId ?? 0) - (a.normalizedEventId ?? 0);
+                return b.normalizedEventId - a.normalizedEventId;
               })[0];
 
-            const mostRecentEventLabel = mostRecentEvent
-              ? mostRecentEvent.name?.trim() ||
-                (mostRecentEvent.normalizedEventId
-                  ? (eventMap[mostRecentEvent.normalizedEventId] ?? null)
-                  : null)
+            const mostRecentEventLabel = mostRecentEventFromMatch
+              ? (eventMap[mostRecentEventFromMatch.normalizedEventId] ??
+                `Event ${mostRecentEventFromMatch.normalizedEventId}`)
               : null;
 
             return (
@@ -533,7 +542,7 @@ function PlayersPageContent() {
                       </div>
                       <div className="h-20 min-w-0 text-center flex flex-col justify-center">
                         <div
-                          className="text-sm sm:text-base font-bold text-sky-700 dark:text-sky-200 leading-tight truncate"
+                          className="text-sm sm:text-base font-bold text-sky-700 dark:text-sky-200 leading-tight whitespace-normal break-words"
                           title={mostRecentEventLabel ?? "N/A"}
                         >
                           {mostRecentEventLabel ?? "N/A"}
