@@ -2,25 +2,26 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { AdminSeasonRow, useAdminSeasons } from "@/lib/useAdminSeasons";
+import { AdminEventRow, useAdminEvents } from "@/lib/useAdminEvents";
 
 const inputCls =
   "mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-slate-900 dark:text-slate-100 text-sm";
 const labelCls =
   "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide";
 
-export function SeasonsTab({ enabled }: { enabled: boolean }) {
-  const { seasons, setSeasons, loading } = useAdminSeasons(enabled);
+export function EventsTab({ enabled }: { enabled: boolean }) {
+  const { events, setEvents, loading } = useAdminEvents(enabled);
 
-  const [updatingSeasonId, setUpdatingSeasonId] = useState<number | null>(null);
-  const [newSeasonName, setNewSeasonName] = useState("");
-  const [newSeasonStart, setNewSeasonStart] = useState("");
-  const [newSeasonEnd, setNewSeasonEnd] = useState("");
-  const [newSeasonFee, setNewSeasonFee] = useState("1000");
-  const [newSeasonRegStatus, setNewSeasonRegStatus] = useState<
-    "open" | "closed"
-  >("open");
-  const [newSeasonStatus, setNewSeasonStatus] = useState<
+  const [updatingEventId, setUpdatingEventId] = useState<number | null>(null);
+  const [newEventName, setNewEventName] = useState("");
+  const [newEventType, setNewEventType] = useState("league_season");
+  const [newEventStart, setNewEventStart] = useState("");
+  const [newEventEnd, setNewEventEnd] = useState("");
+  const [newEventFee, setNewEventFee] = useState("1000");
+  const [newEventRegStatus, setNewEventRegStatus] = useState<"open" | "closed">(
+    "open",
+  );
+  const [newEventStatus, setNewEventStatus] = useState<
     "upcoming" | "ongoing" | "completed"
   >("upcoming");
   const [creating, setCreating] = useState(false);
@@ -28,7 +29,7 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
   const [success, setSuccess] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    if (!newSeasonStart || !newSeasonEnd) {
+    if (!newEventStart || !newEventEnd) {
       setError("Start date and end date are required.");
       return;
     }
@@ -43,72 +44,77 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
       setCreating(false);
       return;
     }
-    const res = await fetch("/api/admin/seasons", {
+
+    const res = await fetch("/api/admin/events", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        name: newSeasonName || undefined,
-        start_date: newSeasonStart,
-        end_date: newSeasonEnd,
-        registration_fee: newSeasonFee ? Number(newSeasonFee) : 1000,
-        registration_status: newSeasonRegStatus,
-        status: newSeasonStatus,
+        name: newEventName || undefined,
+        event_type: newEventType,
+        start_date: newEventStart,
+        end_date: newEventEnd,
+        registration_fee: newEventFee ? Number(newEventFee) : 1000,
+        registration_status: newEventRegStatus,
+        status: newEventStatus,
       }),
     });
+
     const json = (await res.json()) as {
       error?: string;
-      season?: AdminSeasonRow;
+      event?: AdminEventRow;
     };
+
     if (!res.ok) {
-      setError(json.error ?? "Failed to create season.");
-    } else if (json.season) {
-      setSuccess(`Season created (ID ${json.season.season_id}).`);
-      setSeasons((prev) => [json.season as AdminSeasonRow, ...prev]);
-      setNewSeasonName("");
-      setNewSeasonStart("");
-      setNewSeasonEnd("");
-      setNewSeasonFee("1000");
+      setError(json.error ?? "Failed to create event.");
+    } else if (json.event) {
+      setSuccess(`Event created (ID ${json.event.event_id}).`);
+      setEvents((prev) => [json.event as AdminEventRow, ...prev]);
+      setNewEventName("");
+      setNewEventType("league_season");
+      setNewEventStart("");
+      setNewEventEnd("");
+      setNewEventFee("1000");
     }
     setCreating(false);
   };
 
-  const handleToggleReg = async (season: AdminSeasonRow) => {
-    setUpdatingSeasonId(season.season_id);
-    const newStatus = season.registration_status === "open" ? "closed" : "open";
+  const handleToggleReg = async (event: AdminEventRow) => {
+    setUpdatingEventId(event.event_id);
+    const newStatus = event.registration_status === "open" ? "closed" : "open";
     const {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session) {
-      setUpdatingSeasonId(null);
+      setUpdatingEventId(null);
       return;
     }
-    const res = await fetch("/api/admin/seasons", {
+
+    const res = await fetch("/api/admin/events", {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        season_id: season.season_id,
+        event_id: event.event_id,
         registration_status: newStatus,
       }),
     });
+
     if (res.ok) {
-      const json = (await res.json()) as { season?: AdminSeasonRow };
-      if (json.season) {
-        setSeasons((prev) =>
-          prev.map((s) =>
-            s.season_id === season.season_id
-              ? (json.season as AdminSeasonRow)
-              : s,
+      const json = (await res.json()) as { event?: AdminEventRow };
+      if (json.event) {
+        setEvents((prev) =>
+          prev.map((e) =>
+            e.event_id === event.event_id ? (json.event as AdminEventRow) : e,
           ),
         );
       }
     }
-    setUpdatingSeasonId(null);
+    setUpdatingEventId(null);
   };
 
   const regBadge = (status: string) =>
@@ -117,33 +123,34 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
       : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
 
   const statusBadge = (s: string) => {
-    if (s === "ongoing")
+    if (s === "ongoing") {
       return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
-    if (s === "completed")
+    }
+    if (s === "completed") {
       return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+    }
     return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
   };
 
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-6 text-sm">
-      {/* ── Existing seasons ── */}
       <div>
         <div className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-3">
-          All Seasons
+          All Events
         </div>
         {loading ? (
           <div className="text-slate-500 animate-pulse">Loading…</div>
-        ) : seasons.length === 0 ? (
+        ) : events.length === 0 ? (
           <p className="text-slate-500 dark:text-slate-400">
-            No seasons yet. Create one below.
+            No events yet. Create one below.
           </p>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            {seasons.map((s) => {
-              const label = s.name ?? `Season ${s.season_id}`;
+            {events.map((e) => {
+              const label = e.name ?? `Event ${e.event_id}`;
               return (
                 <div
-                  key={s.season_id}
+                  key={e.event_id}
                   className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 flex-wrap"
                 >
                   <div className="flex-1 min-w-0">
@@ -151,32 +158,34 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
                       {label}
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-                      {s.start_date && s.end_date
-                        ? `${s.start_date} → ${s.end_date}`
+                      {e.start_date && e.end_date
+                        ? `${e.start_date} → ${e.end_date}`
                         : "Dates TBD"}
-                      {s.registration_fee != null &&
-                        ` · ₱${s.registration_fee.toLocaleString()}`}
+                      {` · ${e.event_type}`}
+                      {e.registration_fee != null
+                        ? ` · ₱${e.registration_fee.toLocaleString()}`
+                        : ""}
                     </p>
                   </div>
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${statusBadge(s.status)}`}
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${statusBadge(e.status)}`}
                   >
-                    {s.status}
+                    {e.status}
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${regBadge(s.registration_status)}`}
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${regBadge(e.registration_status)}`}
                   >
-                    Reg: {s.registration_status}
+                    Reg: {e.registration_status}
                   </span>
                   <button
                     type="button"
-                    disabled={updatingSeasonId === s.season_id}
-                    onClick={() => void handleToggleReg(s)}
+                    disabled={updatingEventId === e.event_id}
+                    onClick={() => void handleToggleReg(e)}
                     className="text-xs font-medium px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 text-slate-700 dark:text-slate-300"
                   >
-                    {updatingSeasonId === s.season_id
+                    {updatingEventId === e.event_id
                       ? "…"
-                      : s.registration_status === "open"
+                      : e.registration_status === "open"
                         ? "Close Registration"
                         : "Open Registration"}
                   </button>
@@ -187,10 +196,9 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
         )}
       </div>
 
-      {/* ── Create season ── */}
       <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
         <div className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">
-          Create Season
+          Create Event
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
@@ -198,9 +206,19 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
             <input
               type="text"
               className={inputCls}
-              placeholder="e.g. Season 11"
-              value={newSeasonName}
-              onChange={(e) => setNewSeasonName(e.target.value)}
+              placeholder="e.g. Summer Open"
+              value={newEventName}
+              onChange={(ev) => setNewEventName(ev.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Type</label>
+            <input
+              type="text"
+              className={inputCls}
+              placeholder="league_season"
+              value={newEventType}
+              onChange={(ev) => setNewEventType(ev.target.value)}
             />
           </div>
           <div>
@@ -208,8 +226,8 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
             <input
               type="date"
               className={inputCls}
-              value={newSeasonStart}
-              onChange={(e) => setNewSeasonStart(e.target.value)}
+              value={newEventStart}
+              onChange={(ev) => setNewEventStart(ev.target.value)}
             />
           </div>
           <div>
@@ -217,8 +235,8 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
             <input
               type="date"
               className={inputCls}
-              value={newSeasonEnd}
-              onChange={(e) => setNewSeasonEnd(e.target.value)}
+              value={newEventEnd}
+              onChange={(ev) => setNewEventEnd(ev.target.value)}
             />
           </div>
           <div>
@@ -226,18 +244,17 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
             <input
               type="number"
               className={inputCls}
-              placeholder="1000"
-              value={newSeasonFee}
-              onChange={(e) => setNewSeasonFee(e.target.value)}
+              value={newEventFee}
+              onChange={(ev) => setNewEventFee(ev.target.value)}
             />
           </div>
           <div>
             <label className={labelCls}>Registration</label>
             <select
               className={inputCls}
-              value={newSeasonRegStatus}
-              onChange={(e) =>
-                setNewSeasonRegStatus(e.target.value as "open" | "closed")
+              value={newEventRegStatus}
+              onChange={(ev) =>
+                setNewEventRegStatus(ev.target.value as "open" | "closed")
               }
             >
               <option value="open">Open</option>
@@ -248,10 +265,10 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
             <label className={labelCls}>Status</label>
             <select
               className={inputCls}
-              value={newSeasonStatus}
-              onChange={(e) =>
-                setNewSeasonStatus(
-                  e.target.value as "upcoming" | "ongoing" | "completed",
+              value={newEventStatus}
+              onChange={(ev) =>
+                setNewEventStatus(
+                  ev.target.value as "upcoming" | "ongoing" | "completed",
                 )
               }
             >
@@ -276,10 +293,10 @@ export function SeasonsTab({ enabled }: { enabled: boolean }) {
         <button
           type="button"
           onClick={() => void handleCreate()}
-          disabled={creating || !newSeasonStart || !newSeasonEnd}
+          disabled={creating || !newEventStart || !newEventEnd}
           className="mt-4 inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {creating ? "Creating…" : "Create Season"}
+          {creating ? "Creating…" : "Create Event"}
         </button>
       </div>
     </div>

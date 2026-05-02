@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
+import { EventOption } from "@/lib/useMatchEvents";
 import {
   SCHEDULE_MATCH_TYPE_OPTIONS,
   SCHEDULE_MATCH_VENUE_OPTIONS,
@@ -12,7 +13,7 @@ type Props = {
   players: Player[];
   playersLoading: boolean;
   playersError: string | null;
-  matchSeasons: number[];
+  matchSeasons: EventOption[];
   matchSeasonsLoading: boolean;
   matchSeasonsError: string | null;
   onMatchScheduled: () => void;
@@ -42,10 +43,10 @@ export function ScheduleMatchTab({
     null,
   );
 
-  // Seed season id when seasons load.
+  // Seed event id when events load.
   useEffect(() => {
     if (createMatchSeasonId || matchSeasons.length === 0) return;
-    setCreateMatchSeasonId(String(matchSeasons[0]));
+    setCreateMatchSeasonId(String(matchSeasons[0].id));
   }, [createMatchSeasonId, matchSeasons]);
 
   const handleCreateMatch = async () => {
@@ -87,7 +88,7 @@ export function ScheduleMatchTab({
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          seasonId: createMatchSeasonId
+          eventId: createMatchSeasonId
             ? Number.parseInt(createMatchSeasonId, 10)
             : null,
           dateLocal: createMatchDateLocal || null,
@@ -121,7 +122,7 @@ export function ScheduleMatchTab({
       }
 
       setCreateMatchSeasonId(
-        matchSeasons.length > 0 ? String(matchSeasons[0]) : "",
+        matchSeasons.length > 0 ? String(matchSeasons[0].id) : "",
       );
       setCreateMatchDateLocal("");
       setCreateMatchTimeLocal("");
@@ -155,25 +156,26 @@ export function ScheduleMatchTab({
             className="text-slate-500 dark:text-slate-400"
             htmlFor="create-match-season-id"
           >
-            season_id:
+            event_id:
           </label>
           <input
             id="create-match-season-id"
             type="number"
-            value={createMatchSeasonId}
             onChange={(e) => setCreateMatchSeasonId(e.target.value)}
             list="create-match-season-options"
             className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
             placeholder={
-              matchSeasonsLoading ? "Loading seasons..." : "Enter season id"
+              matchSeasonsLoading ? "Loading events..." : "Enter event id"
             }
           />
           <datalist id="create-match-season-options">
             {matchSeasons
               .slice()
-              .sort((a, b) => b - a)
+              .sort((a, b) => b.id - a.id)
               .map((season) => (
-                <option key={season} value={String(season)} />
+                <option key={season.id} value={String(season.id)}>
+                  {season.label}
+                </option>
               ))}
           </datalist>
         </div>
@@ -253,7 +255,7 @@ export function ScheduleMatchTab({
 
       {matchSeasonsError && (
         <div className="text-sm text-rose-600 dark:text-rose-400">
-          Error loading seasons: {matchSeasonsError}
+          Error loading events: {matchSeasonsError}
         </div>
       )}
 

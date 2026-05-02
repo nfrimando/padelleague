@@ -20,7 +20,7 @@ export type MatchTypeFilterValue =
   (typeof MATCH_TYPE_FILTER_OPTIONS)[number]["value"];
 
 type MatchSeasonRow = {
-  season_id: number | null;
+  event_id: number | null;
 };
 
 export function isValidMatchTypeFilter(value: string | null): boolean {
@@ -37,14 +37,14 @@ export function getIncludedMatchTypes(
   return (selected?.includeTypes as readonly string[] | null) ?? null;
 }
 
-export function getSeasonsFromMatches<T extends MatchSeasonRow>(matches: T[]) {
+export function getEventsFromMatches<T extends MatchSeasonRow>(matches: T[]) {
   return Array.from(
     new Set(
       matches
-        .map((match) => match.season_id)
-        .filter((season): season is number => season !== null)
-        .map((season) => Number(season))
-        .filter((season) => !Number.isNaN(season)),
+        .map((match) => match.event_id)
+        .filter((eventId): eventId is number => eventId !== null)
+        .map((eventId) => Number(eventId))
+        .filter((eventId) => !Number.isNaN(eventId)),
     ),
   ).sort((a, b) => b - a);
 }
@@ -62,13 +62,13 @@ export function matchPassesTypeFilter(
   return includeTypes.includes(String(matchType || "").toLowerCase());
 }
 
-export function filterMatchesBySeasonAndType(
+export function filterMatchesByEventAndType(
   matches: MatchWithTeams[],
-  seasonFilter: number | typeof ALL_MATCH_FILTER,
+  eventFilter: number | typeof ALL_MATCH_FILTER,
   selectedTypeFilter: string,
 ) {
   return matches.filter((match) => {
-    if (seasonFilter !== ALL_MATCH_FILTER && match.season_id !== seasonFilter) {
+    if (eventFilter !== ALL_MATCH_FILTER && match.event_id !== eventFilter) {
       return false;
     }
 

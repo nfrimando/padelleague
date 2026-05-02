@@ -3,34 +3,41 @@ type TypeFilterOption = {
   label: string;
 };
 
+type EventOption = {
+  id: number;
+  label: string;
+};
+
 type MatchFiltersCardProps = {
-  seasonFilter: number | "ALL" | null;
-  seasons: number[];
-  selectedTypeFilter: string;
-  typeFilterOptions: readonly TypeFilterOption[];
-  onSeasonChange: (value: number | "ALL") => void;
-  onTypeChange: (value: string) => void;
+  eventFilter: number | "ALL" | null;
+  events: EventOption[];
+  selectedTypeFilter?: string;
+  typeFilterOptions?: readonly TypeFilterOption[];
+  onEventChange: (value: number | "ALL") => void;
+  onTypeChange?: (value: string) => void;
+  showTypeFilter?: boolean;
 };
 
 export default function MatchFiltersCard({
-  seasonFilter,
-  seasons,
+  eventFilter,
+  events,
   selectedTypeFilter,
   typeFilterOptions,
-  onSeasonChange,
+  onEventChange,
   onTypeChange,
+  showTypeFilter = true,
 }: MatchFiltersCardProps) {
   return (
     <div className="flex flex-wrap items-center gap-3 mb-6">
-      <label className="text-sm text-slate-500" htmlFor="season-filter">
-        Season:
+      <label className="text-sm text-slate-500" htmlFor="event-filter">
+        Event:
       </label>
       <select
-        id="season-filter"
-        value={seasonFilter ?? ""}
+        id="event-filter"
+        value={eventFilter ?? ""}
         onChange={(e) => {
           const value = e.target.value;
-          onSeasonChange(value === "ALL" ? "ALL" : Number(value));
+          onEventChange(value === "ALL" ? "ALL" : Number(value));
         }}
         className="border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
       >
@@ -40,36 +47,40 @@ export default function MatchFiltersCard({
         >
           ALL
         </option>
-        {seasons.map((season) => (
+        {events.map((eventOption) => (
           <option
-            key={season}
-            value={season}
+            key={eventOption.id}
+            value={eventOption.id}
             className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
           >
-            {season}
+            {eventOption.label}
           </option>
         ))}
       </select>
 
-      <label className="text-sm text-slate-500" htmlFor="type-filter">
-        Type:
-      </label>
-      <select
-        id="type-filter"
-        value={selectedTypeFilter}
-        onChange={(e) => onTypeChange(e.target.value)}
-        className="border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
-      >
-        {typeFilterOptions.map((option) => (
-          <option
-            key={option.value}
-            value={option.value}
-            className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+      {showTypeFilter && (
+        <>
+          <label className="text-sm text-slate-500" htmlFor="type-filter">
+            Type:
+          </label>
+          <select
+            id="type-filter"
+            value={selectedTypeFilter ?? "ALL"}
+            onChange={(e) => onTypeChange?.(e.target.value)}
+            className="border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
           >
-            {option.label}
-          </option>
-        ))}
-      </select>
+            {(typeFilterOptions ?? []).map((option) => (
+              <option
+                key={option.value}
+                value={option.value}
+                className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+              >
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
     </div>
   );
 }

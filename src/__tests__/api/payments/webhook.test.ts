@@ -14,7 +14,7 @@ import { POST } from "@/app/api/payments/webhook/route";
 const SECRET         = "whsk_test_mock";
 const LINK_ID        = "link_abc123";
 const EVENT_ID       = "evt_test_001";
-const PAYMENT_ROW    = { payment_id: "pay-uuid", status: "pending", reference_doc_type: "season_signup", reference_doc_id: "signup-uuid" };
+const PAYMENT_ROW    = { payment_id: "pay-uuid", status: "pending", reference_doc_type: "event_signup", reference_doc_id: "signup-uuid" };
 const PM_ROW         = { payment_id: "pay-uuid" };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

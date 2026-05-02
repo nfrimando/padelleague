@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getIncludedMatchTypes, ALL_MATCH_FILTER } from "@/lib/matches";
+import { ALL_MATCH_FILTER } from "@/lib/matches";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 
@@ -25,11 +25,10 @@ export type RankedLeaderboardRow = LeaderboardRow & {
 export type LeaderboardMode = "PERFORMANCE" | "RATING";
 
 type UseLeaderboardDataArgs = {
-  seasonFilter: number | typeof ALL_MATCH_FILTER | null;
-  selectedTypeFilter: string;
+  eventFilter: number | typeof ALL_MATCH_FILTER | null;
   selectedMode: LeaderboardMode;
-  seasonsLoading: boolean;
-  seasonsError: string | null;
+  eventsLoading: boolean;
+  eventsError: string | null;
   maxRows?: number;
   minMatches?: number;
   minMatchesAllTypes?: number;
@@ -40,11 +39,10 @@ const DEFAULT_MIN_MATCHES = 5;
 const DEFAULT_MIN_MATCHES_ALL_TYPES = 10;
 
 export function useLeaderboardData({
-  seasonFilter,
-  selectedTypeFilter,
+  eventFilter,
   selectedMode,
-  seasonsLoading,
-  seasonsError,
+  eventsLoading,
+  eventsError,
   maxRows = DEFAULT_MAX_ROWS,
   minMatches = DEFAULT_MIN_MATCHES,
   minMatchesAllTypes = DEFAULT_MIN_MATCHES_ALL_TYPES,
@@ -57,37 +55,36 @@ export function useLeaderboardData({
   const [error, setError] = useState<string | null>(null);
 
   const minMatchesRequired =
-    seasonFilter === ALL_MATCH_FILTER ? minMatchesAllTypes : minMatches;
+    eventFilter === ALL_MATCH_FILTER ? minMatchesAllTypes : minMatches;
 
   useEffect(() => {
-    if (seasonsError) {
-      setError(seasonsError);
+    if (eventsError) {
+      setError(eventsError);
       setLoading(false);
       return;
     }
-  }, [seasonsError]);
+  }, [eventsError]);
 
   useEffect(() => {
     async function loadLeaderboard() {
-      if (seasonFilter === null || seasonsLoading || seasonsError) {
+      if (eventFilter === null || eventsLoading || eventsError) {
         return;
       }
 
       setLoading(true);
       setError(null);
 
-      const includeTypes = getIncludedMatchTypes(selectedTypeFilter);
       const rpcName =
         selectedMode === "RATING"
           ? "get_leaderboard_ratings"
           : "get_leaderboard";
 
-      const buildRpcArgs = (typeFilter: string | null) => {
+      const buildRpcArgs = () => {
         if (selectedMode === "RATING") {
           return {
             season_filter:
-              seasonFilter === ALL_MATCH_FILTER ? null : seasonFilter,
-            type_filter: typeFilter,
+              eventFilter === ALL_MATCH_FILTER ? null : eventFilter,
+            type_filter: null,
             formula_filter: null,
             min_matches: minMatchesRequired,
           };
@@ -95,30 +92,22 @@ export function useLeaderboardData({
 
         return {
           season_filter:
-            seasonFilter === ALL_MATCH_FILTER ? null : seasonFilter,
-          type_filter: typeFilter,
+            eventFilter === ALL_MATCH_FILTER ? null : eventFilter,
+          type_filter: null,
         };
       };
 
-      const rpcRequests =
-        includeTypes === null
-          ? [supabase.rpc(rpcName, buildRpcArgs(null))]
-          : includeTypes.map((type) =>
-              supabase.rpc(rpcName, buildRpcArgs(type)),
-            );
+      const rpcResult = await supabase.rpc(rpcName, buildRpcArgs());
 
-      const rpcResults = await Promise.all(rpcRequests);
-      const failedResult = rpcResults.find((result) => result.error);
-
-      if (failedResult?.error) {
-        setError(failedResult.error.message || "Failed to load leaderboard.");
+      if (rpcResult.error) {
+        setError(rpcResult.error.message || "Failed to load leaderboard.");
         setRows([]);
         setTopPlayersById(new Map());
         setLoading(false);
         return;
       }
 
-      const combinedRows = rpcResults.flatMap((result) => result.data || []);
+      const combinedRows = rpcResult.data || [];
       const aggregatedMap = new Map<string, LeaderboardRow>();
 
       const parseDateMs = (value: string | null) => {
@@ -300,11 +289,10 @@ export function useLeaderboardData({
     loadLeaderboard();
   }, [
     minMatchesRequired,
-    seasonFilter,
-    seasonsError,
-    seasonsLoading,
+    eventFilter,
+    eventsError,
+    eventsLoading,
     selectedMode,
-    selectedTypeFilter,
   ]);
 
   const rankedRowsWithTopTies = useMemo(() => {

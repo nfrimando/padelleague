@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { formatMatchDate, formatMatchTime } from "@/lib/utils";
+import {
+  formatMatchDate,
+  formatMatchTime,
+  seasonBadgeFromEvent,
+} from "@/lib/utils";
 import { MatchWithTeams } from "@/lib/types";
 
 interface MatchCardProps {
   match: MatchWithTeams;
   highlightPlayerId?: string | number;
+  seasonLabel?: string;
 }
 
 function PlayerNamePart({
@@ -130,6 +135,7 @@ function getStatusBadgeClass(status: string | null | undefined) {
 export default function MatchCard({
   match,
   highlightPlayerId,
+  seasonLabel,
 }: MatchCardProps) {
   const team1 = match.teams.find((t) => t.team_number === 1);
   const team2 = match.teams.find((t) => t.team_number === 2);
@@ -156,6 +162,7 @@ export default function MatchCard({
     ? "text-slate-900 dark:text-white"
     : "text-slate-500 dark:text-[#687FA3]";
   const statusLabel = String(match.status || "completed").toUpperCase();
+  const seasonBadge = seasonBadgeFromEvent(seasonLabel, match.event_id);
 
   return (
     <div className="bg-white dark:bg-[#162032]/50 border border-slate-200 dark:border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 md:p-6 transition-all duration-300 shadow-sm dark:shadow-none">
@@ -164,9 +171,9 @@ export default function MatchCard({
         <span className="text-slate-500 dark:text-[#687FA3] text-[10px] font-black uppercase tracking-widest">
           {formatMatchDate(match.date_local)}
         </span>
-        {match.season_id && (
+        {seasonBadge && (
           <span className="bg-[#00C8DC]/10 text-[#00C8DC] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-            S{match.season_id}
+            {seasonBadge}
           </span>
         )}
         {match.type && (

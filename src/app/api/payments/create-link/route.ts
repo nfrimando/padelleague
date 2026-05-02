@@ -83,16 +83,16 @@ export async function POST(request: Request) {
   }
 
   // 2. Parse body
-  let body: { season_id?: unknown };
+  let body: { event_id?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const seasonId = typeof body.season_id === "number" ? body.season_id : null;
-  if (!seasonId) {
-    return NextResponse.json({ error: "season_id is required." }, { status: 400 });
+  const eventId = typeof body.event_id === "number" ? body.event_id : null;
+  if (!eventId) {
+    return NextResponse.json({ error: "event_id is required." }, { status: 400 });
   }
 
   let serviceClient;
@@ -166,51 +166,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Player not found." }, { status: 500 });
   }
 
-  // 4. Load season (must be open).
-  //    Select only guaranteed columns; name + registration_fee are added by migration
-  //    20260414000001 and may not exist yet — we handle their absence gracefully.
-  const { data: season, error: seasonError } = await serviceClient
-    .from("seasons")
-    .select("season_id, registration_status, start_date, end_date")
-    .eq("season_id", seasonId)
+  // 4. Load event (must be open).
+  const { data: event, error: eventError } = await serviceClient
+    .from("events")
+    .select("event_id, name, registration_fee, registration_status, start_date, end_date")
+    .eq("event_id", eventId)
     .eq("registration_status", "open")
     .maybeSingle();
 
-  if (seasonError || !season) {
-    console.error("Season lookup error:", seasonError?.message);
+  if (eventError || !event) {
+    console.error("Event lookup error:", eventError?.message);
     return NextResponse.json(
-      { error: "Season not found or registration is closed." },
+      { error: "Event not found or registration is closed." },
       { status: 404 },
     );
   }
 
-  // Attempt to read optional columns (only present after migration 20260414000001)
-  const { data: seasonExtra } = await serviceClient
-    .from("seasons")
-    .select("name, registration_fee")
-    .eq("season_id", seasonId)
-    .maybeSingle()
-    .then((r) => {
-      // If the columns don't exist PostgREST returns an error — treat as empty
-      if (r.error) return { data: null };
-      return r;
-    });
+  const eventName: string =
+    event.name ??
+    (event.start_date
+      ? `Event ${event.event_id} · ${new Date(event.start_date).getFullYear()}`
+      : `Event ${event.event_id}`);
 
-  const seasonName: string =
-    (seasonExtra as { name?: string | null } | null)?.name ??
-    (season.start_date
-      ? `Season ${season.season_id} · ${new Date(season.start_date).getFullYear()}`
-      : `Season ${season.season_id}`);
-
-  const registrationFee: number =
-    (seasonExtra as { registration_fee?: number | null } | null)?.registration_fee ?? 5;
+  const registrationFee: number = event.registration_fee ?? 5;
 
   // 5. Guard duplicate signups — but resume if payment is still pending
   const { data: existingSignup } = await serviceClient
     .from("signups")
     .select("id, status")
     .eq("player_id", player.player_id)
-    .eq("season_id", seasonId)
+    .eq("event_id", eventId)
     .maybeSingle();
 
   if (existingSignup) {
@@ -220,8 +205,10 @@ export async function POST(request: Request) {
         .from("payments")
         .select("payment_id")
         .eq("reference_doc_id", existingSignup.id)
-        .eq("reference_doc_type", "season_signup")
+        .eq("reference_doc_type", "event_signup")
         .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (pmRow) {
@@ -249,7 +236,7 @@ export async function POST(request: Request) {
       // Fall through to create fresh signup + payment below
     } else {
       return NextResponse.json(
-        { error: "You have already signed up for this season." },
+        { error: "You have already signed up for this event." },
         { status: 409 },
       );
     }
@@ -260,7 +247,7 @@ export async function POST(request: Request) {
     .from("payments")
     .insert({
       player_id: player.player_id,
-      reference_doc_type: "season_signup",
+      reference_doc_type: "event_signup",
       // reference_doc_id will be set after signup is created
       reference_doc_id: "00000000-0000-0000-0000-000000000000", // placeholder
       amount: registrationFee,
@@ -280,9 +267,9 @@ export async function POST(request: Request) {
   const { data: signup, error: signupInsertError } = await serviceClient
     .from("signups")
     .insert({
-      season_id: seasonId,
+      event_id: eventId,
       player_id: player.player_id,
-      event_type: "season_registration",
+      event_type: "event_registration",
       status: "pending_payment",
     })
     .select("id")
@@ -308,10 +295,10 @@ export async function POST(request: Request) {
   try {
     paymongoLink = await createPayMongoLink({
       amountCentavos: Math.round(registrationFee * 100),
-      description: `${seasonName} Registration — ${player.name}`,
+      description: `${eventName} Registration — ${player.name}`,
       remarks: `payment:${payment.payment_id}`,
-      redirectSuccess: `${origin}/register/success`,
-      redirectFailed: `${origin}/register?payment=failed`,
+      redirectSuccess: `${origin}/events/register/success`,
+      redirectFailed: `${origin}/events/register?payment=failed`,
     });
   } catch (err) {
     // Roll back both records

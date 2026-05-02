@@ -58,7 +58,7 @@ export function useMatches(options: UseMatchesOptions = {}, enabled = true) {
           .select("*")
           .order("date_local", { ascending: false, nullsFirst: false })
           .order("time_local", { ascending: false, nullsFirst: false })
-          .order("season_id", { ascending: false, nullsFirst: false })
+          .order("event_id", { ascending: false, nullsFirst: false })
           .order("match_id", { ascending: false });
 
         if (options.dateGte) {

@@ -6,19 +6,19 @@ import BackToHome from "@/components/BackToHome";
 import { CompleteMatchTab } from "@/components/admin/CompleteMatchTab";
 import { CreatePlayerTab } from "@/components/admin/CreatePlayerTab";
 import { EditPlayerTab } from "@/components/admin/EditPlayerTab";
+import { EventsTab } from "@/components/admin/EventsTab";
 import { MembersTab } from "@/components/admin/MembersTab";
 import { ScheduleMatchTab } from "@/components/admin/ScheduleMatchTab";
-import { SeasonsTab } from "@/components/admin/SeasonsTab";
 import { UpdateMatchTab } from "@/components/admin/UpdateMatchTab";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
-import { useMatchSeasons } from "@/lib/useMatchSeasons";
+import { useMatchEvents } from "@/lib/useMatchEvents";
 import { useScheduledMatches } from "@/lib/useScheduledMatches";
 import { usePlayers } from "@/lib/usePlayers";
 
 const ADMIN_PLAYER_TABS = [
   { value: "MEMBERS", label: "Members" },
-  { value: "SEASONS", label: "Seasons" },
+  { value: "EVENTS", label: "Events" },
   { value: "CREATE", label: "Create Player" },
   { value: "EDIT", label: "Edit Player" },
   { value: "SCHEDULE_MATCH", label: "Schedule Match" },
@@ -66,10 +66,10 @@ function AdminPageContent() {
     error: playersError,
   } = usePlayers({ enabled: isAdmin, orderByName: true });
   const {
-    seasons: matchSeasons,
+    events: matchSeasons,
     loading: matchSeasonsLoading,
     error: matchSeasonsError,
-  } = useMatchSeasons(isAdmin);
+  } = useMatchEvents(isAdmin);
   const {
     scheduledMatches,
     loading: scheduledMatchesLoading,
@@ -335,9 +335,9 @@ function AdminPageContent() {
                     <MembersTab
                       enabled={activePlayerTab === "MEMBERS" && isAdmin}
                     />
-                  ) : activePlayerTab === "SEASONS" ? (
-                    <SeasonsTab
-                      enabled={activePlayerTab === "SEASONS" && isAdmin}
+                  ) : activePlayerTab === "EVENTS" ? (
+                    <EventsTab
+                      enabled={activePlayerTab === "EVENTS" && isAdmin}
                     />
                   ) : null}
                 </div>

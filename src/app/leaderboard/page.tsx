@@ -8,44 +8,35 @@ import MatchFiltersCard from "@/components/MatchFiltersCard";
 import TopPlayersTable, {
   TopPlayersTableRow,
 } from "@/components/TopPlayersTable";
-import {
-  ALL_MATCH_FILTER,
-  isValidMatchTypeFilter,
-  MATCH_TYPE_FILTER_OPTIONS,
-} from "@/lib/matches";
+import { ALL_MATCH_FILTER } from "@/lib/matches";
 import { Player } from "@/lib/types";
 import {
   LeaderboardMode,
   RankedLeaderboardRow,
   useLeaderboardData,
 } from "@/lib/useLeaderboardData";
-import { useMatchSeasons } from "@/lib/useMatchSeasons";
+import { useMatchEvents } from "@/lib/useMatchEvents";
 
 const LEADERBOARD_MODE_OPTIONS = [
   { value: "PERFORMANCE", label: "Performance" },
   { value: "RATING", label: "Rating" },
 ] as const;
 
-const PERFORMANCE_DEFAULT_TYPE = "SEASON";
-
 function LeaderboardPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
-  const [seasonFilter, setSeasonFilter] = useState<
+  const [eventFilter, setEventFilter] = useState<
     number | typeof ALL_MATCH_FILTER | null
   >(null);
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>(
-    PERFORMANCE_DEFAULT_TYPE,
-  );
   const [selectedMode, setSelectedMode] =
     useState<LeaderboardMode>("PERFORMANCE");
   const {
-    seasons,
-    loading: seasonsLoading,
-    error: seasonsError,
-  } = useMatchSeasons();
+    events,
+    loading: eventsLoading,
+    error: eventsError,
+  } = useMatchEvents();
   const {
     rows,
     topPlayersById,
@@ -54,33 +45,31 @@ function LeaderboardPageContent() {
     minMatchesRequired,
     rankedRowsWithTopTies,
   } = useLeaderboardData({
-    seasonFilter,
-    selectedTypeFilter,
+    eventFilter,
     selectedMode,
-    seasonsLoading,
-    seasonsError,
+    eventsLoading,
+    eventsError,
   });
 
   useEffect(() => {
-    if (seasons.length === 0) {
+    if (events.length === 0) {
       return;
     }
 
     const params = new URLSearchParams(searchParamsString);
     const seasonParam = params.get("season");
-    const parsedSeason = seasonParam ? Number(seasonParam) : Number.NaN;
+    const parsedEvent = seasonParam ? Number(seasonParam) : Number.NaN;
 
-    let nextSeason: number | typeof ALL_MATCH_FILTER = seasons[0];
+    let nextEvent: number | typeof ALL_MATCH_FILTER =
+      events[0]?.id ?? ALL_MATCH_FILTER;
     if (seasonParam === ALL_MATCH_FILTER) {
-      nextSeason = ALL_MATCH_FILTER;
-    } else if (!Number.isNaN(parsedSeason) && seasons.includes(parsedSeason)) {
-      nextSeason = parsedSeason;
+      nextEvent = ALL_MATCH_FILTER;
+    } else if (
+      !Number.isNaN(parsedEvent) &&
+      events.some((s) => s.id === parsedEvent)
+    ) {
+      nextEvent = parsedEvent;
     }
-
-    const typeParam = params.get("type");
-    const parsedType = isValidMatchTypeFilter(typeParam)
-      ? (typeParam as string)
-      : ALL_MATCH_FILTER;
 
     const modeParam = params.get("mode");
     const nextMode = LEADERBOARD_MODE_OPTIONS.some(
@@ -89,28 +78,18 @@ function LeaderboardPageContent() {
       ? (modeParam as (typeof LEADERBOARD_MODE_OPTIONS)[number]["value"])
       : "PERFORMANCE";
 
-    const nextType =
-      nextMode === "PERFORMANCE" && parsedType === ALL_MATCH_FILTER
-        ? PERFORMANCE_DEFAULT_TYPE
-        : parsedType;
-
-    setSeasonFilter((current) =>
-      current === nextSeason ? current : nextSeason,
-    );
-    setSelectedTypeFilter((current) =>
-      current === nextType ? current : nextType,
-    );
+    setEventFilter((current) => (current === nextEvent ? current : nextEvent));
     setSelectedMode((current) => (current === nextMode ? current : nextMode));
-  }, [seasons, searchParamsString]);
+  }, [events, searchParamsString]);
 
   useEffect(() => {
-    if (seasonFilter === null) {
+    if (eventFilter === null) {
       return;
     }
 
     const params = new URLSearchParams(searchParamsString);
-    params.set("season", String(seasonFilter));
-    params.set("type", selectedTypeFilter);
+    params.set("season", String(eventFilter));
+    params.delete("type");
     params.set("mode", selectedMode);
     params.delete("formula");
 
@@ -121,14 +100,7 @@ function LeaderboardPageContent() {
 
     const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
     router.replace(nextUrl, { scroll: false });
-  }, [
-    pathname,
-    router,
-    searchParamsString,
-    seasonFilter,
-    selectedTypeFilter,
-    selectedMode,
-  ]);
+  }, [pathname, router, searchParamsString, eventFilter, selectedMode]);
 
   return (
     <>
@@ -144,20 +116,15 @@ function LeaderboardPageContent() {
                 type="button"
                 onClick={() => {
                   setSelectedMode(option.value);
-                  setSelectedTypeFilter(
-                    option.value === "PERFORMANCE"
-                      ? PERFORMANCE_DEFAULT_TYPE
-                      : ALL_MATCH_FILTER,
-                  );
                   if (option.value === "PERFORMANCE") {
-                    const latestSeason = seasons[0];
-                    setSeasonFilter(
+                    const latestSeason = events[0];
+                    setEventFilter(
                       latestSeason !== undefined
-                        ? latestSeason
+                        ? latestSeason.id
                         : ALL_MATCH_FILTER,
                     );
                   } else {
-                    setSeasonFilter(ALL_MATCH_FILTER);
+                    setEventFilter(ALL_MATCH_FILTER);
                   }
                 }}
                 className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
@@ -179,12 +146,10 @@ function LeaderboardPageContent() {
         </p>
         <div className="-mb-4">
           <MatchFiltersCard
-            seasonFilter={seasonFilter}
-            seasons={seasons}
-            selectedTypeFilter={selectedTypeFilter}
-            typeFilterOptions={MATCH_TYPE_FILTER_OPTIONS}
-            onSeasonChange={(value) => setSeasonFilter(value)}
-            onTypeChange={(value) => setSelectedTypeFilter(value)}
+            eventFilter={eventFilter}
+            events={events}
+            onEventChange={(value) => setEventFilter(value)}
+            showTypeFilter={false}
           />
         </div>
       </div>

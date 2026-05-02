@@ -344,8 +344,10 @@ export default function MatchCalendar({
                             className="relative w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                {matchTopLine(match)}
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 truncate">
+                                  {matchTopLine(match)}
+                                </div>
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <span
@@ -459,8 +461,10 @@ export default function MatchCalendar({
                     className="group relative mt-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1 py-0.5 text-center"
                     title={`${teamLabel(t1)} vs ${teamLabel(t2)}`}
                   >
-                    <div className="text-[9px] font-semibold leading-tight text-slate-500 dark:text-slate-400 truncate uppercase tracking-wide">
-                      {matchTopLine(m)}
+                    <div className="flex items-center justify-center gap-1">
+                      <div className="text-[9px] font-semibold leading-tight text-slate-500 dark:text-slate-400 truncate uppercase tracking-wide">
+                        {matchTopLine(m)}
+                      </div>
                     </div>
                     <TeamPlayerLine
                       team={t1}

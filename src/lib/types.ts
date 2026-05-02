@@ -24,12 +24,28 @@ export type Player = {
 
 // season_id is a bigint integer PK.
 // name and registration_fee are added via migration 20260414000001.
+// Seasons have been migrated to events (migration 20260502000004-006).
+// The Season type is kept only for legacy code that may still reference it.
+// @deprecated Use Event instead.
 export type Season = {
   season_id: number;
-  name?: string | null;               // added by 20260414000001 migration
+  name?: string | null;
   start_date?: string | null;
   end_date?: string | null;
-  registration_fee?: number | null;   // added by 20260414000001 migration; default 1000
+  registration_fee?: number | null;
+  registration_status: "open" | "closed";
+  status: "upcoming" | "ongoing" | "completed";
+  created_at: string;
+  updated_at: string;
+};
+
+export type Event = {
+  event_id: number;
+  name?: string | null;
+  event_type: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  registration_fee?: number | null;
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
   created_at: string;
@@ -37,17 +53,21 @@ export type Season = {
 };
 
 // Maps to the `signups` table.
-// event_type distinguishes signup kinds (e.g. 'season_registration').
+// event_type distinguishes signup kinds (e.g. 'event_registration').
 // player_id is an integer FK to players.player_id.
+// season_id was removed from the signups table in migration 20260502000006.
 export type SeasonSignup = {
   id: string;
-  season_id: number;
+  event_id: number;
   player_id: number | string;
   event_type: string;
   status: "pending_payment" | "registered" | "waitlisted" | "cancelled";
   created_at: string;
   updated_at: string;
 };
+
+// Alias for SeasonSignup — use this for new code.
+export type EventSignup = SeasonSignup;
 
 // Maps to the `payments` table.
 // provider: 'paymongo' | 'manual' | etc.
@@ -102,7 +122,7 @@ export type MatchSet = {
 export type MatchWithTeams = {
   match_id: number;
   created_at: string;
-  season_id: number | null;
+  event_id: number | null;
   date_local: string | null;
   time_local: string | null;
   venue: string | null;
@@ -124,7 +144,7 @@ export type MatchPlayerSummary = {
 export type LoadedMatchDetails = {
   matchId: number;
   status: MatchStatus;
-  seasonId: number | null;
+  eventId: number | null;
   dateLocal: string | null;
   timeLocal: string | null;
   venue: string | null;

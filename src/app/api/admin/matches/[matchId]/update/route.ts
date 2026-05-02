@@ -18,7 +18,7 @@ type SetScoreInput = {
 
 type UpdateMatchRequest = {
   status: MatchStatus;
-  seasonId?: number | null;
+  eventId?: number | null;
   dateLocal?: string | null;
   timeLocal?: string | null;
   venue?: string | null;
@@ -28,7 +28,7 @@ type UpdateMatchRequest = {
 
 type MatchSnapshot = {
   status: MatchStatus;
-  season_id: number | null;
+  event_id: number | null;
   date_local: string | null;
   time_local: string | null;
   venue: string | null;
@@ -124,16 +124,16 @@ function validatePayload(payload: unknown): ValidationResult {
     errors.push("status must be one of scheduled, completed, forfeit, cancelled.");
   }
 
-  const seasonId = normalizeOptionalPositiveInteger(payload.seasonId);
+  const eventId = normalizeOptionalPositiveInteger(payload.eventId);
   const venue = normalizeOptionalString(payload.venue);
   const type = normalizeOptionalString(payload.type);
   if (
-    payload.seasonId !== undefined &&
-    payload.seasonId !== null &&
-    payload.seasonId !== "" &&
-    seasonId === null
+    payload.eventId !== undefined &&
+    payload.eventId !== null &&
+    payload.eventId !== "" &&
+    eventId === null
   ) {
-    errors.push("seasonId must be a positive integer or null.");
+    errors.push("eventId must be a positive integer or null.");
   }
 
   if (type && !(ALLOWED_MATCH_TYPES as readonly string[]).includes(type)) {
@@ -175,10 +175,10 @@ function validatePayload(payload: unknown): ValidationResult {
     valid: true,
     value: {
       status,
-      seasonId:
-        payload.seasonId === undefined
+      eventId:
+        payload.eventId === undefined
           ? undefined
-          : normalizeOptionalPositiveInteger(payload.seasonId),
+          : normalizeOptionalPositiveInteger(payload.eventId),
       dateLocal:
         payload.dateLocal === undefined
           ? undefined
@@ -386,8 +386,8 @@ export async function PATCH(
     status: validation.value.status,
   };
 
-  if (validation.value.seasonId !== undefined) {
-    matchUpdates.season_id = validation.value.seasonId;
+  if (validation.value.eventId !== undefined) {
+    matchUpdates.event_id = validation.value.eventId;
   }
   if (validation.value.dateLocal !== undefined) {
     matchUpdates.date_local = validation.value.dateLocal;
@@ -405,7 +405,7 @@ export async function PATCH(
   if (validation.value.status === "completed") {
     const { data: currentMatchRow, error: currentMatchError } = await supabase
       .from("matches")
-      .select("status,season_id,date_local,time_local,venue,type,winner_team")
+        .select("status,event_id,date_local,time_local,venue,type,winner_team")
       .eq("match_id", matchId)
       .maybeSingle();
 
@@ -464,7 +464,7 @@ export async function PATCH(
         .from("matches")
         .update({
           status: matchSnapshot.status,
-          season_id: matchSnapshot.season_id,
+          event_id: matchSnapshot.event_id,
           date_local: matchSnapshot.date_local,
           time_local: matchSnapshot.time_local,
           venue: matchSnapshot.venue,

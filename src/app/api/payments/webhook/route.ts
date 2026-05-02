@@ -149,7 +149,7 @@ export async function POST(request: Request) {
 
   // ── Mark the referenced signup as registered ───────────────────────────────
   if (
-    paymentRow.reference_doc_type === "season_signup" &&
+    paymentRow.reference_doc_type === "event_signup" &&
     paymentRow.reference_doc_id
   ) {
     const { error: signupUpdateError } = await serviceClient

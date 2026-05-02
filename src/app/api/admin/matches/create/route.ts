@@ -13,7 +13,7 @@ type TeamInput = {
 };
 
 type CreateMatchRequest = {
-  seasonId?: number | null;
+  eventId?: number | null;
   dateLocal?: string | null;
   timeLocal?: string | null;
   venue?: string | null;
@@ -50,16 +50,16 @@ function validatePayload(payload: unknown): ValidationResult {
     };
   }
 
-  const seasonId = normalizeOptionalPositiveInteger(payload.seasonId);
+  const eventId = normalizeOptionalPositiveInteger(payload.eventId);
   const venue = normalizeOptionalString(payload.venue);
   const type = normalizeOptionalString(payload.type);
   if (
-    payload.seasonId !== undefined &&
-    payload.seasonId !== null &&
-    payload.seasonId !== "" &&
-    seasonId === null
+    payload.eventId !== undefined &&
+    payload.eventId !== null &&
+    payload.eventId !== "" &&
+    eventId === null
   ) {
-    errors.push("seasonId must be a positive integer or null.");
+    errors.push("eventId must be a positive integer or null.");
   }
 
   if (!type) {
@@ -125,7 +125,7 @@ function validatePayload(payload: unknown): ValidationResult {
   return {
     valid: true,
     value: {
-      seasonId,
+      eventId,
       dateLocal: normalizeOptionalString(payload.dateLocal),
       timeLocal: normalizeOptionalString(payload.timeLocal),
       venue,
@@ -191,7 +191,7 @@ export async function POST(request: Request) {
   const { data: createdMatch, error: createMatchError } = await supabase
     .from("matches")
     .insert({
-      season_id: validation.value.seasonId,
+      event_id: validation.value.eventId,
       date_local: validation.value.dateLocal,
       time_local: validation.value.timeLocal,
       venue: validation.value.venue,
@@ -199,7 +199,7 @@ export async function POST(request: Request) {
       status: "scheduled",
       winner_team: null,
     })
-    .select("match_id,status,season_id,date_local,time_local,venue,type")
+      .select("match_id,status,event_id,date_local,time_local,venue,type")
     .maybeSingle();
 
   if (createMatchError || !createdMatch) {
