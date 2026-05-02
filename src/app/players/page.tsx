@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import MatchCard from "@/components/MatchCard";
@@ -40,6 +40,16 @@ function PlayersPageContent() {
   >(ALL_MATCH_FILTER);
   const [selectedTypeFilter, setSelectedTypeFilter] =
     useState<string>(ALL_MATCH_FILTER);
+  const playerCardHrefBuilder = useCallback(
+    (playerId: string) => {
+      const params = new URLSearchParams(searchParamsString);
+      params.set("playerId", playerId);
+      params.delete("playerid");
+      return `${pathname}?${params.toString()}`;
+    },
+    [pathname, searchParamsString],
+  );
+
   const { players, loading } = usePlayers({ onlyActivePlayers: true });
   const filtered = usePlayerSearch(players, search);
   const {
@@ -324,7 +334,11 @@ function PlayersPageContent() {
             ) : randomPlayers.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {randomPlayers.map((player) => (
-                  <PlayerCard key={player.player_id} player={player} />
+                  <PlayerCard
+                    key={player.player_id}
+                    player={player}
+                    hrefBuilder={playerCardHrefBuilder}
+                  />
                 ))}
               </div>
             ) : null}

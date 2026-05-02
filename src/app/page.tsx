@@ -195,9 +195,9 @@ export default function HomePage() {
         const combinedRows = rpcResults.flatMap((result) => result.data ?? []);
 
         if (combinedRows.length > 0 && !cancelled) {
-          const playerMap = new Map<string, any>();
+          const playerMap = new Map<string, TopPlayer>();
 
-          for (const row of combinedRows as any[]) {
+          for (const row of combinedRows as TopPlayer[]) {
             const playerId = String(row.player_id);
             const existing = playerMap.get(playerId);
 

@@ -17,6 +17,8 @@ type RatingHistoryPoint = {
   date: string | null;
 };
 
+const RATING_HISTORY_POINTS = 6;
+
 type MatchTeamIdRow = {
   match_id: number;
 };
@@ -182,7 +184,7 @@ export function usePlayerMatches(playerId: string | null) {
 
         const nextRatingHistory: RatingHistoryPoint[] = [];
         for (const match of typedMatchesData) {
-          if (nextRatingHistory.length >= 6) {
+          if (nextRatingHistory.length >= RATING_HISTORY_POINTS) {
             break;
           }
 
