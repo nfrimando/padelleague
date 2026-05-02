@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import { supabase } from "@/lib/supabase";
 import { useLoadedMatchDetails } from "@/lib/useLoadedMatchDetails";
-import { Player } from "@/lib/types";
-import { EventOption } from "@/lib/useMatchEvents";
 import {
   SCHEDULE_MATCH_TYPE_OPTIONS,
   SCHEDULE_MATCH_VENUE_OPTIONS,
@@ -12,21 +11,9 @@ import {
   MatchStatusValue,
 } from "./constants";
 
-type Props = {
-  players: Player[];
-  matchSeasons: EventOption[];
-  matchSeasonsLoading: boolean;
-  matchSeasonsError: string | null;
-  playerNameById: Map<string, string>;
-};
-
-export function UpdateMatchTab({
-  players,
-  matchSeasons,
-  matchSeasonsLoading,
-  matchSeasonsError,
-  playerNameById: _playerNameById,
-}: Props) {
+export function UpdateMatchTab() {
+  const { players, matchSeasons, matchSeasonsLoading, matchSeasonsError } =
+    useAdminDataContext();
   const [matchId, setMatchId] = useState("");
   const [updateMatchStatus, setUpdateMatchStatus] =
     useState<MatchStatusValue>("scheduled");

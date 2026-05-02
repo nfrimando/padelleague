@@ -49,6 +49,7 @@ export function useLoadedMatchDetails({ matchId, enabled }: Options): Result {
         .select(
           "match_id,status,event_id,date_local,time_local,venue,type,winner_team",
         )
+        .eq("match_id", parsedId)
         .maybeSingle();
 
       if (cancelled) return;
@@ -63,6 +64,13 @@ export function useLoadedMatchDetails({ matchId, enabled }: Options): Result {
       if (!matchRow) {
         setLoadedMatchDetails(null);
         setError("Match not found.");
+        setLoading(false);
+        return;
+      }
+
+      if (matchRow.match_id !== parsedId) {
+        setLoadedMatchDetails(null);
+        setError("Loaded match did not match the selected match_id.");
         setLoading(false);
         return;
       }

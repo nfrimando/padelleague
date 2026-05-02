@@ -2,28 +2,20 @@
 
 import { useEffect, useState } from "react";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
+import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 
-type Props = {
-  players: Player[];
-  playersLoading: boolean;
-  playersError: string | null;
-  onPlayersChange: (updater: (prev: Player[]) => Player[]) => void;
-  /** Set by the page when CreatePlayerTab creates a new player. */
-  initialPlayer?: Player | null;
-  onInitialPlayerConsumed: () => void;
-};
-
-export function EditPlayerTab({
-  players,
-  playersLoading,
-  playersError,
-  onPlayersChange,
-  initialPlayer,
-  onInitialPlayerConsumed,
-}: Props) {
+export function EditPlayerTab() {
+  const {
+    players,
+    setPlayers,
+    playersLoading,
+    playersError,
+    pendingEditPlayer,
+    consumePendingEditPlayer,
+  } = useAdminDataContext();
   const [search, setSearch] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [editName, setEditName] = useState("");
@@ -39,16 +31,16 @@ export function EditPlayerTab({
 
   // When the page hands us a freshly created player, adopt it.
   useEffect(() => {
-    if (!initialPlayer) return;
-    setSelectedPlayer(initialPlayer);
-    setSearch(initialPlayer.name || "");
-    setEditName(initialPlayer.name || "");
-    setEditNickname(initialPlayer.nickname || "");
-    setEditImageLink(initialPlayer.image_link || "");
+    if (!pendingEditPlayer) return;
+    setSelectedPlayer(pendingEditPlayer);
+    setSearch(pendingEditPlayer.name || "");
+    setEditName(pendingEditPlayer.name || "");
+    setEditNickname(pendingEditPlayer.nickname || "");
+    setEditImageLink(pendingEditPlayer.image_link || "");
     setSavePlayerError(null);
     setSavePlayerSuccess(null);
-    onInitialPlayerConsumed();
-  }, [initialPlayer, onInitialPlayerConsumed]);
+    consumePendingEditPlayer();
+  }, [pendingEditPlayer, consumePendingEditPlayer]);
 
   // Sync edit fields when selected player changes.
   useEffect(() => {
@@ -129,7 +121,7 @@ export function EditPlayerTab({
       }
 
       setSelectedPlayer(updated);
-      onPlayersChange((current) =>
+      setPlayers((current) =>
         current.map((p) =>
           String(p.player_id) === String(updated.player_id) ? updated : p,
         ),

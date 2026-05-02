@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
+import { AdminDataProvider } from "@/components/admin/AdminDataContext";
 import { CompleteMatchTab } from "@/components/admin/CompleteMatchTab";
 import { CreatePlayerTab } from "@/components/admin/CreatePlayerTab";
 import { EditPlayerTab } from "@/components/admin/EditPlayerTab";
@@ -39,13 +40,14 @@ function AdminPageContent() {
       ? (rawTab as (typeof ADMIN_PLAYER_TABS)[number]["value"])
       : "SCHEDULE_MATCH";
 
-  const setActivePlayerTab = (
-    tab: (typeof ADMIN_PLAYER_TABS)[number]["value"],
-  ) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", tab);
-    router.push(`/admin?${params.toString()}`);
-  };
+  const setActivePlayerTab = useCallback(
+    (tab: (typeof ADMIN_PLAYER_TABS)[number]["value"]) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", tab);
+      router.push(`/admin?${params.toString()}`);
+    },
+    [router, searchParams],
+  );
 
   // ── Auth state ──────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
@@ -87,6 +89,56 @@ function AdminPageContent() {
         ]),
       ),
     [players],
+  );
+  const refreshScheduledMatches = useCallback(() => {
+    setMatchRefreshKey((k) => k + 1);
+  }, []);
+  const consumePendingEditPlayer = useCallback(() => {
+    setPendingEditPlayer(null);
+  }, []);
+  const handlePlayerCreated = useCallback(
+    (created: Player) => {
+      setPlayers((prev) => [created, ...prev]);
+      setPendingEditPlayer(created);
+      setActivePlayerTab("EDIT");
+    },
+    [setPlayers, setActivePlayerTab],
+  );
+  const adminDataContextValue = useMemo(
+    () => ({
+      players,
+      setPlayers,
+      playersLoading,
+      playersError,
+      matchSeasons,
+      matchSeasonsLoading,
+      matchSeasonsError,
+      scheduledMatches,
+      scheduledMatchesLoading,
+      scheduledMatchesError,
+      playerNameById,
+      pendingEditPlayer,
+      consumePendingEditPlayer,
+      handlePlayerCreated,
+      refreshScheduledMatches,
+    }),
+    [
+      players,
+      setPlayers,
+      playersLoading,
+      playersError,
+      matchSeasons,
+      matchSeasonsLoading,
+      matchSeasonsError,
+      scheduledMatches,
+      scheduledMatchesLoading,
+      scheduledMatchesError,
+      playerNameById,
+      pendingEditPlayer,
+      consumePendingEditPlayer,
+      handlePlayerCreated,
+      refreshScheduledMatches,
+    ],
   );
 
   useEffect(() => {
@@ -287,59 +339,28 @@ function AdminPageContent() {
                     </div>
                   </div>
 
-                  {/* TAB CONTENT */}
-                  {activePlayerTab === "EDIT" ? (
-                    <EditPlayerTab
-                      players={players}
-                      playersLoading={playersLoading}
-                      playersError={playersError}
-                      onPlayersChange={setPlayers}
-                      initialPlayer={pendingEditPlayer}
-                      onInitialPlayerConsumed={() => setPendingEditPlayer(null)}
-                    />
-                  ) : activePlayerTab === "SCHEDULE_MATCH" ? (
-                    <ScheduleMatchTab
-                      players={players}
-                      playersLoading={playersLoading}
-                      playersError={playersError}
-                      matchSeasons={matchSeasons}
-                      matchSeasonsLoading={matchSeasonsLoading}
-                      matchSeasonsError={matchSeasonsError}
-                      onMatchScheduled={() => setMatchRefreshKey((k) => k + 1)}
-                    />
-                  ) : activePlayerTab === "COMPLETE_MATCH" ? (
-                    <CompleteMatchTab
-                      scheduledMatches={scheduledMatches}
-                      scheduledMatchesLoading={scheduledMatchesLoading}
-                      scheduledMatchesError={scheduledMatchesError}
-                      playerNameById={playerNameById}
-                      onMatchCompleted={() => setMatchRefreshKey((k) => k + 1)}
-                    />
-                  ) : activePlayerTab === "UPDATE_MATCH" ? (
-                    <UpdateMatchTab
-                      players={players}
-                      matchSeasons={matchSeasons}
-                      matchSeasonsLoading={matchSeasonsLoading}
-                      matchSeasonsError={matchSeasonsError}
-                      playerNameById={playerNameById}
-                    />
-                  ) : activePlayerTab === "CREATE" ? (
-                    <CreatePlayerTab
-                      onPlayerCreated={(created) => {
-                        setPlayers((prev) => [created, ...prev]);
-                        setPendingEditPlayer(created);
-                        setActivePlayerTab("EDIT");
-                      }}
-                    />
-                  ) : activePlayerTab === "MEMBERS" ? (
-                    <MembersTab
-                      enabled={activePlayerTab === "MEMBERS" && isAdmin}
-                    />
-                  ) : activePlayerTab === "EVENTS" ? (
-                    <EventsTab
-                      enabled={activePlayerTab === "EVENTS" && isAdmin}
-                    />
-                  ) : null}
+                  <AdminDataProvider value={adminDataContextValue}>
+                    {/* TAB CONTENT */}
+                    {activePlayerTab === "EDIT" ? (
+                      <EditPlayerTab />
+                    ) : activePlayerTab === "SCHEDULE_MATCH" ? (
+                      <ScheduleMatchTab />
+                    ) : activePlayerTab === "COMPLETE_MATCH" ? (
+                      <CompleteMatchTab />
+                    ) : activePlayerTab === "UPDATE_MATCH" ? (
+                      <UpdateMatchTab />
+                    ) : activePlayerTab === "CREATE" ? (
+                      <CreatePlayerTab />
+                    ) : activePlayerTab === "MEMBERS" ? (
+                      <MembersTab
+                        enabled={activePlayerTab === "MEMBERS" && isAdmin}
+                      />
+                    ) : activePlayerTab === "EVENTS" ? (
+                      <EventsTab
+                        enabled={activePlayerTab === "EVENTS" && isAdmin}
+                      />
+                    ) : null}
+                  </AdminDataProvider>
                 </div>
               </div>
             ) : (
