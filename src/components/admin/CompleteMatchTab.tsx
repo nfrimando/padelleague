@@ -1,26 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import { supabase } from "@/lib/supabase";
 import { useLoadedMatchDetails } from "@/lib/useLoadedMatchDetails";
 import { useMatchRatingPreview } from "@/lib/useMatchRatingPreview";
-import { ScheduledMatchOption } from "@/lib/useScheduledMatches";
 
-type Props = {
-  scheduledMatches: ScheduledMatchOption[];
-  scheduledMatchesLoading: boolean;
-  scheduledMatchesError: string | null;
-  playerNameById: Map<string, string>;
-  onMatchCompleted: () => void;
-};
-
-export function CompleteMatchTab({
-  scheduledMatches,
-  scheduledMatchesLoading,
-  scheduledMatchesError,
-  playerNameById,
-  onMatchCompleted,
-}: Props) {
+export function CompleteMatchTab() {
+  const {
+    scheduledMatches,
+    scheduledMatchesLoading,
+    scheduledMatchesError,
+    playerNameById,
+    refreshScheduledMatches,
+  } = useAdminDataContext();
   const [matchId, setMatchId] = useState("");
   const [updateSet1Team1, setUpdateSet1Team1] = useState("");
   const [updateSet1Team2, setUpdateSet1Team2] = useState("");
@@ -217,7 +210,7 @@ export function CompleteMatchTab({
       setCompleteMatchSuccess(
         result.message || "Match completed successfully.",
       );
-      onMatchCompleted();
+      refreshScheduledMatches();
     } catch {
       setCompleteMatchError("Unexpected error while completing match.");
     } finally {

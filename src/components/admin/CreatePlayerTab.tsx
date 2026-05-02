@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 
-type Props = {
-  onPlayerCreated: (player: Player) => void;
-};
-
-export function CreatePlayerTab({ onPlayerCreated }: Props) {
+export function CreatePlayerTab() {
+  const { handlePlayerCreated } = useAdminDataContext();
   const [createName, setCreateName] = useState("");
   const [createNickname, setCreateNickname] = useState("");
   const [createImageLink, setCreateImageLink] = useState("");
@@ -98,7 +96,7 @@ export function CreatePlayerTab({ onPlayerCreated }: Props) {
       setCreateImageLink("");
       setCreateInitialRating("");
       setCreatePlayerSuccess(result.message || "Player created successfully.");
-      onPlayerCreated(created);
+      handlePlayerCreated(created);
     } catch {
       setCreatePlayerError("Unexpected error while creating player.");
     } finally {

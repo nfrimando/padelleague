@@ -1,33 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import { supabase } from "@/lib/supabase";
-import { Player } from "@/lib/types";
-import { EventOption } from "@/lib/useMatchEvents";
 import {
   SCHEDULE_MATCH_TYPE_OPTIONS,
   SCHEDULE_MATCH_VENUE_OPTIONS,
 } from "./constants";
 
-type Props = {
-  players: Player[];
-  playersLoading: boolean;
-  playersError: string | null;
-  matchSeasons: EventOption[];
-  matchSeasonsLoading: boolean;
-  matchSeasonsError: string | null;
-  onMatchScheduled: () => void;
-};
-
-export function ScheduleMatchTab({
-  players,
-  playersLoading,
-  playersError,
-  matchSeasons,
-  matchSeasonsLoading,
-  matchSeasonsError,
-  onMatchScheduled,
-}: Props) {
+export function ScheduleMatchTab() {
+  const {
+    players,
+    playersLoading,
+    playersError,
+    matchSeasons,
+    matchSeasonsLoading,
+    matchSeasonsError,
+    refreshScheduledMatches,
+  } = useAdminDataContext();
   const [createMatchSeasonId, setCreateMatchSeasonId] = useState("");
   const [createMatchDateLocal, setCreateMatchDateLocal] = useState("");
   const [createMatchTimeLocal, setCreateMatchTimeLocal] = useState("");
@@ -136,7 +126,7 @@ export function ScheduleMatchTab({
         result.message ||
           `Match #${result.match?.match_id ?? ""} created successfully.`,
       );
-      onMatchScheduled();
+      refreshScheduledMatches();
     } catch {
       setCreateMatchError("Unexpected error while creating match.");
     } finally {

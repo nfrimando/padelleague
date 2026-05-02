@@ -9,6 +9,14 @@ export type EventRow = {
   created_at: string | null;
 };
 
+type EventSnapshot = {
+  eventMap: Record<number, string>;
+  events: EventRow[];
+};
+
+let cachedEventSnapshot: EventSnapshot | null = null;
+let inFlightEventSnapshotPromise: Promise<EventSnapshot> | null = null;
+
 function normalizeEventId(value: number | string | bigint): number | null {
   const normalized =
     typeof value === "number"
@@ -22,6 +30,55 @@ function normalizeEventId(value: number | string | bigint): number | null {
 function buildEventLabel(row: EventRow): string {
   if (row.name) return row.name;
   return `Event ${row.event_id}`;
+}
+
+function buildEventSnapshot(rows: EventRow[]): EventSnapshot {
+  const map: Record<number, string> = {};
+  for (const row of rows) {
+    const eventId = normalizeEventId(row.event_id);
+    if (eventId !== null) {
+      map[eventId] = buildEventLabel(row);
+    }
+  }
+  return { eventMap: map, events: rows };
+}
+
+async function loadEventSnapshot(): Promise<EventSnapshot> {
+  if (cachedEventSnapshot) {
+    return cachedEventSnapshot;
+  }
+
+  if (!inFlightEventSnapshotPromise) {
+    inFlightEventSnapshotPromise = (async () => {
+      const primary = await supabase
+        .from("events")
+        .select("event_id, name, created_at")
+        .order("event_id", { ascending: true });
+
+      if (!primary.error) {
+        return buildEventSnapshot((primary.data ?? []) as EventRow[]);
+      }
+
+      const fallback = await supabase
+        .from("events")
+        .select("event_id, name")
+        .order("event_id", { ascending: true });
+
+      const rows = ((fallback.data ?? []) as Array<Omit<EventRow, "created_at">>)
+        .map((row) => ({ ...row, created_at: null }));
+
+      return buildEventSnapshot(rows);
+    })()
+      .then((snapshot) => {
+        cachedEventSnapshot = snapshot;
+        return snapshot;
+      })
+      .finally(() => {
+        inFlightEventSnapshotPromise = null;
+      });
+  }
+
+  return inFlightEventSnapshotPromise;
 }
 
 export function useEventMap(enabled = true) {
@@ -38,55 +95,22 @@ export function useEventMap(enabled = true) {
     }
 
     let cancelled = false;
+    if (cachedEventSnapshot) {
+      setEventMap(cachedEventSnapshot.eventMap);
+      setEvents(cachedEventSnapshot.events);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-
-    const loadEvents = async () => {
-      const primary = await supabase
-        .from("events")
-        .select("event_id, name, created_at")
-        .order("event_id", { ascending: true });
-
-      if (!cancelled && !primary.error) {
-        const rows = (primary.data ?? []) as EventRow[];
-        const map: Record<number, string> = {};
-        for (const row of rows) {
-          const eventId = normalizeEventId(row.event_id);
-          if (eventId !== null) {
-            map[eventId] = buildEventLabel(row);
-          }
-        }
-        setEvents(rows);
-        setEventMap(map);
-        setLoading(false);
-        return;
-      }
-
-      const fallback = await supabase
-        .from("events")
-        .select("event_id, name")
-        .order("event_id", { ascending: true });
-
+    void loadEventSnapshot().then((snapshot) => {
       if (cancelled) {
         return;
       }
-
-      const rows = ((fallback.data ?? []) as Array<
-        Omit<EventRow, "created_at">
-      >).map((row) => ({ ...row, created_at: null }));
-      const map: Record<number, string> = {};
-      for (const row of rows) {
-        const eventId = normalizeEventId(row.event_id);
-        if (eventId !== null) {
-          map[eventId] = buildEventLabel(row);
-        }
-      }
-
-      setEvents(rows);
-      setEventMap(map);
+      setEventMap(snapshot.eventMap);
+      setEvents(snapshot.events);
       setLoading(false);
-    };
-
-    void loadEvents();
+    });
 
     return () => {
       cancelled = true;
