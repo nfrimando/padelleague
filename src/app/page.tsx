@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-const WEBSITE_VERSION = "0.8.1";
+const WEBSITE_VERSION = "0.8.2";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -18,7 +18,7 @@ import type { User } from "@supabase/supabase-js";
 type LeagueStats = {
   players: number;
   completedMatches: number;
-  latestSeason: number | null;
+  latestEvent: { event_id: number; name: string } | null;
   setsPlayed: number;
 };
 
@@ -60,7 +60,10 @@ export default function HomePage() {
   const [stats, setStats] = useState<LeagueStats | null>(null);
   const [recentMatches, setRecentMatches] = useState<MatchWithTeams[]>([]);
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([]);
-  const [lastSeason, setLastSeason] = useState<number | null>(null);
+  const [lastEvent, setLastEvent] = useState<{
+    event_id: number;
+    name: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [authUser, setAuthUser] = useState<User | null>(null);
 
@@ -101,7 +104,7 @@ export default function HomePage() {
       const [
         { count: playerCount },
         { data: matchCountData },
-        { data: latestSeasonData },
+        { data: latestEventData },
         { count: setsCount },
       ] = await Promise.all([
         supabase.from("players").select("*", { count: "exact", head: true }),
@@ -110,25 +113,29 @@ export default function HomePage() {
           .select("match_id", { count: "exact" })
           .eq("status", "completed"),
         supabase
-          .from("matches")
-          .select("event_id")
-          .not("event_id", "is", null)
+          .from("events")
+          .select("event_id,name")
           .order("event_id", { ascending: false })
           .limit(1),
         supabase.from("match_sets").select("*", { count: "exact", head: true }),
       ]);
 
-      const latestSeason: number | null =
-        latestSeasonData?.[0]?.event_id ?? null;
+      const latestEvent: { event_id: number; name: string } | null =
+        latestEventData?.[0]
+          ? {
+              event_id: latestEventData[0].event_id,
+              name: latestEventData[0].name,
+            }
+          : null;
 
       if (!cancelled) {
         setStats({
           players: playerCount ?? 0,
           completedMatches: matchCountData?.length ?? 0,
-          latestSeason,
+          latestEvent,
           setsPlayed: setsCount ?? 0,
         });
-        setLastSeason(latestSeason);
+        setLastEvent(latestEvent);
       }
 
       // ── 2. Recent completed matches ──────────────────────────────────────
@@ -177,14 +184,14 @@ export default function HomePage() {
         if (!cancelled) setRecentMatches(assembled);
       }
 
-      // ── 3. Top players of last season (by rating) ────────────────────────
-      if (latestSeason !== null) {
+      // ── 3. Top players of last event (by rating) ─────────────────────────
+      if (latestEvent !== null) {
         const minGames = 5;
-        const seasonTypes = ["group", "semis", "finals"];
+        const eventTypes = ["group", "semis", "finals"];
         const rpcResults = await Promise.all(
-          seasonTypes.map((type) =>
+          eventTypes.map((type) =>
             supabase.rpc("get_leaderboard_ratings", {
-              season_filter: latestSeason,
+              season_filter: latestEvent.event_id,
               type_filter: type,
               formula_filter: null,
               min_matches: 1,
@@ -285,8 +292,8 @@ export default function HomePage() {
       icon: Sword,
     },
     {
-      label: "SEASON",
-      value: stats?.latestSeason != null ? `S${stats.latestSeason}` : "–",
+      label: "EVENT",
+      value: stats?.latestEvent != null ? stats.latestEvent.name : "–",
       icon: Flame,
     },
     {
@@ -334,8 +341,8 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full pt-28">
             <div className="max-w-3xl space-y-4 md:space-y-6">
               <div className="inline-block bg-[#00C8DC]/10 text-[#00C8DC] px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase">
-                {stats?.latestSeason
-                  ? `Season ${stats.latestSeason} · Now Live`
+                {stats?.latestEvent
+                  ? `${stats.latestEvent.name} · Now Live`
                   : "Philippines' Premier Circuit"}
               </div>
               <h1 className="text-5xl sm:text-7xl md:text-[9rem] font-black italic leading-[0.85] tracking-tighter uppercase">
@@ -436,7 +443,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Top Players of Last Season ────────────────────────────────────── */}
+      {/* ── Top Players of Last Event ─────────────────────────────────────── */}
       <section className="py-16 md:py-24 px-4 sm:px-6 bg-[#0a1020]">
         <div className="max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-end mb-10 gap-4">
@@ -445,7 +452,7 @@ export default function HomePage() {
                 Elite Circuit
               </div>
               <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter">
-                {lastSeason ? `Season ${lastSeason}` : "Season"}{" "}
+                {lastEvent ? lastEvent.name : "Event"}{" "}
                 <span className="text-[#00C8DC]">Top Players</span>
               </h2>
             </div>

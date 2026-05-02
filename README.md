@@ -1,292 +1,205 @@
-# Padel League Philippines
+# Padel League PH
 
-A lightweight Next.js app for tracking Padel league players and matches in the Philippines.
+A full-stack web application for managing and analysing a competitive padel league in the Philippines. Tracks players, matches, ratings, and event registrations with a real-time leaderboard and integrated payment flow.
 
-## What it does
+---
 
-- Home page with quick navigation to the main sections
-- Players page with player search, profile stats, and filtered match history
-- Leaderboard page with two modes:
-  - Performance mode powered by Supabase RPC `get_leaderboard(season_filter, type_filter)`
-  - Rating mode powered by Supabase RPC `get_leaderboard_ratings(season_filter, type_filter, formula_filter, min_matches)`
-- Admin page at `/admin` with Google sign-in, admin authorization, player lookup, and player editing
-- Shared match card component for consistent match display
-- Shared `MatchFiltersCard` component used by players and leaderboard pages
-- Supports Supabase as the backend/data source
-- Includes Google Sheet extract, CSV transform, and full refresh scripts for importing players, matches, teams, sets, and ratings
+## Features
 
-## Local setup
+- **Player profiles** — rating history, win/loss record, match history, partner analysis
+- **Match management** — schedule, complete, and update matches via admin panel
+- **v3 Rating system** — ELO-inspired algorithm that rewards game dominance, not just wins
+- **Leaderboard** — performance (win rate) and rating modes, per-event filtering
+- **Event registration** — PayMongo payment link integration with webhook confirmation
+- **Admin panel** — create players, schedule/complete matches, verify members, manage events
+- **Match calendar** — monthly calendar view with mobile agenda fallback
+- **Public site** — homepage with live stats, recent matches, and top players
 
-1. Install dependencies:
+---
+
+## Tech Stack
+
+| Layer      | Technology                          |
+| ---------- | ----------------------------------- |
+| Framework  | Next.js 15 (App Router)             |
+| Language   | TypeScript                          |
+| Styling    | Tailwind CSS                        |
+| Database   | Supabase (PostgreSQL)               |
+| Auth       | Supabase Auth (Google OAuth)        |
+| Payments   | PayMongo (payment links + webhooks) |
+| Deployment | Vercel                              |
+| Testing    | Vitest (unit), Playwright (E2E)     |
+
+---
+
+## Setup
+
+### Prerequisites
+
+- Node.js 20+
+- A Supabase project
+- A PayMongo account (test credentials work for local dev)
+
+### 1. Clone and install
 
 ```bash
+git clone <repo-url>
+cd padel-league
 npm install
 ```
 
-2. Copy environment variables into `.env.local`:
+### 2. Environment variables
 
-```bash
-cp .env.example .env.local
+Create `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+PAYMONGO_SECRET_KEY=sk_test_your-key
+PAYMONGO_WEBHOOK_SECRET=whsk_your-secret
 ```
 
-3. Update `.env.local` with your Supabase project credentials:
+### 3. Database
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+Apply the schema from `supabase/schema.sql` to your Supabase project, or run migrations in order from the `supabase/migrations/` directory.
 
-4. Start the development server:
+The schema requires these custom RPC functions (see schema.sql):
+
+- `get_leaderboard` — performance leaderboard
+- `get_leaderboard_ratings` — rating-based leaderboard
+
+### 4. Run locally
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+App runs at `http://localhost:3000`.
 
-## Project structure
+### 5. Admin access
 
-- `src/app/` — Next.js app routes and page components
-- `src/components/` — reusable UI components like match cards and navigation
-- `src/lib/` — helper utilities and Supabase client setup
-- `data/inputs/` — input CSV files for data transformation
-- `data/outputs/` — generated CSV output files from the transform script
-- `src/app/scripts/` — SQL and Python scripts for data transforms and Supabase refresh
+Sign in with Google, then manually insert your `auth.users` user ID into the `admin_users` table via Supabase dashboard.
 
-## Scripts
+### 6. E2E tests (optional)
 
-- `npm run dev` — start the app locally
-- `npm run build` — build the production app
-- `npm run start` — start the production server after build
-- `npm run lint` — run ESLint
-
-## Data scripts
-
-- `src/app/scripts/transform/transform_players.py`
-  - Transforms `data/inputs/dim_players.csv` into `data/outputs/players.csv`.
-  - Cleans name/nickname/image fields and prepares player data for import.
-
-- `src/app/scripts/transform/transform_matches.py`
-  - Transforms `data/inputs/fact_matches.csv` into:
-    - `data/outputs/matches.csv`
-    - `data/outputs/match_teams.csv`
-  - Maps player names/nicknames to Supabase `player_id` values and formats match fields.
-  - Outputs `status` for matches (`scheduled`, `completed`, `forfeit`, `cancelled`).
-
-- `src/app/scripts/load/load_players_to_supabase_full_refresh.py`
-  - Loads `data/outputs/players.csv` into the `players` table.
-  - Truncates `players` with CASCADE (clears all FK-dependent tables) before inserting.
-  - **Must be run before the other transform scripts** (`transform_teams.py`, `transform_matches.py`, `transform_sets.py`, `transform_ratings.py`) because those scripts look up `player_id` values that are auto-generated by Supabase on insert.
-
-- `src/app/scripts/load/load_teams_to_supabase_full_refresh.py`
-  - Loads `data/outputs/teams.csv` into the `teams` table.
-  - Truncates `teams` with RESTART IDENTITY CASCADE before inserting.
-
-- `src/app/scripts/load/load_matches_to_supabase_full_refresh.py`
-  - Truncates `match_player_ratings`, `match_sets`, `match_teams`, `matches` (with RESTART IDENTITY CASCADE).
-  - Loads `data/outputs/matches.csv` into `matches` (including `status`).
-
-- `src/app/scripts/load/load_match_teams_to_supabase_full_refresh.py`
-  - Loads `data/outputs/match_teams.csv` into `match_teams`.
-
-- `src/app/scripts/load/load_match_sets_to_supabase_full_refresh.py`
-  - Loads `data/outputs/match_sets.csv` into `match_sets`.
-
-- `src/app/scripts/load/load_match_player_ratings_to_supabase_full_refresh.py`
-  - Loads `data/outputs/match_player_ratings.csv` into `match_player_ratings` (skips if CSV is missing).
-
-- `src/app/scripts/load/load_reset_matches_sequence.py`
-  - Resets the `matches.match_id` sequence to `MAX(match_id)`.
-  - Run this after loading matches/match teams/match sets/ratings if you execute load scripts manually.
-
-- `src/app/scripts/transform/transform_sets.py`
-  - Transforms `data/inputs/fact_sets.csv` into `data/outputs/match_sets.csv`.
-  - Normalizes set-level game scores for match set imports.
-
-- `src/app/scripts/transform/transform_teams.py`
-  - Transforms `data/inputs/dim_team.csv` into `data/outputs/teams.csv`.
-  - Normalizes to teams schema fields: `team_id`, `season_id`, `team_name`, `icon`, `captain_player_id`, `co_captain_player_id`, `final_rank`.
-  - Resolves captain/co-captain names to `player_id` values from Supabase `players`.
-
-- `src/app/scripts/extract/extract.py`
-  - Runs all Google Sheets extract scripts in sequence with consolidated logs.
-  - Executes these one-sheet extractors:
-    - `extract_fact_matches.py` → `data/inputs/fact_matches.csv`
-    - `extract_dim_players.py` → `data/inputs/dim_players.csv`
-    - `extract_fact_sets.py` → `data/inputs/fact_sets.csv`
-    - `extract_dim_team.py` (`dim_team!A:G`) → `data/inputs/dim_team.csv`
-    - `extract_ratings_v2.py` (`RatingsV2!A10:I`) → `data/inputs/ratings_v2.csv`
-    - `extract_ratings_v3.py` (`RatingsV3!F9:S`) → `data/inputs/ratings_v3.csv`
-
-- `src/app/scripts/transform/transform_ratings.py`
-  - Transforms `ratings_v2.csv` and `ratings_v3.csv` into `data/outputs/match_player_ratings.csv`.
-  - Sets `formula_name` to `v2`/`v3` and maps player names to Supabase `player_id` values.
-
-- `src/app/scripts/leaderboard.sql`
-  - Creates/updates both leaderboard SQL functions in Supabase:
-    - `get_leaderboard(season_filter, type_filter)`
-    - `get_leaderboard_ratings(season_filter, type_filter, formula_filter, min_matches)`
-  - Used by the leaderboard page via Supabase RPC.
-  - Run this command to apply it:
+Playwright E2E tests that require auth need a saved session:
 
 ```bash
-psql "$SUPABASE_DB_URL" -f src/app/scripts/leaderboard.sql
+npm run test:auth-setup   # opens browser, sign in with Google, press Enter
+npx playwright test       # runs all E2E tests
 ```
 
-## Full pipeline
-
-To run the entire ETL pipeline in one command, run:
+Unit tests run without auth:
 
 ```bash
-python3 src/app/scripts/ingest.py
+npm run test
 ```
 
-This runs all steps in order: extract all sheets from Google Sheets → transform players → load players → transform teams → load teams → transform matches/sets/ratings → load matches → load match teams → load match sets → load ratings → reset sequence.
+---
 
-## CSV import helpers
+## Project Structure
 
-To pull all input CSVs directly from Google Sheets, run:
-
-```bash
-python3 src/app/scripts/extract/extract.py
+```
+src/
+├── app/                      # Next.js App Router pages and API routes
+│   ├── api/
+│   │   ├── admin/            # Admin-only API routes (matches, players, events)
+│   │   ├── payments/         # Payment flow (create-link, confirm, webhook)
+│   │   └── ratings/          # v3 rating calculation endpoint
+│   ├── admin/                # Admin panel page
+│   ├── dashboard/            # Authenticated player dashboard
+│   ├── leaderboard/
+│   ├── matches/
+│   ├── players/
+│   └── register/             # Event registration + payment success
+│
+├── components/
+│   ├── admin/                # Tab components for admin panel
+│   ├── MatchCard.tsx
+│   ├── MatchCalendar.tsx
+│   ├── PlayerCard.tsx
+│   ├── PlayerSearchBox.tsx
+│   ├── SiteHeader.tsx
+│   ├── TeamCard.tsx
+│   ├── TeamPlayerLine.tsx
+│   └── TopPlayersTable.tsx
+│
+├── lib/
+│   ├── matchAssembly.ts      # Match + team + rating assembly utilities
+│   ├── matchRatingPreview.ts # v3 rating preview calculation
+│   ├── matches.ts            # Match filter utilities
+│   ├── playerLookup.ts       # Email-based player lookup
+│   ├── resolvePreMatchRatings.ts  # Pre-match rating resolution logic
+│   ├── supabase.ts           # Supabase client (anon key)
+│   ├── types.ts              # Shared TypeScript types
+│   ├── utils.ts              # Date, label, format helpers
+│   ├── useAdminEvents.ts
+│   ├── useEventMap.ts
+│   ├── useLeaderboardData.ts
+│   ├── useLoadedMatchDetails.ts
+│   ├── useMatchEvents.ts
+│   ├── useMatchRatingPreview.ts
+│   ├── useMatches.ts
+│   ├── usePendingMembers.ts
+│   ├── usePlayerMatches.ts
+│   ├── usePlayerSearch.ts
+│   ├── usePlayers.ts
+│   └── useScheduledMatches.ts
+│
+└── __tests__/
+    ├── api/payments/         # Unit tests for payment API routes
+    ├── e2e/                  # Playwright E2E tests
+    ├── helpers/              # Supabase mock factories
+    └── setup.ts              # Test environment variables
 ```
 
-To transform the player import CSV in `data/inputs/`, run:
+---
 
-```bash
-python3 src/app/scripts/transform/transform_players.py
+## Rating System (v3)
+
+Each match updates player ratings using an ELO-influenced algorithm:
+
+1. **Expected win probability (EWP)** — computed from average team ratings using ELO formula
+2. **Actual performance** — percentage of total games won across all sets (not just sets won)
+3. **Reward curve** — scaled by how much a team outperformed their EWP
+4. **Win bonus floor** — winners always gain at least `+0.08` regardless of performance
+5. **Symmetric delta** — losers mirror the winner's gain as a negative
+
+This rewards dominant wins (e.g. 6-0 6-0) over squeaky wins (7-6 7-6) and accounts for rating mismatch between teams.
+
+---
+
+## Payment Flow
+
+```
+User clicks "Register & Pay"
+  → POST /api/payments/create-link
+  → Creates payment + signup records (status: pending)
+  → Calls PayMongo to create a payment link
+  → Redirects user to PayMongo checkout
+
+User completes payment on PayMongo
+  → PayMongo POSTs to /api/payments/webhook
+  → Signature verified (HMAC-SHA256)
+  → Idempotency check (webhook_events table)
+  → payment.status → "paid", signup.status → "registered"
+
+Success page polls /api/payments/confirm
+  → Direct PayMongo API check (covers localhost / slow webhooks)
+  → Confirms registration if paid
 ```
 
-The script writes the output to `data/outputs/players.csv`.
+---
 
-> **Important:** Load players into Supabase before running the other transform scripts.
-> `transform_teams.py`, `transform_matches.py`, `transform_sets.py`, and `transform_ratings.py` all look up
-> `player_id` values that are generated by Supabase when players are inserted.
+## Future Improvements
 
-To transform teams data, run:
-
-```bash
-python3 src/app/scripts/transform/transform_teams.py
-```
-
-To load teams into Supabase, run:
-
-```bash
-python3 src/app/scripts/load/load_teams_to_supabase_full_refresh.py
-```
-
-To load the transformed players into Supabase, run:
-
-```bash
-python3 src/app/scripts/load/load_players_to_supabase_full_refresh.py
-```
-
-To transform match and match team data, run:
-
-```bash
-python3 src/app/scripts/transform/transform_matches.py
-```
-
-To transform set-level game score data, run:
-
-```bash
-python3 src/app/scripts/transform/transform_sets.py
-```
-
-To transform ratings data, run:
-
-```bash
-python3 src/app/scripts/transform/transform_ratings.py
-```
-
-To load matches with full-refresh truncation, run:
-
-```bash
-python3 src/app/scripts/load/load_matches_to_supabase_full_refresh.py
-```
-
-Then load match teams, match sets, and ratings in order:
-
-```bash
-python3 src/app/scripts/load/load_match_teams_to_supabase_full_refresh.py
-python3 src/app/scripts/load/load_match_sets_to_supabase_full_refresh.py
-python3 src/app/scripts/load/load_match_player_ratings_to_supabase_full_refresh.py
-python3 src/app/scripts/load/load_reset_matches_sequence.py
-```
-
-## Admin page
-
-- Route: `src/app/admin/page.tsx` (`/admin`)
-- Authentication: Supabase Google OAuth (`signInWithOAuth`)
-- Authorization: `admin_users` table lookup by `auth.uid()`
-- Admin functionality currently available:
-  - player lookup by name/nickname
-  - edit `players` fields (`name`, `nickname`, `image_link`)
-  - create scheduled matches via `POST /api/admin/matches/create`
-
-Create match API request body:
-
-```json
-{
-  "seasonId": 1,
-  "dateLocal": "2026-04-12",
-  "timeLocal": "19:30",
-  "venue": "Club United",
-  "type": "americano",
-  "team1": {
-    "player1Id": 101,
-    "player2Id": 102
-  },
-  "team2": {
-    "player1Id": 201,
-    "player2Id": 202
-  }
-}
-```
-
-The endpoint requires the caller's Supabase access token in the `Authorization: Bearer ...` header, verifies that the user exists in `admin_users`, creates the `matches` row with `status = 'scheduled'`, and then creates two `match_teams` rows.
-
-Recommended DB setup for admin auth:
-
-```sql
-create table if not exists public.admin_users (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  email text,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.admin_users enable row level security;
-
-create policy "users can read own admin row"
-on public.admin_users
-for select
-to authenticated
-using (user_id = auth.uid());
-```
-
-Google OAuth redirect configuration:
-
-1. Supabase Dashboard → Authentication → URL Configuration
-   - Site URL:
-     - local: `http://localhost:3000`
-     - production: `https://www.padelph.com`
-   - Redirect URLs (allowlist):
-     - `http://localhost:3000/**`
-     - `https://www.padelph.com/**`
-
-2. Supabase Dashboard → Authentication → Providers → Google
-   - Enable provider and set Google OAuth client ID/secret.
-
-3. Google Cloud Console → OAuth client
-   - Authorized redirect URI must include your Supabase callback:
-     - `https://<YOUR_SUPABASE_PROJECT_REF>.supabase.co/auth/v1/callback`
-
-If login redirects unexpectedly to localhost in production, verify the Supabase Site URL and Redirect URLs first.
-
-## Notes
-
-- The app uses Tailwind CSS for styling and Next.js 16 for routing.
-- Players and leaderboard use shared match filters (season/type, default `ALL`).
-- Leaderboard mode behavior:
-  - Performance mode resets filters to latest season + type `ALL`.
-  - Rating mode resets filters to season `ALL` + type `ALL`.
-- Loading states are rendered as overlays to keep layouts stable while data refreshes.
+- **React Query / SWR** — eliminate duplicate Supabase fetches across components; all hooks currently fire independent queries with no shared cache
+- **Supabase type generation** — replace manual type definitions and `as unknown` casts with generated types from `supabase gen types typescript`
+- **URL state via `nuqs`** — replace ~80 lines of manual `useEffect`-based URL sync in `players/page.tsx`
+- **Head-to-head comparison** — dedicated `/players/compare` page with win rate, common opponents, and set history between any two players
+- **Rating trajectory chart** — full time-series chart on player profile (data already exists, only the sparkline is shown)
+- **Season summary cards** — shareable end-of-season recap per player (most improved, best win, longest streak)
+- **Match result notifications** — email players their new rating after a match is recorded
+- **Admin data context** — replace prop drilling in `admin/page.tsx` with a React context
+- **Feature-based folder structure** — migrate from `src/lib/` flat structure to `src/features/` domain slices
