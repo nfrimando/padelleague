@@ -13,6 +13,9 @@ interface PlayerCardProps {
   layout?: "default" | "matchCompact";
   disableLink?: boolean;
   showLatestRating?: boolean;
+  showLifetimeMatches?: boolean;
+  lifetimeMatches?: number | null;
+  loadingLifetimeMatches?: boolean;
   ratingHistory?: RatingSparklinePoint[];
   loadingRating?: boolean;
   hrefBuilder?: (playerId: string) => string;
@@ -25,6 +28,9 @@ export default function PlayerCard({
   layout = "default",
   disableLink = false,
   showLatestRating = true,
+  showLifetimeMatches = false,
+  lifetimeMatches = null,
+  loadingLifetimeMatches = false,
   ratingHistory,
   loadingRating = false,
   hrefBuilder,
@@ -39,7 +45,7 @@ export default function PlayerCard({
     if (!player?.player_id) return null;
     const id = String(player.player_id);
     if (hrefBuilder) return hrefBuilder(id);
-    return `/players?playerId=${encodeURIComponent(id)}`;
+    return `/players/${encodeURIComponent(id)}`;
   })();
   const displayName = player?.name || "N/A";
   const displayLabel = player?.nickname || "—";
@@ -133,6 +139,16 @@ export default function PlayerCard({
             >
               {displayLabel}
             </div>
+            {showLifetimeMatches ? (
+              loadingLifetimeMatches ? (
+                <div className="mt-0.5 h-4 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+              ) : (
+                <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  Lifetime Matches:{" "}
+                  {typeof lifetimeMatches === "number" ? lifetimeMatches : "-"}
+                </div>
+              )
+            ) : null}
             {loadingRating ? (
               <div className="mt-0.5 h-4 w-28 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
             ) : hasLatestMatchDate ? (
