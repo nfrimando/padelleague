@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import PlayerDiscoveryCard from "@/components/PlayerDiscoveryCard";
@@ -11,14 +10,31 @@ import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { Player } from "@/lib/types";
 
 function PlayersPageContent() {
-  const router = useRouter();
   const [search, setSearch] = useState("");
+  const [committedSearch, setCommittedSearch] = useState("");
   const playerCardHrefBuilder = useCallback((playerId: string) => {
     return `/players/${encodeURIComponent(playerId)}`;
   }, []);
 
   const { players, loading } = usePlayers({ onlyActivePlayers: true });
   const filteredPlayers = usePlayerSearch(players, search);
+  const filteredPlayersForGrid = usePlayerSearch(players, committedSearch);
+
+  useEffect(() => {
+    const trimmedSearch = search.trim();
+    if (!trimmedSearch) {
+      setCommittedSearch("");
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCommittedSearch(trimmedSearch);
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [search]);
 
   const [randomPlayers, setRandomPlayers] = useState<Player[]>([]);
   const pickRandomPlayers = () => {
@@ -36,19 +52,23 @@ function PlayersPageContent() {
   };
 
   const displayedPlayers = useMemo(() => {
-    if (search.trim().length > 0) {
-      return filteredPlayers;
+    if (committedSearch.length > 0) {
+      return filteredPlayersForGrid;
     }
 
     return randomPlayers;
-  }, [search, filteredPlayers, randomPlayers]);
+  }, [committedSearch, filteredPlayersForGrid, randomPlayers]);
 
   const displayedPlayerIds = useMemo(
     () => displayedPlayers.map((player) => player.player_id),
     [displayedPlayers],
   );
-  const { matchCounts, loading: loadingMatchCounts } =
-    usePlayerMatchCounts(displayedPlayerIds);
+  const {
+    matchCounts,
+    latestMatchDates,
+    latestRatings,
+    loading: loadingMatchCounts,
+  } = usePlayerMatchCounts(displayedPlayerIds);
 
   return (
     <>
@@ -57,7 +77,7 @@ function PlayersPageContent() {
         <div className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-2xl font-bold">Players</h1>
-            {search.trim().length === 0 ? (
+            {committedSearch.length === 0 ? (
               <button
                 type="button"
                 className="text-xs px-2 py-1 rounded font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-100 border border-slate-300 dark:border-slate-600 shadow-sm hover:bg-sky-100 dark:hover:bg-sky-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 transition"
@@ -73,18 +93,21 @@ function PlayersPageContent() {
             <PlayerSearchBox
               value={search}
               suggestions={filteredPlayers}
+              showSuggestions={false}
               selectedPlayerName={null}
               maxSuggestions={6}
               placeholder="Search players by name or nickname..."
               onValueChange={setSearch}
               onClear={() => setSearch("")}
               onSelectPlayer={(player) => {
-                router.push(playerCardHrefBuilder(String(player.player_id)));
+                const selectedName = String(player.name || "").trim();
+                setSearch(selectedName);
+                setCommittedSearch(selectedName);
               }}
             />
           </div>
           <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            {search.trim().length > 0
+            {committedSearch.length > 0
               ? `Showing ${displayedPlayers.length} result${displayedPlayers.length === 1 ? "" : "s"}`
               : "Showing a random subset. Hit re-roll for a fresh mix."}
           </div>
@@ -122,12 +145,16 @@ function PlayersPageContent() {
                 href={playerCardHrefBuilder(String(player.player_id))}
                 loadingLifetimeMatches={loadingMatchCounts}
                 lifetimeMatches={matchCounts[String(player.player_id)] ?? null}
+                latestMatchDate={
+                  latestMatchDates[String(player.player_id)] ?? null
+                }
+                latestRating={latestRatings[String(player.player_id)] ?? null}
               />
             ))}
           </div>
         ) : (
           <div className="rounded border border-dashed border-slate-300 dark:border-slate-700 p-6 text-sm text-slate-600 dark:text-slate-300">
-            {search.trim().length > 0
+            {committedSearch.length > 0
               ? "No players matched your search."
               : "No active players found."}
           </div>

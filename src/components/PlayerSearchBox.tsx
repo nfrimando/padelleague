@@ -12,6 +12,7 @@ type PlayerSearchBoxProps = {
   placeholder?: string;
   maxSuggestions?: number;
   selectedPlayerName?: string | null;
+  showSuggestions?: boolean;
 };
 
 export default function PlayerSearchBox({
@@ -23,6 +24,7 @@ export default function PlayerSearchBox({
   placeholder = "Search player by name or nickname...",
   maxSuggestions = 5,
   selectedPlayerName,
+  showSuggestions = true,
 }: PlayerSearchBoxProps) {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
 
@@ -32,6 +34,7 @@ export default function PlayerSearchBox({
   );
 
   const shouldShowDropdown =
+    showSuggestions &&
     value.trim().length > 0 &&
     visibleSuggestions.length > 0 &&
     (!selectedPlayerName ||

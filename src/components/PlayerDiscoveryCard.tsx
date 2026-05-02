@@ -7,6 +7,8 @@ type PlayerDiscoveryCardProps = {
   href: string;
   lifetimeMatches?: number | null;
   loadingLifetimeMatches?: boolean;
+  latestMatchDate?: string | null;
+  latestRating?: number | null;
 };
 
 export default function PlayerDiscoveryCard({
@@ -14,23 +16,24 @@ export default function PlayerDiscoveryCard({
   href,
   lifetimeMatches,
   loadingLifetimeMatches = false,
+  latestMatchDate = null,
+  latestRating = null,
 }: PlayerDiscoveryCardProps) {
+  const hasName =
+    typeof player.name === "string" && player.name.trim().length > 0;
+  const hasNickname =
+    typeof player.nickname === "string" && player.nickname.trim().length > 0;
   const hasCustomImage = !!(player.image_link && player.image_link !== "null");
   const imageSrc = hasCustomImage ? player.image_link : "/default-avatar.webp";
   const cardRating =
-    typeof player.latest_rating === "number" &&
-    Number.isFinite(player.latest_rating)
-      ? player.latest_rating
-      : typeof player.pre_match_rating === "number" &&
-          Number.isFinite(player.pre_match_rating)
-        ? player.pre_match_rating
-        : typeof player.initial_rating === "number" &&
-            Number.isFinite(player.initial_rating)
-          ? player.initial_rating
-          : null;
+    typeof latestRating === "number" && Number.isFinite(latestRating)
+      ? latestRating
+      : null;
+  const effectiveLatestMatchDate =
+    latestMatchDate ?? player.latest_match_date ?? null;
   const hasLatestMatchDate =
-    typeof player.latest_match_date === "string" &&
-    player.latest_match_date.trim().length > 0;
+    typeof effectiveLatestMatchDate === "string" &&
+    effectiveLatestMatchDate.trim().length > 0;
 
   return (
     <Link
@@ -48,13 +51,26 @@ export default function PlayerDiscoveryCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            {player.name || "Unknown Player"}
+            {hasName ? (
+              player.name
+            ) : (
+              <span className="block h-4 w-28 rounded bg-slate-200/70 dark:bg-slate-700/70 animate-pulse" />
+            )}
           </div>
           <div className="mt-1 inline-flex max-w-full items-center rounded-md border border-slate-200/90 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-            <span className="truncate">{player.nickname || "No nickname"}</span>
+            {hasNickname ? (
+              <span className="truncate">{player.nickname}</span>
+            ) : (
+              <span className="block h-3 w-20 rounded bg-slate-200/80 dark:bg-slate-700/80 animate-pulse" />
+            )}
           </div>
           <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate">
-            Last Match: {hasLatestMatchDate ? formatMatchDate(player.latest_match_date || null) : "N/A"}
+            Last Match:{" "}
+            {hasLatestMatchDate ? (
+              formatMatchDate(effectiveLatestMatchDate)
+            ) : (
+              <span className="inline-block align-middle h-3 w-16 rounded bg-slate-200/80 dark:bg-slate-700/80 animate-pulse" />
+            )}
           </div>
         </div>
         <div className="rounded-lg border border-sky-200 dark:border-sky-900/80 bg-sky-50/80 dark:bg-sky-950/25 px-2.5 py-1 text-right shrink-0">
@@ -62,7 +78,11 @@ export default function PlayerDiscoveryCard({
             Rating
           </div>
           <div className="mt-0.5 text-lg font-bold tabular-nums text-sky-900 dark:text-sky-200">
-            {cardRating != null ? cardRating.toFixed(2) : "-"}
+            {!loadingLifetimeMatches && cardRating != null ? (
+              cardRating.toFixed(2)
+            ) : (
+              <span className="inline-block h-5 w-12 rounded bg-sky-200/80 dark:bg-sky-900/60 animate-pulse" />
+            )}
           </div>
         </div>
       </div>
@@ -74,10 +94,12 @@ export default function PlayerDiscoveryCard({
           </div>
           {loadingLifetimeMatches ? (
             <div className="mt-1 h-6 w-12 rounded-md bg-slate-200/70 dark:bg-slate-700/70 animate-pulse" />
-          ) : (
+          ) : typeof lifetimeMatches === "number" ? (
             <div className="mt-1 text-2xl font-bold leading-none text-slate-900 dark:text-slate-100 tabular-nums">
-              {typeof lifetimeMatches === "number" ? lifetimeMatches : "-"}
+              {lifetimeMatches}
             </div>
+          ) : (
+            <div className="mt-1 h-6 w-12 rounded-md bg-slate-200/70 dark:bg-slate-700/70 animate-pulse" />
           )}
         </div>
         <div className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
