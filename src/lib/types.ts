@@ -113,6 +113,58 @@ export type MatchWithTeams = {
   sets?: MatchSet[];
 };
 
+export type MatchStatus = "scheduled" | "completed" | "forfeit" | "cancelled";
+
+export type MatchPlayerSummary = {
+  player_id: number;
+  name: string | null;
+  nickname: string | null;
+};
+
+export type LoadedMatchDetails = {
+  matchId: number;
+  status: MatchStatus;
+  seasonId: number | null;
+  dateLocal: string | null;
+  timeLocal: string | null;
+  venue: string | null;
+  type: string | null;
+  winnerTeam: number | null;
+  team1SetsWon: number | null;
+  team2SetsWon: number | null;
+  team1: {
+    player1: MatchPlayerSummary | null;
+    player2: MatchPlayerSummary | null;
+  };
+  team2: {
+    player1: MatchPlayerSummary | null;
+    player2: MatchPlayerSummary | null;
+  };
+  sets: Array<{ set_number: number; team_1_games: number; team_2_games: number }>;
+  preRatingsV3: Record<number, number | null>;
+};
+
+export type MatchRatingPreviewRow = {
+  player: MatchPlayerSummary;
+  team: 1 | 2;
+  before: number;
+  after: number;
+  delta: number;
+};
+
+export type MatchRatingPreviewError = {
+  error: string;
+};
+
+export type MatchRatingPreviewSuccess = {
+  winnerTeam: 1 | 2;
+  rows: MatchRatingPreviewRow[];
+};
+
+export type MatchRatingPreview =
+  | MatchRatingPreviewError
+  | MatchRatingPreviewSuccess;
+
 // ─── Season teams (the `teams` table) ─────────────────────────────────────────
 
 export type SeasonTeam = {
