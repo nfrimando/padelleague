@@ -1,3 +1,30 @@
+import type { MatchWithTeams } from "@/lib/types";
+
+export function playerLabel(
+  p: { name: string; nickname: string } | null | undefined,
+): string {
+  return p?.nickname || p?.name || "TBD";
+}
+
+export function versusLabel(match: Pick<MatchWithTeams, "type">): string {
+  const type = String(match.type || "").toLowerCase();
+  if (type === "kotc") return "👑";
+  if (type === "duel") return "⚔️";
+  return "vs";
+}
+
+export function matchTopLine(match: MatchWithTeams): string {
+  if (match.status === "completed" && match.sets && match.sets.length > 0) {
+    return [...match.sets]
+      .sort((a, b) => a.set_number - b.set_number)
+      .map((s) => `${s.team_1_games}-${s.team_2_games}`)
+      .join(", ");
+  }
+  const venue = match.venue || "No venue";
+  const time = formatMatchTime(match.time_local);
+  return time ? `${venue} · ${time}` : venue;
+}
+
 export const formatMatchDate = (dateString: string | null) => {
   if (!dateString) return "N/A";
   const date = new Date(`${dateString}T00:00:00`);

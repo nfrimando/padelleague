@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
 import { formatMatchDate } from "@/lib/utils";
 import { Player } from "@/lib/types";
 
@@ -101,6 +100,7 @@ interface PlayerCardProps {
   showLatestRating?: boolean;
   ratingHistory?: RatingSparklinePoint[];
   loadingRating?: boolean;
+  hrefBuilder?: (playerId: string) => string;
 }
 
 export default function PlayerCard({
@@ -112,32 +112,19 @@ export default function PlayerCard({
   showLatestRating = true,
   ratingHistory,
   loadingRating = false,
+  hrefBuilder,
 }: PlayerCardProps) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const isLg = size === "lg";
   const hasCustomImage = !!(player?.image_link && player.image_link !== "null");
   const imageSrc = hasCustomImage
     ? (player?.image_link as string)
     : "/default-avatar.webp";
   const playerHref = (() => {
-    if (disableLink) {
-      return null;
-    }
-
-    if (!player?.player_id) {
-      return null;
-    }
-
-    // Preserve active players-page filters when navigating between player profiles.
-    if (pathname === "/players") {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("playerId", String(player.player_id));
-      params.delete("playerid");
-      return `${pathname}?${params.toString()}`;
-    }
-
-    return `/players?playerId=${encodeURIComponent(String(player.player_id))}`;
+    if (disableLink) return null;
+    if (!player?.player_id) return null;
+    const id = String(player.player_id);
+    if (hrefBuilder) return hrefBuilder(id);
+    return `/players?playerId=${encodeURIComponent(id)}`;
   })();
   const isMatchCompact = layout === "matchCompact";
   const displayName = player?.name || "N/A";
@@ -279,13 +266,12 @@ export default function PlayerCard({
                       {latestRating.toFixed(2)}
                     </div>
                   ) : null)}
-                {isLg && (
-                  loadingRating ? (
+                {isLg &&
+                  (loadingRating ? (
                     <div className="w-20 h-8 rounded bg-sky-100 dark:bg-sky-900/30 animate-pulse" />
                   ) : ratingHistory && ratingHistory.length >= 2 ? (
                     <RatingSparkline history={ratingHistory} />
-                  ) : null
-                )}
+                  ) : null)}
               </div>
             ) : null}
           </div>
