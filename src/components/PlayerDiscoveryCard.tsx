@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Player } from "@/lib/types";
+import { formatMatchDate } from "@/lib/utils";
 
 type PlayerDiscoveryCardProps = {
   player: Player;
@@ -27,6 +28,9 @@ export default function PlayerDiscoveryCard({
             Number.isFinite(player.initial_rating)
           ? player.initial_rating
           : null;
+  const hasLatestMatchDate =
+    typeof player.latest_match_date === "string" &&
+    player.latest_match_date.trim().length > 0;
 
   return (
     <Link
@@ -48,6 +52,9 @@ export default function PlayerDiscoveryCard({
           </div>
           <div className="mt-1 inline-flex max-w-full items-center rounded-md border border-slate-200/90 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
             <span className="truncate">{player.nickname || "No nickname"}</span>
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            Last Match: {hasLatestMatchDate ? formatMatchDate(player.latest_match_date || null) : "N/A"}
           </div>
         </div>
         <div className="rounded-lg border border-sky-200 dark:border-sky-900/80 bg-sky-50/80 dark:bg-sky-950/25 px-2.5 py-1 text-right shrink-0">
