@@ -16,10 +16,12 @@ import { Player } from "@/lib/types";
 import { useMatchEvents } from "@/lib/useMatchEvents";
 import { useScheduledMatches } from "@/lib/useScheduledMatches";
 import { usePlayers } from "@/lib/usePlayers";
+import { CreateEventTab } from "@/components/admin/CreateEventTab";
 
 const ADMIN_PLAYER_TABS = [
   { value: "MEMBERS", label: "Members" },
-  { value: "EVENTS", label: "Events" },
+  { value: "CREATE_EVENT", label: "Create Event" },
+  { value: "EVENTS", label: "Manage Events" },
   { value: "CREATE", label: "Create Player" },
   { value: "EDIT", label: "Edit Player" },
   { value: "SCHEDULE_MATCH", label: "Schedule Match" },
@@ -317,25 +319,27 @@ function AdminPageContent() {
                     </h2>
                   </div>
 
-                  <div className="w-full flex justify-center">
-                    <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/60">
-                      {ADMIN_PLAYER_TABS.map((tab) => {
-                        const active = activePlayerTab === tab.value;
-                        return (
-                          <button
-                            key={tab.value}
-                            type="button"
-                            onClick={() => setActivePlayerTab(tab.value)}
-                            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                              active
-                                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                                : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
-                            }`}
-                          >
-                            {tab.label}
-                          </button>
-                        );
-                      })}
+                  <div className="w-full overflow-x-auto">
+                    <div className="flex justify-center min-w-[420px] sm:min-w-0">
+                      <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/60">
+                        {ADMIN_PLAYER_TABS.map((tab) => {
+                          const active = activePlayerTab === tab.value;
+                          return (
+                            <button
+                              key={tab.value}
+                              type="button"
+                              onClick={() => setActivePlayerTab(tab.value)}
+                              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                                active
+                                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                                  : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+                              }`}
+                            >
+                              {tab.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 
@@ -349,6 +353,8 @@ function AdminPageContent() {
                       <CompleteMatchTab />
                     ) : activePlayerTab === "UPDATE_MATCH" ? (
                       <UpdateMatchTab />
+                    ) : activePlayerTab === "CREATE_EVENT" ? (
+                      <CreateEventTab />
                     ) : activePlayerTab === "CREATE" ? (
                       <CreatePlayerTab />
                     ) : activePlayerTab === "MEMBERS" ? (
