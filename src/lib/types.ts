@@ -63,8 +63,8 @@ export type Event = {
 // Status: registered = initially signed up, accepted = payment confirmed (or free event), waitlisted/cancelled = other states.
 export type SeasonSignup = {
   id: string;
-  event_id: number;
-  player_id: number | string;
+  event_id: number | null;
+  player_id: number | string | null;
   event_type: string;
   status: "registered" | "accepted" | "waitlisted" | "cancelled";
   created_at: string;
@@ -73,6 +73,21 @@ export type SeasonSignup = {
 
 // Alias for SeasonSignup — use this for new code.
 export type EventSignup = SeasonSignup;
+
+// Maps to signups rows where event_type = 'membership' and player_id is null
+// until an admin approves and creates the member profile.
+export type MembershipApplication = {
+  id: string;
+  event_type: string;
+  status: "registered" | "accepted" | "waitlisted" | "cancelled";
+  applicant_name: string | null;
+  applicant_nickname: string | null;
+  applicant_contact: string | null;
+  applicant_email: string | null;
+  player_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
 
 // Maps to the `player_claims` table.
 // A claim is submitted when a signed-in user wants to link their email to an

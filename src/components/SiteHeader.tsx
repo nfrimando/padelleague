@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Zap } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
@@ -11,12 +10,6 @@ type SiteHeaderProps = {
   activePath?: string;
   rightSlot?: ReactNode;
 };
-
-const NAV_LINKS = [
-  { href: "/events", label: "Events" },
-  { href: "/matches", label: "Calendar" },
-  { href: "/players", label: "Players" },
-] as const;
 
 export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
   const pathname = usePathname();
@@ -76,7 +69,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
   return (
     <nav className="sticky top-0 z-50 bg-[#0E1523]/95 backdrop-blur-xl border-b border-[#162032] py-3">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex justify-between items-center">
-        <Link href="/" className="flex items-center gap-3">
+        <a href="/" className="flex items-center gap-3">
           <div className="bg-[#00C8DC] p-1.5 rounded-md shadow-[0_0_15px_rgba(0,200,220,0.4)]">
             <div className="border border-[#0E1523] p-0.5 rounded-sm">
               <Zap className="text-[#0E1523] w-5 h-5" fill="currentColor" />
@@ -90,18 +83,18 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               PHILIPPINES
             </span>
           </div>
-        </Link>
+        </a>
 
         <div className="hidden md:flex items-center gap-10 font-bold text-[11px] uppercase tracking-[0.2em]">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={desktopLinkClass(link.href)}
-            >
-              {link.label}
-            </Link>
-          ))}
+          <a href="/events" className={desktopLinkClass("/events")}>
+            Events
+          </a>
+          <a href="/matches" className={desktopLinkClass("/matches")}>
+            Calendar
+          </a>
+          <a href="/players" className={desktopLinkClass("/players")}>
+            Players
+          </a>
         </div>
 
         <div className="flex items-center gap-4">
@@ -109,7 +102,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
             {loading ? (
               <div className="h-8 w-28 rounded-full bg-[#22304a] animate-pulse" />
             ) : user ? (
-              <Link href="/dashboard" className={dashboardLinkClass}>
+              <a href="/dashboard" className={dashboardLinkClass}>
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
@@ -122,7 +115,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   </span>
                 )}
                 My Dashboard
-              </Link>
+              </a>
             ) : (
               !rightSlot && (
                 <button
@@ -142,7 +135,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               {loading ? (
                 <div className="h-6 w-16 rounded-full bg-[#22304a] animate-pulse" />
               ) : user ? (
-                <Link
+                <a
                   href="/dashboard"
                   className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
                 >
@@ -154,28 +147,28 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                     />
                   ) : null}
                   Me
-                </Link>
+                </a>
               ) : null}
               {rightSlot}
             </div>
           ) : (
             <div className="flex md:hidden gap-6 font-bold text-[10px] uppercase tracking-[0.15em] text-[#687FA3]">
-              <Link
+              <a
                 href="/matches"
                 className="hover:text-[#00C8DC] transition-colors"
               >
                 Calendar
-              </Link>
-              <Link
+              </a>
+              <a
                 href="/players"
                 className="hover:text-[#00C8DC] transition-colors"
               >
                 Players
-              </Link>
+              </a>
               {loading ? (
                 <div className="h-6 w-12 rounded-full bg-[#22304a] animate-pulse" />
               ) : user ? (
-                <Link
+                <a
                   href="/dashboard"
                   className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
                 >
@@ -187,7 +180,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                     />
                   ) : null}
                   Me
-                </Link>
+                </a>
               ) : (
                 <button
                   type="button"

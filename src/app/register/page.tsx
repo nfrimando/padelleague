@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
+import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
 import {
   fetchPlayerByEmail,
   PLAYER_LOOKUP_REGISTER_SELECT,
@@ -10,7 +11,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useEventSignup } from "@/lib/useEventSignup";
 import type { User } from "@supabase/supabase-js";
-import type { Event } from "@/lib/types";
+import type { Event, Player } from "@/lib/types";
 
 type SignupStatus = "none" | "registered" | "waitlisted" | "cancelled";
 type VerifyStatus = "verified" | "pending" | "unknown";
@@ -37,6 +38,7 @@ export default function RegisterPage() {
   const [playerName, setPlayerName] = useState("");
   const [signupStatus, setSignupStatus] = useState<SignupStatus>("none");
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("unknown");
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const {
     handleSignup,
@@ -122,7 +124,7 @@ export default function RegisterPage() {
     }
 
     lookup();
-  }, [user, selectedEventId]);
+  }, [user, selectedEventId, profileRefreshKey]);
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
@@ -193,7 +195,8 @@ export default function RegisterPage() {
           {!user && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
               <p className="text-white/70 mb-6">
-                Sign in with Google to continue your registration.
+                Sign in with Google to continue. You can claim an existing
+                player profile or create a new one before registering.
               </p>
               <button
                 onClick={handleGoogleSignIn}
@@ -202,6 +205,13 @@ export default function RegisterPage() {
                 <GoogleIcon />
                 Continue with Google
               </button>
+              <p className="text-white/40 text-xs mt-4">
+                New to the league?{" "}
+                <Link href="/join" className="text-[#00C8DC] hover:underline">
+                  Apply for membership first
+                </Link>
+                .
+              </p>
             </div>
           )}
 
@@ -273,36 +283,31 @@ export default function RegisterPage() {
               >
                 Go to your dashboard →
               </Link>
+              <p className="text-white/40 text-xs">
+                Not in the league yet?{" "}
+                <Link href="/join" className="text-[#00C8DC] hover:underline">
+                  Submit a membership application
+                </Link>
+                .
+              </p>
             </div>
           )}
 
-          {user && signupResult === "no_profile" && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
-              <p className="text-white/50 text-sm">Signed in as</p>
-              <p className="font-medium">{user.email}</p>
-              <div className="flex gap-3 text-left">
-                <span className="text-xl mt-0.5">🔗</span>
-                <div>
-                  <p className="font-bold text-amber-300 mb-1">
-                    No profile linked
-                  </p>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    Your account isn&apos;t linked to a player profile yet. Go
-                    to your dashboard to claim an existing profile or register
-                    as a new player.
-                  </p>
-                </div>
-              </div>
-              <Link
-                href="/dashboard"
-                className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
-              >
-                Go to your dashboard →
-              </Link>
-            </div>
+          {user && verifyStatus === "unknown" && signupStatus === "none" && (
+            <ProfileLinkingPanel
+              user={user}
+              onProfileLinked={(linkedPlayer: Player) => {
+                setPlayerName(linkedPlayer.name ?? user.email ?? "");
+                setVerifyStatus(
+                  linkedPlayer.is_profile_complete ? "verified" : "pending",
+                );
+                setSignupStatus("none");
+                setProfileRefreshKey((prev) => prev + 1);
+              }}
+            />
           )}
 
-          {user && signupStatus === "none" && verifyStatus !== "pending" && (
+          {user && signupStatus === "none" && verifyStatus === "verified" && (
             <form
               onSubmit={handleSubmit}
               className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6"
