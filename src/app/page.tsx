@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-const WEBSITE_VERSION = "0.8.15";
+const WEBSITE_VERSION = "0.8.16";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -255,6 +255,12 @@ export default function HomePage() {
                   VIEW CALENDAR
                   <ChevronRight className="group-hover:translate-x-1 transition-transform" />
                 </Link>
+                <Link
+                  href="/events"
+                  className="bg-[#162032] border border-[#00C8DC]/40 text-[#00C8DC] px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:border-[#00C8DC] transition-all"
+                >
+                  EVENTS
+                </Link>
                 {authUser ? (
                   <Link
                     href="/dashboard"
@@ -383,6 +389,9 @@ export default function HomePage() {
               className="hover:text-white transition-colors"
             >
               Players
+            </Link>
+            <Link href="/events" className="hover:text-white transition-colors">
+              Events
             </Link>
             <Link
               href="/matches"

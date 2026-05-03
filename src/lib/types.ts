@@ -48,6 +48,10 @@ export type Event = {
   registration_fee?: number | null;
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
+  requires_payment?: boolean | null;
+  image_url?: string | null;
+  description?: string | null;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -56,18 +60,33 @@ export type Event = {
 // event_type distinguishes signup kinds (e.g. 'event_registration').
 // player_id is an integer FK to players.player_id.
 // season_id was removed from the signups table in migration 20260502000006.
+// Status: registered = initially signed up, accepted = payment confirmed (or free event), waitlisted/cancelled = other states.
 export type SeasonSignup = {
   id: string;
   event_id: number;
   player_id: number | string;
   event_type: string;
-  status: "pending_payment" | "registered" | "waitlisted" | "cancelled";
+  status: "registered" | "accepted" | "waitlisted" | "cancelled";
   created_at: string;
   updated_at: string;
 };
 
 // Alias for SeasonSignup — use this for new code.
 export type EventSignup = SeasonSignup;
+
+// Maps to the `player_claims` table.
+// A claim is submitted when a signed-in user wants to link their email to an
+// existing player record that has no email (e.g. a historical player from CSV).
+// Admin approval updates players.email and optionally verifies the profile.
+export type PlayerClaim = {
+  id: string;
+  player_id: number;
+  claimed_by_email: string;
+  claimed_by_name?: string | null;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  reviewed_at?: string | null;
+};
 
 // Maps to the `payments` table.
 // provider: 'paymongo' | 'manual' | etc.

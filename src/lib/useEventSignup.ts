@@ -3,18 +3,12 @@
 import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type SignupResult = null | "registered" | "requires_payment" | "pending_verification";
+type SignupResult = null | "registered" | "pending_verification" | "no_profile";
 
 type RegisterResponse = {
   registered?: boolean;
-  requires_payment?: boolean;
-  pending?: boolean;
   pendingVerification?: boolean;
-  error?: string;
-};
-
-type CreateLinkResponse = {
-  checkout_url?: string;
+  noProfile?: boolean;
   error?: string;
 };
 
@@ -65,27 +59,9 @@ export function useEventSignup(): {
         return;
       }
 
-      if (registerJson.requires_payment === true) {
-        const paymentRes = await fetch("/api/payments/create-link", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ event_id: eventId }),
-        });
-
-        const paymentJson = (await paymentRes.json()) as CreateLinkResponse;
-
-        if (!paymentRes.ok || !paymentJson.checkout_url) {
-          setError(
-            paymentJson.error ?? "Unable to start payment checkout. Please try again.",
-          );
-          return;
-        }
-
-        setResult("requires_payment");
-        window.location.href = paymentJson.checkout_url;
+      if (registerJson.noProfile === true) {
+        setResult("no_profile");
+        setError(registerJson.error ?? "No player profile linked to your account.");
         return;
       }
 
