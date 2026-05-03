@@ -153,7 +153,7 @@ export async function POST(request: Request) {
     paymentRow.reference_doc_id
   ) {
     const { error: signupUpdateError } = await serviceClient
-      .from("signups")
+      .from("signups_events")
       .update({ status: "registered", updated_at: new Date().toISOString() })
       .eq("id", paymentRow.reference_doc_id)
       .eq("status", "pending_payment"); // only promote if still pending

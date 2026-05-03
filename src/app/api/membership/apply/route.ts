@@ -67,11 +67,9 @@ export async function POST(request: Request) {
   }
 
   const { data, error } = await serviceClient
-    .from("signups")
+    .from("signups_players")
     .insert({
       player_id: null,
-      event_id: null,
-      event_type: "membership",
       status: "registered",
       applicant_name: name,
       applicant_nickname: nickname,

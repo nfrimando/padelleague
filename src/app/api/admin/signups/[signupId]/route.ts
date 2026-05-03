@@ -3,10 +3,16 @@ import {
   getAuthorizedAdminClient,
 } from "@/app/api/admin/_lib/auth";
 
-type SignupStatus = "registered" | "waitlisted" | "cancelled" | "pending_payment";
+type SignupStatus =
+  | "registered"
+  | "accepted"
+  | "waitlisted"
+  | "cancelled"
+  | "pending_payment";
 
 const ALLOWED_SIGNUP_STATUSES: SignupStatus[] = [
   "registered",
+  "accepted",
   "waitlisted",
   "cancelled",
   "pending_payment",
@@ -49,7 +55,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          "status must be one of registered, waitlisted, cancelled, pending_payment.",
+          "status must be one of registered, accepted, waitlisted, cancelled, pending_payment.",
       },
       { status: 400 },
     );
@@ -58,7 +64,7 @@ export async function PATCH(
   const { supabase } = authResult;
 
   const { data, error } = await supabase
-    .from("signups")
+    .from("signups_events")
     .update({ status })
     .eq("id", signupId)
     .select("*")

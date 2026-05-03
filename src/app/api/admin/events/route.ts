@@ -174,7 +174,7 @@ export async function DELETE(request: Request) {
   const { supabase } = authResult;
 
   const { count, error: signupError } = await supabase
-    .from("signups")
+    .from("signups_events")
     .select("id", { count: "exact", head: true })
     .eq("event_id", eventId)
     .neq("status", "cancelled");

@@ -116,7 +116,7 @@ export async function POST(request: Request) {
 
   // 7. Existing signup checks
   const { data: existingSignup, error: existingSignupError } = await serviceClient
-    .from("signups")
+    .from("signups_events")
     .select("id, status")
     .eq("player_id", player.player_id)
     .eq("event_id", eventId)
@@ -145,11 +145,10 @@ export async function POST(request: Request) {
 
   // 8. Create signup with status registered
   const { data: signup, error: signupError } = await serviceClient
-    .from("signups")
+    .from("signups_events")
     .insert({
       event_id: eventId,
       player_id: player.player_id,
-      event_type: "event_registration",
       status: "registered",
     })
     .select("id")

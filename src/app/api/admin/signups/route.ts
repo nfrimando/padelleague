@@ -4,10 +4,16 @@ import {
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
 
-type SignupStatus = "registered" | "waitlisted" | "cancelled" | "pending_payment";
+type SignupStatus =
+  | "registered"
+  | "accepted"
+  | "waitlisted"
+  | "cancelled"
+  | "pending_payment";
 
 const ALLOWED_SIGNUP_STATUSES: SignupStatus[] = [
   "registered",
+  "accepted",
   "waitlisted",
   "cancelled",
   "pending_payment",
@@ -29,9 +35,9 @@ export async function GET(request: Request) {
   const { supabase } = authResult;
 
   const { data, error } = await supabase
-    .from("signups")
+    .from("signups_events")
     .select(
-      "id,player_id,event_id,event_type,status,created_at,updated_at,player:player_id(player_id,name,email,nickname,image_link)",
+      "id,player_id,event_id,status,created_at,updated_at,player:player_id(player_id,name,email,nickname,image_link)",
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });
@@ -79,7 +85,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "status must be one of registered, waitlisted, cancelled, pending_payment.",
+          "status must be one of registered, accepted, waitlisted, cancelled, pending_payment.",
       },
       { status: 400 },
     );
@@ -117,7 +123,7 @@ export async function POST(request: Request) {
   }
 
   const { data: existingSignup, error: existingError } = await supabase
-    .from("signups")
+    .from("signups_events")
     .select("id")
     .eq("event_id", eventId)
     .eq("player_id", playerId)
@@ -135,12 +141,11 @@ export async function POST(request: Request) {
   }
 
   const { data, error } = await supabase
-    .from("signups")
+    .from("signups_events")
     .insert({
       event_id: eventId,
       player_id: playerId,
       status,
-      event_type: "event_registration",
     })
     .select("*")
     .maybeSingle();

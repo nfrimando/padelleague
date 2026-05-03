@@ -26,9 +26,9 @@ export async function PATCH(
   }
 
   const { data: signup, error: signupError } = await supabase
-    .from("signups")
+    .from("signups_players")
     .select(
-      "id, event_type, status, player_id, applicant_name, applicant_nickname, applicant_email",
+      "id, status, player_id, applicant_name, applicant_nickname, applicant_email",
     )
     .eq("id", signupId)
     .maybeSingle();
@@ -37,7 +37,7 @@ export async function PATCH(
     return NextResponse.json({ error: signupError.message }, { status: 500 });
   }
 
-  if (!signup || signup.event_type !== "membership") {
+  if (!signup) {
     return NextResponse.json({ error: "Membership application not found." }, { status: 404 });
   }
 
@@ -50,7 +50,7 @@ export async function PATCH(
 
   if (!body.approved) {
     const { error: rejectError } = await supabase
-      .from("signups")
+      .from("signups_players")
       .update({ status: "cancelled" })
       .eq("id", signupId);
 
@@ -117,7 +117,7 @@ export async function PATCH(
   }
 
   const { error: approveError } = await supabase
-    .from("signups")
+    .from("signups_players")
     .update({ status: "accepted", player_id: playerId })
     .eq("id", signupId);
 

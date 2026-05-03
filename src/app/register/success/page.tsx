@@ -52,7 +52,7 @@ export default function RegisterSuccessPage() {
               // Fetch event name for the confirmed signup
               if (json.signup_id) {
                 const { data: signup } = await supabase
-                  .from("signups")
+                  .from("signups_events")
                   .select("event_id, event:events(event_id, name, start_date)")
                   .eq("id", json.signup_id)
                   .maybeSingle();

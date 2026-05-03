@@ -82,7 +82,7 @@ describe("POST /api/payments/webhook", () => {
       webhook_events: [{ data: null }, { data: null }], // idempotency check + insert
       payments_paymongo: { data: PM_ROW },
       payments: [{ data: PAYMENT_ROW }, { data: null }],
-      signups: { data: null },
+      signups_events: { data: null },
     });
     const res = await POST(makePaidRequest());
     expect(res.status).toBe(200);
@@ -122,7 +122,7 @@ describe("POST /api/payments/webhook", () => {
       webhook_events:   [{ data: null }, { data: null }],  // not exists + insert
       payments_paymongo: { data: PM_ROW },
       payments:         [{ data: PAYMENT_ROW }, { data: null }],  // find + update
-      signups:          { data: null },                           // update
+      signups_events:   { data: null },                           // update
     });
     mockCreateClient.mockReturnValue(svcClient);
 
@@ -130,9 +130,9 @@ describe("POST /api/payments/webhook", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ received: true });
 
-    // Verify from() was called for both payments and signups updates
+    // Verify from() was called for both payments and signups_events updates
     expect(svcClient.from).toHaveBeenCalledWith("payments");
-    expect(svcClient.from).toHaveBeenCalledWith("signups");
+    expect(svcClient.from).toHaveBeenCalledWith("signups_events");
   });
 
   // ── Idempotency ───────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ describe("POST /api/payments/webhook", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ received: true });
 
-    // Should stop early — payments and signups never touched
+    // Should stop early — payments and signups_events never touched
     expect(svcClient.from).not.toHaveBeenCalledWith("payments_paymongo");
     expect(svcClient.from).not.toHaveBeenCalledWith("payments");
   });
@@ -172,7 +172,7 @@ describe("POST /api/payments/webhook", () => {
       webhook_events:   [{ data: null }, { data: null }],
       payments_paymongo: { data: PM_ROW },
       payments:         [{ data: PAYMENT_ROW }, { data: null }],
-      signups:          { data: null },
+      signups_events:   { data: null },
     });
 
     const payload = buildPayload("link.payment.paid", LINK_ID);

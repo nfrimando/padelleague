@@ -56,17 +56,19 @@ export type Event = {
   updated_at: string;
 };
 
-// Maps to the `signups` table.
-// event_type distinguishes signup kinds (e.g. 'event_registration').
-// player_id is an integer FK to players.player_id.
-// season_id was removed from the signups table in migration 20260502000006.
-// Status: registered = initially signed up, accepted = payment confirmed (or free event), waitlisted/cancelled = other states.
+// Maps to the `signups_events` table.
+// Status: registered = initially signed up, accepted = payment confirmed (or free event),
+// waitlisted/cancelled = other states, pending_payment = payment link created.
 export type SeasonSignup = {
   id: string;
-  event_id: number | null;
-  player_id: number | string | null;
-  event_type: string;
-  status: "registered" | "accepted" | "waitlisted" | "cancelled";
+  event_id: number;
+  player_id: number | string;
+  status:
+    | "registered"
+    | "accepted"
+    | "waitlisted"
+    | "cancelled"
+    | "pending_payment";
   created_at: string;
   updated_at: string;
 };
@@ -74,11 +76,10 @@ export type SeasonSignup = {
 // Alias for SeasonSignup — use this for new code.
 export type EventSignup = SeasonSignup;
 
-// Maps to signups rows where event_type = 'membership' and player_id is null
-// until an admin approves and creates the member profile.
+// Maps to rows in `signups_players`.
+// player_id is null until an admin approves and links/creates the member profile.
 export type MembershipApplication = {
   id: string;
-  event_type: string;
   status: "registered" | "accepted" | "waitlisted" | "cancelled";
   applicant_name: string | null;
   applicant_nickname: string | null;
