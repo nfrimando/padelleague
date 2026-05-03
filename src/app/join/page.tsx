@@ -295,11 +295,11 @@ function JoinPageContent() {
                 <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-2">
                   Contact number
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <select
                     value={countryCode}
                     onChange={(e) => setCountryCode(e.target.value)}
-                    className="w-32 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+                    className="w-32 min-w-0 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
                   >
                     {COUNTRY_CODES.map((code) => (
                       <option key={code.value} value={code.value}>
@@ -313,7 +313,7 @@ function JoinPageContent() {
                       value={customCountryCode}
                       onChange={(e) => setCustomCountryCode(e.target.value)}
                       placeholder="e.g. +81"
-                      className="w-28 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+                      className="w-28 min-w-0 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
                     />
                   )}
                   <input
@@ -321,7 +321,7 @@ function JoinPageContent() {
                     value={contact}
                     onChange={(e) => setContact(e.target.value)}
                     placeholder="e.g. 9171234567"
-                    className="flex-1 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+                    className="flex-1 min-w-0 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
                   />
                 </div>
               </div>
