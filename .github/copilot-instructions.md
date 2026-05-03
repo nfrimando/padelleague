@@ -4,20 +4,17 @@
 
 - Stack: Next.js App Router + TypeScript + Tailwind CSS + Supabase.
 - Data model is centered around `players`, `matches`, and `match_teams`.
-- Leaderboard data comes from Supabase RPC: `get_leaderboard(season_filter, type_filter)`.
 
 ## Routing and Page Patterns
 
 - Keep `/` as a lightweight navigation page.
 - Use `/players` for player search, profile stats, and filtered match history.
-- Use `/leaderboard` for ranking and season/type filtering.
 
 ## Filter and URL State
 
 - Reuse `src/components/MatchFiltersCard.tsx` for season/type UI.
 - Keep filter defaults as:
   - Players: season `ALL`, type `ALL`
-  - Leaderboard: URL-driven, with safe fallback behavior
 - Persist filter state in query params (`season`, `type`) without dropping existing params.
 - Preserve `playerId` query behavior on `/players`.
 - Prevent URL/state races on same-route updates:
@@ -52,7 +49,6 @@
   - `src/lib/matches.ts`
   - `src/lib/usePlayerMatches.ts`
   - `src/lib/useMatchSeasons.ts`
-  - `src/lib/useLeaderboardData.ts`
 - Prefer top-level pages to orchestrate URL state and rendering while shared hooks own Supabase fetch, aggregation, and normalization logic.
 
 ## Data and Scripts
@@ -63,7 +59,6 @@
   - `transform_matches.py`
   - `transform_sets.py`
   - `load_all_to_supabase_full_refresh.py`
-  - `leaderboard.sql`
 
 ## Coding Expectations
 

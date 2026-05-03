@@ -1,6 +1,6 @@
 # Padel League PH
 
-A full-stack web application for managing and analysing a competitive padel league in the Philippines. Tracks players, matches, ratings, and event registrations with a real-time leaderboard and integrated payment flow.
+A full-stack web application for managing and analysing a competitive padel league in the Philippines. Tracks players, matches, ratings, and event registrations with integrated payment flow.
 
 ---
 
@@ -9,11 +9,10 @@ A full-stack web application for managing and analysing a competitive padel leag
 - **Player profiles** — rating history, win/loss record, match history, partner analysis
 - **Match management** — schedule, complete, and update matches via admin panel
 - **v3 Rating system** — ELO-inspired algorithm that rewards game dominance, not just wins
-- **Leaderboard** — performance (win rate) and rating modes, per-event filtering
 - **Event registration** — PayMongo payment link integration with webhook confirmation
 - **Admin panel** — create players, schedule/complete matches, verify members, manage events
 - **Match calendar** — monthly calendar view with mobile agenda fallback
-- **Public site** — homepage with live stats, recent matches, and top players
+- **Public site** — homepage with live stats and recent matches
 
 ---
 
@@ -62,12 +61,7 @@ PAYMONGO_WEBHOOK_SECRET=whsk_your-secret
 
 ### 3. Database
 
-Apply the schema from `supabase/schema.sql` to your Supabase project, or run migrations in order from the `supabase/migrations/` directory.
-
-The schema requires these custom RPC functions (see schema.sql):
-
-- `get_leaderboard` — performance leaderboard
-- `get_leaderboard_ratings` — rating-based leaderboard
+Apply the schema from `supabase/schema.sql` to your Supabase project.
 
 ### 4. Run locally
 
@@ -109,7 +103,6 @@ src/
 │   │   └── ratings/          # v3 rating calculation endpoint
 │   ├── admin/                # Admin panel page
 │   ├── dashboard/            # Authenticated player dashboard
-│   ├── leaderboard/
 │   ├── matches/
 │   ├── players/
 │   └── register/             # Event registration + payment success
@@ -123,7 +116,6 @@ src/
 │   ├── SiteHeader.tsx
 │   ├── TeamCard.tsx
 │   ├── TeamPlayerLine.tsx
-│   └── TopPlayersTable.tsx
 │
 ├── lib/
 │   ├── matchAssembly.ts      # Match + team + rating assembly utilities
@@ -136,7 +128,6 @@ src/
 │   ├── utils.ts              # Date, label, format helpers
 │   ├── useAdminEvents.ts
 │   ├── useEventMap.ts
-│   ├── useLeaderboardData.ts
 │   ├── useLoadedMatchDetails.ts
 │   ├── useMatchEvents.ts
 │   ├── useMatchRatingPreview.ts
