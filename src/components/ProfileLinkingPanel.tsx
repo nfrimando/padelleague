@@ -18,9 +18,13 @@ type ClaimStatus = "none" | "pending" | "rejected";
 type Props = {
   user: User;
   onProfileLinked?: (player: Player) => void;
+  newPlayerHref?: string;
 };
 
-export default function ProfileLinkingPanel({ user }: Props) {
+export default function ProfileLinkingPanel({
+  user,
+  newPlayerHref = "/join",
+}: Props) {
   const [loading, setLoading] = useState(true);
   const [claimStatus, setClaimStatus] = useState<ClaimStatus>("none");
   const [claimablePlayers, setClaimablePlayers] = useState<ClaimablePlayer[]>(
@@ -249,7 +253,7 @@ export default function ProfileLinkingPanel({ user }: Props) {
           </div>
 
           <Link
-            href="/join"
+            href={newPlayerHref}
             className="w-full flex items-center justify-center gap-2 bg-transparent border border-[#687FA3]/20 hover:border-[#687FA3]/50 text-[#687FA3] hover:text-white font-black text-[11px] uppercase tracking-widest py-3 rounded-xl transition-all"
           >
             <UserPlus size={13} />

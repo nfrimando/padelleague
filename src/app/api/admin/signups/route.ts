@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("signups_events")
     .select(
-      "id,player_id,event_id,status,created_at,updated_at,player:player_id(player_id,name,email,nickname,image_link)",
+      "id,player_id,event_id,status,applicant_name,applicant_contact,applicant_email,created_at,updated_at,player:player_id(player_id,name,email,nickname,image_link)",
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });

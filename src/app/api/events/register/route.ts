@@ -73,12 +73,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // 4. No player linked to this email — ask them to claim or register via dashboard
+  // 4. No player linked to this email — send them to /join to claim or create profile
   if (!player) {
     return NextResponse.json(
       {
         error:
-          "No player profile is linked to your account. Visit your dashboard to claim an existing profile or register as a new player.",
+          "No player profile is linked to your account. Go to /join to claim an existing profile or create a new player profile.",
         noProfile: true,
       },
       { status: 403 },
