@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
 import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabase";
 import { fetchPlayerByEmail } from "@/lib/playerLookup";
@@ -28,9 +30,12 @@ const COUNTRY_CODES = [
 ] as const;
 
 export default function JoinPage() {
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [alreadyMember, setAlreadyMember] = useState(false);
+  const [existingPlayer, setExistingPlayer] =
+    useState<ExistingPlayerLookup | null>(null);
   const [fullName, setFullName] = useState("");
   const [nickname, setNickname] = useState("");
   const [countryCode, setCountryCode] = useState<string>("+63");
@@ -47,6 +52,8 @@ export default function JoinPage() {
       } = await supabase.auth.getUser();
 
       setUser(currentUser ?? null);
+      setExistingPlayer(null);
+      setAlreadyMember(false);
 
       if (currentUser) {
         const full =
@@ -63,6 +70,7 @@ export default function JoinPage() {
             email: currentUser.email,
             select: "player_id, name, is_profile_complete",
           });
+          setExistingPlayer(player ?? null);
           if (player?.is_profile_complete) {
             setAlreadyMember(true);
           }
@@ -157,6 +165,19 @@ export default function JoinPage() {
     );
   }
 
+  const authenticated = Boolean(user);
+  const showAuthenticatedApplication =
+    authenticated && searchParams.get("apply") === "1";
+  const isPendingVerification = Boolean(
+    existingPlayer && !existingPlayer.is_profile_complete,
+  );
+  const showProfileLinking =
+    authenticated &&
+    !alreadyMember &&
+    !isPendingVerification &&
+    !existingPlayer &&
+    !showAuthenticatedApplication;
+
   return (
     <div className="min-h-screen bg-[#0E1523] text-white flex flex-col">
       <SiteHeader />
@@ -171,7 +192,7 @@ export default function JoinPage() {
             registration.
           </p>
 
-          {alreadyMember ? (
+          {authenticated && alreadyMember ? (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
               <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
                 ✓ You are already a verified member
@@ -183,6 +204,30 @@ export default function JoinPage() {
                 Go to your dashboard →
               </Link>
             </div>
+          ) : authenticated && isPendingVerification ? (
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-8 space-y-4">
+              <div className="flex gap-3">
+                <span className="text-xl">⏳</span>
+                <div>
+                  <p className="font-bold text-amber-300 mb-1">
+                    Pending Verification
+                  </p>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    Your account is waiting for admin approval before you can
+                    become a verified member. No need to submit another
+                    application.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard"
+                className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
+              >
+                Go to your dashboard →
+              </Link>
+            </div>
+          ) : showProfileLinking && user ? (
+            <ProfileLinkingPanel user={user} newPlayerHref="/join?apply=1" />
           ) : submitted ? (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
               <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
-import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
 import {
   fetchPlayerByEmail,
   PLAYER_LOOKUP_REGISTER_SELECT,
@@ -11,15 +11,32 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useEventSignup } from "@/lib/useEventSignup";
 import type { User } from "@supabase/supabase-js";
-import type { Event, Player } from "@/lib/types";
+import type { Event } from "@/lib/types";
 
-type SignupStatus = "none" | "registered" | "waitlisted" | "cancelled";
+type SignupStatus =
+  | "none"
+  | "registered"
+  | "accepted"
+  | "waitlisted"
+  | "cancelled"
+  | "pending_payment";
 type VerifyStatus = "verified" | "pending" | "unknown";
 
 type RegisterLookupPlayer = {
   player_id: number;
   name: string;
   is_profile_complete: boolean;
+};
+
+type UnclaimedPlayer = {
+  player_id: number;
+  name: string | null;
+  nickname: string | null;
+};
+
+type PlayerRegisterResponse = {
+  registered?: boolean;
+  error?: string;
 };
 
 function eventLabel(e: Event): string {
@@ -31,16 +48,60 @@ function eventLabel(e: Event): string {
   return `Event ${e.event_id}`;
 }
 
+function signupStatusLabel(status: Exclude<SignupStatus, "none">): string {
+  switch (status) {
+    case "registered":
+      return "Pending Approval";
+    case "accepted":
+      return "Accepted";
+    case "waitlisted":
+      return "Waitlisted";
+    case "cancelled":
+      return "Cancelled";
+    case "pending_payment":
+      return "Pending Payment";
+  }
+}
+
+function signupStatusBadgeClass(status: Exclude<SignupStatus, "none">): string {
+  switch (status) {
+    case "registered":
+      return "bg-amber-500/10 border-amber-500/30 text-amber-300";
+    case "accepted":
+      return "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
+    case "waitlisted":
+      return "bg-amber-500/10 border-amber-500/30 text-amber-300";
+    case "pending_payment":
+      return "bg-cyan-500/10 border-cyan-500/30 text-cyan-300";
+    case "cancelled":
+      return "bg-red-500/10 border-red-500/30 text-red-300";
+  }
+}
+
 export default function RegisterPage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [signupStatus, setSignupStatus] = useState<SignupStatus>("none");
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("unknown");
-  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileResolved, setProfileResolved] = useState(false);
+  const [unclaimedPlayers, setUnclaimedPlayers] = useState<UnclaimedPlayer[]>(
+    [],
+  );
+  const [showPlayerSignup, setShowPlayerSignup] = useState(false);
+  const [selectedUnclaimedPlayerId, setSelectedUnclaimedPlayerId] = useState<
+    number | null
+  >(null);
+  const [playerSignupSubmitting, setPlayerSignupSubmitting] = useState(false);
+  const [playerSignupError, setPlayerSignupError] = useState<string | null>(
+    null,
+  );
+  const [playerSignupSubmitted, setPlayerSignupSubmitted] = useState(false);
+  const [playerSignupName, setPlayerSignupName] = useState("");
   const {
     handleSignup,
     loading: submitting,
@@ -50,16 +111,23 @@ export default function RegisterPage() {
 
   useEffect(() => {
     async function init() {
-      const [{ data: authData }, { data: eventData }] = await Promise.all([
-        supabase.auth.getSession(),
-        supabase
-          .from("events")
-          .select(
-            "event_id, name, event_type, registration_fee, requires_payment, start_date, end_date, registration_status, status, created_at, updated_at",
-          )
-          .eq("registration_status", "open")
-          .order("event_id", { ascending: false }),
-      ]);
+      const [{ data: authData }, { data: eventData }, { data: playerData }] =
+        await Promise.all([
+          supabase.auth.getSession(),
+          supabase
+            .from("events")
+            .select(
+              "event_id, name, event_type, registration_fee, requires_payment, start_date, end_date, registration_status, status, created_at, updated_at",
+            )
+            .eq("registration_status", "open")
+            .order("event_id", { ascending: false }),
+          supabase
+            .from("players")
+            .select("player_id, name, nickname")
+            .is("email", null)
+            .eq("is_profile_complete", true)
+            .order("name", { ascending: true }),
+        ]);
 
       const u = authData.session?.user ?? null;
       if (u) setUser(u);
@@ -67,6 +135,14 @@ export default function RegisterPage() {
       if (eventData && eventData.length > 0) {
         setEvents(eventData as Event[]);
         setSelectedEventId(eventData[0].event_id);
+      }
+
+      if (playerData) {
+        const players = playerData as UnclaimedPlayer[];
+        setUnclaimedPlayers(players);
+        if (players.length > 0) {
+          setSelectedUnclaimedPlayerId(players[0].player_id);
+        }
       }
 
       setLoading(false);
@@ -89,12 +165,14 @@ export default function RegisterPage() {
     if (!user) {
       setSignupStatus("none");
       setProfileLoading(false);
+      setProfileResolved(false);
       return;
     }
 
     let active = true;
 
     async function lookup() {
+      setProfileResolved(false);
       setProfileLoading(true);
       try {
         const { player: playerRow, error: playerLookupError } =
@@ -109,14 +187,33 @@ export default function RegisterPage() {
           console.error("Failed player lookup on register:", playerLookupError);
         }
 
-        const pid = playerRow?.player_id ?? null;
+        let pid = playerRow?.player_id ?? null;
         setPlayerName(playerRow?.name ?? user!.user_metadata?.full_name ?? "");
         if (playerRow) {
           setVerifyStatus(
             playerRow.is_profile_complete ? "verified" : "pending",
           );
         } else {
-          setVerifyStatus("unknown");
+          const { data: latestClaim } = await supabase
+            .from("player_claims")
+            .select("player_id, status")
+            .eq("claimed_by_email", user?.email ?? "")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!active) return;
+
+          if (
+            latestClaim?.player_id &&
+            (latestClaim.status === "pending" ||
+              latestClaim.status === "approved")
+          ) {
+            pid = latestClaim.player_id;
+            setVerifyStatus("pending");
+          } else {
+            setVerifyStatus("unknown");
+          }
         }
 
         if (!pid || !selectedEventId) {
@@ -133,11 +230,12 @@ export default function RegisterPage() {
 
         if (!active) return;
 
-        let status = (existing?.status as SignupStatus) ?? "none";
+        const status = (existing?.status as SignupStatus) ?? "none";
         setSignupStatus(status);
       } finally {
         if (active) {
           setProfileLoading(false);
+          setProfileResolved(true);
         }
       }
     }
@@ -147,7 +245,21 @@ export default function RegisterPage() {
     return () => {
       active = false;
     };
-  }, [user, selectedEventId, profileRefreshKey]);
+  }, [user, selectedEventId]);
+
+  useEffect(() => {
+    if (!user || profileLoading || !profileResolved) return;
+    if (verifyStatus === "unknown" && signupStatus === "none") {
+      router.replace("/join?from=register");
+    }
+  }, [
+    user,
+    profileLoading,
+    profileResolved,
+    verifyStatus,
+    signupStatus,
+    router,
+  ]);
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
@@ -174,6 +286,55 @@ export default function RegisterPage() {
     e?.preventDefault();
     if (!user || !selectedEventId) return;
     await handleSignup(selectedEventId);
+  };
+
+  const handlePlayerSignupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedEventId) {
+      setPlayerSignupError("No event is open for registration right now.");
+      return;
+    }
+
+    if (!selectedUnclaimedPlayerId) {
+      setPlayerSignupError("Select a player first.");
+      return;
+    }
+
+    setPlayerSignupSubmitting(true);
+    setPlayerSignupError(null);
+
+    try {
+      const res = await fetch("/api/events/register/player", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          event_id: selectedEventId,
+          player_id: selectedUnclaimedPlayerId,
+        }),
+      });
+
+      const json = (await res.json()) as PlayerRegisterResponse;
+
+      if (!res.ok || !json.registered) {
+        setPlayerSignupError(json.error ?? "Failed to register player.");
+        return;
+      }
+
+      const picked = unclaimedPlayers.find(
+        (p) => p.player_id === selectedUnclaimedPlayerId,
+      );
+      setPlayerSignupName(
+        picked?.name || picked?.nickname || "Selected player",
+      );
+      setPlayerSignupSubmitted(true);
+    } catch {
+      setPlayerSignupError("Network error. Please try again.");
+    } finally {
+      setPlayerSignupSubmitting(false);
+    }
   };
 
   const selectedEvent = events.find((e) => e.event_id === selectedEventId);
@@ -215,11 +376,25 @@ export default function RegisterPage() {
             Sign up for the upcoming event.
           </p>
 
-          {!user && (
+          {!user && events.length === 0 && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-3">
+              <p className="text-white/70 text-sm">
+                No events are open for registration right now. Check back soon.
+              </p>
+              <Link
+                href="/events"
+                className="inline-block mt-2 text-[#00C8DC] text-sm font-bold hover:underline"
+              >
+                Back to events →
+              </Link>
+            </div>
+          )}
+
+          {!user && events.length > 0 && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
               <p className="text-white/70 mb-6">
-                Sign in with Google to continue. You can claim an existing
-                player profile or create a new one before registering.
+                Sign in with Google to continue. If your email is linked to a
+                player profile, you&apos;ll be able to register immediately.
               </p>
               <button
                 onClick={handleGoogleSignIn}
@@ -228,14 +403,187 @@ export default function RegisterPage() {
                 <GoogleIcon />
                 Continue with Google
               </button>
-              <p className="text-white/40 text-xs mt-4">
-                New to the league?{" "}
-                <Link href="/join" className="text-[#00C8DC] hover:underline">
-                  Apply for membership first
-                </Link>
-                .
-              </p>
+              <div className="mt-6 border-t border-white/10 pt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPlayerSignup(true);
+                    setPlayerSignupError(null);
+                  }}
+                  className="flex w-full items-center justify-center rounded-xl border border-[#687FA3]/20 px-6 py-3 text-sm font-bold text-white/80 transition-colors hover:border-[#00C8DC]/50 hover:text-white"
+                >
+                  Signup without email
+                </button>
+              </div>
             </div>
+          )}
+
+          {!user && events.length > 0 && showPlayerSignup && (
+            <form
+              onSubmit={handlePlayerSignupSubmit}
+              className="mt-4 bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6"
+            >
+              <div>
+                <p className="text-white font-bold text-lg">
+                  Signup without email
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-white/50 text-sm">
+                    Choose your player profile from unclaimed players.
+                  </span>
+                  <span className="relative group">
+                    <button
+                      type="button"
+                      tabIndex={0}
+                      aria-label="Info about profile approval"
+                      className="ml-1 text-amber-300 hover:text-amber-200 focus:outline-none"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="inline w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          fill="none"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 16v-4m0-4h.01"
+                        />
+                      </svg>
+                    </button>
+                    <span className="absolute left-1/2 z-10 mt-2 w-64 -translate-x-1/2 rounded-lg bg-[#1a2233] px-4 py-3 text-xs text-white/80 shadow-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto">
+                      If you recently created a profile, inform an admin to
+                      verify it. Once verified, you can come back here to
+                      register for the event using that profile. If you
+                      don&apos;t have a profile yet, select an unclaimed player
+                      to register as, and an admin will help you set up your
+                      account after registration.
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              {unclaimedPlayers.length === 0 ? (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-amber-200 text-sm">
+                  No unclaimed players are available right now.
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-white/70 mb-2">
+                    Player
+                  </label>
+                  <select
+                    value={selectedUnclaimedPlayerId ?? ""}
+                    onChange={(e) =>
+                      setSelectedUnclaimedPlayerId(Number(e.target.value))
+                    }
+                    className="w-full bg-white text-slate-900 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-[#00C8DC] dark:bg-white/10 dark:text-white transition-colors"
+                  >
+                    {unclaimedPlayers.map((player) => (
+                      <option
+                        key={player.player_id}
+                        value={player.player_id}
+                        className="bg-white text-slate-900 dark:bg-[#0E1523] dark:text-white"
+                      >
+                        {player.name ||
+                          player.nickname ||
+                          `Player ${player.player_id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {events.length > 1 && (
+                <div>
+                  <label className="block text-sm font-medium text-white/70 mb-2">
+                    Event
+                  </label>
+                  <select
+                    value={selectedEventId ?? ""}
+                    onChange={(e) => setSelectedEventId(Number(e.target.value))}
+                    className="w-full bg-white text-slate-900 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-[#00C8DC] dark:bg-white/10 dark:text-white transition-colors"
+                  >
+                    {events.map((event) => (
+                      <option
+                        key={event.event_id}
+                        value={event.event_id}
+                        className="bg-white text-slate-900 dark:bg-[#0E1523] dark:text-white"
+                      >
+                        {eventLabel(event)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {playerSignupError && (
+                <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
+                  {playerSignupError}
+                </p>
+              )}
+
+              {playerSignupSubmitted && (
+                <p className="text-emerald-300 text-sm bg-emerald-400/10 border border-emerald-400/20 rounded-lg px-4 py-3">
+                  {playerSignupName} has been registered for{" "}
+                  {selectedEvent
+                    ? eventLabel(selectedEvent)
+                    : "the selected event"}
+                  .
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPlayerSignup(false);
+                    setPlayerSignupError(null);
+                    setPlayerSignupSubmitted(false);
+                  }}
+                  className="flex-1 rounded-xl border border-white/15 px-4 py-3 text-sm font-bold text-white/70 transition-colors hover:border-[#00C8DC]/60 hover:text-white"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    playerSignupSubmitting || unclaimedPlayers.length === 0
+                  }
+                  className="flex-1 bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {playerSignupSubmitting ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
+                      Registering…
+                    </>
+                  ) : (
+                    "Register Player"
+                  )}
+                </button>
+              </div>
+              <div>
+                <p className="mt-3 text-xs text-white/40">
+                  No profile yet? Go join the league
+                </p>
+                <Link
+                  href="/join?from=register"
+                  className="mt-2 inline-block text-xs font-bold text-[#00C8DC] hover:underline"
+                >
+                  Go to Join the League →
+                </Link>
+              </div>
+            </form>
           )}
 
           {user && events.length === 0 && (
@@ -314,12 +662,14 @@ export default function RegisterPage() {
               </div>
             )}
 
-          {user && signupStatus === "registered" && (
+          {user && signupStatus !== "none" && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
               <p className="text-white/50 text-sm">Signed in as</p>
               <p className="font-medium">{user.email}</p>
-              <div className="mx-auto flex w-fit items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
-                ✓ Registered for{" "}
+              <div
+                className={`mx-auto flex w-fit items-center gap-2 border px-4 py-2 rounded-lg text-sm font-bold ${signupStatusBadgeClass(signupStatus)}`}
+              >
+                ✓ {signupStatusLabel(signupStatus)} for{" "}
                 {selectedEvent ? eventLabel(selectedEvent) : "this event"}
               </div>
               <Link
@@ -335,17 +685,18 @@ export default function RegisterPage() {
             !profileLoading &&
             verifyStatus === "unknown" &&
             signupStatus === "none" && (
-              <ProfileLinkingPanel
-                user={user}
-                onProfileLinked={(linkedPlayer: Player) => {
-                  setPlayerName(linkedPlayer.name ?? user.email ?? "");
-                  setVerifyStatus(
-                    linkedPlayer.is_profile_complete ? "verified" : "pending",
-                  );
-                  setSignupStatus("none");
-                  setProfileRefreshKey((prev) => prev + 1);
-                }}
-              />
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
+                <p className="text-white/60 text-sm">
+                  No player profile is linked to your email. Redirecting to the
+                  join page…
+                </p>
+                <Link
+                  href="/join?from=register"
+                  className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
+                >
+                  Continue to Join →
+                </Link>
+              </div>
             )}
 
           {user &&

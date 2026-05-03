@@ -62,7 +62,10 @@ export type Event = {
 export type SeasonSignup = {
   id: string;
   event_id: number;
-  player_id: number | string;
+  player_id: number | string | null;
+  applicant_name?: string | null;
+  applicant_contact?: string | null;
+  applicant_email?: string | null;
   status:
     | "registered"
     | "accepted"

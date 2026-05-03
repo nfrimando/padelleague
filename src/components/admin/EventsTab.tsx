@@ -29,8 +29,11 @@ type SignupStatus = "registered" | "accepted" | "waitlisted" | "cancelled";
 type AdminSignupRow = {
   id: string;
   event_id: number;
-  player_id: number;
+  player_id: number | null;
   status: SignupStatus;
+  applicant_name?: string | null;
+  applicant_contact?: string | null;
+  applicant_email?: string | null;
   created_at: string;
   updated_at: string;
   player: {
@@ -1040,10 +1043,16 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                                       <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
                                         {signup.player?.name ||
                                           signup.player?.nickname ||
-                                          `Player ${signup.player_id}`}
+                                          signup.applicant_name ||
+                                          (signup.player_id != null
+                                            ? `Player ${signup.player_id}`
+                                            : "Guest signup")}
                                       </td>
                                       <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
-                                        {signup.player?.email || "-"}
+                                        {signup.player?.email ||
+                                          signup.applicant_email ||
+                                          signup.applicant_contact ||
+                                          "-"}
                                       </td>
                                       <td className="px-3 py-2">
                                         <select

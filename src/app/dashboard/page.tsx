@@ -59,9 +59,9 @@ function eventLabel(
 function SignupBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string; dot: string }> = {
     registered: {
-      label: "Registered",
-      cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
-      dot: "bg-emerald-400",
+      label: "Pending Approval",
+      cls: "bg-amber-500/10 border-amber-500/30 text-amber-300",
+      dot: "bg-amber-300",
     },
     accepted: {
       label: "Accepted",
@@ -394,7 +394,9 @@ export default function DashboardPage() {
                           {eventLabel(s.event)}
                         </p>
                         <p className="text-[#687FA3] text-xs mt-0.5">
-                          Registered{" "}
+                          {s.status === "registered"
+                            ? "Pending approval since"
+                            : "Registered"}{" "}
                           {new Date(s.created_at).toLocaleDateString("en-PH", {
                             month: "short",
                             day: "numeric",
