@@ -84,7 +84,7 @@ export default function EventsPage() {
             Events
           </h1>
           <p className="mt-2 text-slate-500 dark:text-slate-400">
-            All leagues, opens, and tournaments — past and present.
+            All seasons, tournaments, and other events -- past and present.
           </p>
         </div>
 
