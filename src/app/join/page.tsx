@@ -273,7 +273,7 @@ function JoinPageContent() {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Juan dela Cruz"
+                  placeholder="e.g. Lance Agril Gulfo"
                   className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
                 />
               </div>
@@ -286,7 +286,7 @@ function JoinPageContent() {
                   type="text"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
-                  placeholder="e.g. Juan"
+                  placeholder="e.g. Qoqo"
                   className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
                 />
               </div>

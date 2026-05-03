@@ -9,6 +9,8 @@ type PlayerSearchBoxProps = {
   onValueChange: (value: string) => void;
   onSelectPlayer: (player: Player) => void;
   onClear: () => void;
+  onCommitValue?: (value: string) => void;
+  onInputBlur?: (value: string) => void;
   placeholder?: string;
   maxSuggestions?: number;
   selectedPlayerName?: string | null;
@@ -21,6 +23,8 @@ export default function PlayerSearchBox({
   onValueChange,
   onSelectPlayer,
   onClear,
+  onCommitValue,
+  onInputBlur,
   placeholder = "Search player by name or nickname...",
   maxSuggestions = 5,
   selectedPlayerName,
@@ -52,6 +56,21 @@ export default function PlayerSearchBox({
         className="w-full border border-slate-300 dark:border-slate-700 bg-white text-slate-900 placeholder:text-slate-400 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 px-3 py-2 pr-10 rounded"
         value={value}
         onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            if (shouldShowDropdown && activeSuggestionIndex >= 0) {
+              e.preventDefault();
+              const selected = visibleSuggestions[activeSuggestionIndex];
+              if (selected) {
+                onSelectPlayer(selected);
+              }
+              return;
+            }
+
+            e.preventDefault();
+            onCommitValue?.(value);
+            return;
+          }
+
           if (!shouldShowDropdown) {
             return;
           }
@@ -70,19 +89,12 @@ export default function PlayerSearchBox({
             );
           }
 
-          if (e.key === "Enter" && activeSuggestionIndex >= 0) {
-            e.preventDefault();
-            const selected = visibleSuggestions[activeSuggestionIndex];
-            if (selected) {
-              onSelectPlayer(selected);
-            }
-          }
-
           if (e.key === "Escape") {
             setActiveSuggestionIndex(-1);
           }
         }}
         onChange={(e) => onValueChange(e.target.value)}
+        onBlur={() => onInputBlur?.(value)}
       />
 
       {value.trim().length > 0 && (

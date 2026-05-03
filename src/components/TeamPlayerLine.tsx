@@ -58,7 +58,7 @@ function PlayerLink({
 
 function playerHref(player: Player): string | null {
   return player?.player_id
-    ? `/players?playerId=${encodeURIComponent(String(player.player_id))}`
+    ? `/players/${encodeURIComponent(String(player.player_id))}`
     : null;
 }
 
