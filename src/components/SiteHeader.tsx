@@ -15,7 +15,6 @@ type SiteHeaderProps = {
 const NAV_LINKS = [
   { href: "/matches", label: "Calendar" },
   { href: "/players", label: "Players" },
-  { href: "/leaderboard", label: "Leaderboard" },
 ] as const;
 
 export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
@@ -171,12 +170,6 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                 className="hover:text-[#00C8DC] transition-colors"
               >
                 Players
-              </Link>
-              <Link
-                href="/leaderboard"
-                className="hover:text-[#00C8DC] transition-colors"
-              >
-                Board
               </Link>
               {loading ? (
                 <div className="h-6 w-12 rounded-full bg-[#22304a] animate-pulse" />

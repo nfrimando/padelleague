@@ -1,14 +1,13 @@
 // app/page.tsx
 "use client";
 
-const WEBSITE_VERSION = "0.8.14";
+const WEBSITE_VERSION = "0.8.15";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, ChevronRight, Sword, Flame, Shield } from "lucide-react";
 import MatchCard from "@/components/MatchCard";
 import SiteHeader from "@/components/SiteHeader";
-import TopPlayersTable from "@/components/TopPlayersTable";
 import { supabase } from "@/lib/supabase";
 import { MatchWithTeams, MatchSet, Player } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
@@ -20,19 +19,6 @@ type LeagueStats = {
   completedMatches: number;
   latestEvent: { event_id: number; name: string } | null;
   setsPlayed: number;
-};
-
-type TopPlayer = {
-  player_id: string;
-  name: string;
-  nickname?: string | null;
-  image_link?: string | null;
-  latest_match_date?: string | null;
-  wins: number;
-  sets_won: number;
-  sets_lost: number;
-  matches_played: number;
-  latest_rating: number | null;
 };
 
 type MatchTeamRow = {
@@ -59,11 +45,6 @@ export default function HomePage() {
   const [scrolled, setScrolled] = useState(false);
   const [stats, setStats] = useState<LeagueStats | null>(null);
   const [recentMatches, setRecentMatches] = useState<MatchWithTeams[]>([]);
-  const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([]);
-  const [lastEvent, setLastEvent] = useState<{
-    event_id: number;
-    name: string;
-  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [authUser, setAuthUser] = useState<User | null>(null);
 
@@ -135,7 +116,6 @@ export default function HomePage() {
           latestEvent,
           setsPlayed: setsCount ?? 0,
         });
-        setLastEvent(latestEvent);
       }
 
       // ── 2. Recent completed matches ──────────────────────────────────────
@@ -182,91 +162,6 @@ export default function HomePage() {
         }));
 
         if (!cancelled) setRecentMatches(assembled);
-      }
-
-      // ── 3. Top players of last event (by rating) ─────────────────────────
-      if (latestEvent !== null) {
-        const minGames = 5;
-        const eventTypes = ["group", "semis", "finals"];
-        const rpcResults = await Promise.all(
-          eventTypes.map((type) =>
-            supabase.rpc("get_leaderboard_ratings", {
-              season_filter: latestEvent.event_id,
-              type_filter: type,
-              formula_filter: null,
-              min_matches: 1,
-            }),
-          ),
-        );
-
-        const combinedRows = rpcResults.flatMap((result) => result.data ?? []);
-
-        if (combinedRows.length > 0 && !cancelled) {
-          const playerMap = new Map<string, TopPlayer>();
-
-          for (const row of combinedRows as TopPlayer[]) {
-            const playerId = String(row.player_id);
-            const existing = playerMap.get(playerId);
-
-            if (existing) {
-              existing.matches_played += Number(row.matches_played ?? 0);
-              existing.wins += Number(row.wins ?? 0);
-              existing.sets_won += Number(row.sets_won ?? 0);
-              existing.sets_lost += Number(row.sets_lost ?? 0);
-
-              const existingDate = Date.parse(existing.latest_match_date ?? "");
-              const incomingDate = Date.parse(row.latest_match_date ?? "");
-              if (
-                Number.isFinite(incomingDate) &&
-                (!Number.isFinite(existingDate) || incomingDate >= existingDate)
-              ) {
-                existing.latest_match_date = row.latest_match_date ?? null;
-                existing.latest_rating =
-                  row.latest_rating !== null && row.latest_rating !== undefined
-                    ? Number(row.latest_rating)
-                    : existing.latest_rating;
-              }
-            } else {
-              playerMap.set(playerId, {
-                player_id: playerId,
-                name: row.name ?? "Unknown",
-                nickname: row.nickname ?? null,
-                image_link: row.image_link ?? null,
-                latest_match_date: row.latest_match_date ?? null,
-                wins: Number(row.wins ?? 0),
-                sets_won: Number(row.sets_won ?? 0),
-                sets_lost: Number(row.sets_lost ?? 0),
-                matches_played: Number(row.matches_played ?? 0),
-                latest_rating:
-                  row.latest_rating !== null && row.latest_rating !== undefined
-                    ? Number(row.latest_rating)
-                    : null,
-              });
-            }
-          }
-
-          const top5: TopPlayer[] = Array.from(playerMap.values())
-            .filter((player) => player.matches_played >= minGames)
-            .sort((a, b) => {
-              const winRateA =
-                a.matches_played > 0 ? a.wins / a.matches_played : 0;
-              const winRateB =
-                b.matches_played > 0 ? b.wins / b.matches_played : 0;
-              if (winRateB !== winRateA) return winRateB - winRateA;
-              if (b.wins !== a.wins) return b.wins - a.wins;
-              if (b.sets_won !== a.sets_won) return b.sets_won - a.sets_won;
-              if (a.sets_lost !== b.sets_lost) return a.sets_lost - b.sets_lost;
-              if (b.matches_played !== a.matches_played) {
-                return b.matches_played - a.matches_played;
-              }
-              const ratingA = a.latest_rating ?? Number.NEGATIVE_INFINITY;
-              const ratingB = b.latest_rating ?? Number.NEGATIVE_INFINITY;
-              return ratingB - ratingA;
-            })
-            .slice(0, 5);
-
-          setTopPlayers(top5);
-        }
       }
 
       if (!cancelled) setLoading(false);
@@ -443,31 +338,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Top Players of Last Event ─────────────────────────────────────── */}
-      <section className="py-16 md:py-24 px-4 sm:px-6 bg-[#0a1020]">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-end mb-10 gap-4">
-            <div>
-              <div className="inline-block bg-[#00C8DC]/10 text-[#00C8DC] px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase mb-4">
-                Elite Circuit
-              </div>
-              <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter">
-                {lastEvent ? lastEvent.name : "Event"}{" "}
-                <span className="text-[#00C8DC]">Top Players</span>
-              </h2>
-            </div>
-            <Link
-              href="/leaderboard"
-              className="text-[11px] font-black tracking-[0.3em] text-[#687FA3] hover:text-white transition-colors uppercase whitespace-nowrap"
-            >
-              Full Leaderboard →
-            </Link>
-          </div>
-
-          <TopPlayersTable rows={topPlayers} loading={loading} />
-        </div>
-      </section>
-
       {/* ── Sponsors ─────────────────────────────────────────────────────── */}
       <section className="py-16 md:py-24 px-4 sm:px-6 border-t border-[#162032]">
         <div className="max-w-5xl mx-auto">
@@ -508,12 +378,6 @@ export default function HomePage() {
           </div>
 
           <div className="flex gap-8 text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
-            <Link
-              href="/leaderboard"
-              className="hover:text-white transition-colors"
-            >
-              Leaderboard
-            </Link>
             <Link
               href="/players"
               className="hover:text-white transition-colors"

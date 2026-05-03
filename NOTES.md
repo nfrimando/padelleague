@@ -60,7 +60,7 @@ Fetches all players from either the `players` table or the `active_players` view
 #### `useEventMap`
 
 **File:** `src/lib/useEventMap.ts`
-**Used in:** `useMatchEvents`, `players/page.tsx`, `matches/page.tsx`, `leaderboard/page.tsx`
+**Used in:** `useMatchEvents`, `players/page.tsx`, `matches/page.tsx`
 
 Fetches all events and builds a lookup map of `event_id → display label`. The label is the event's `name` if it has one, otherwise falls back to `"Event {id}"`. Also returns the raw `events` array for cases where you need more than just the label.
 
@@ -73,7 +73,7 @@ Fetches all events and builds a lookup map of `event_id → display label`. The 
 #### `useMatchEvents`
 
 **File:** `src/lib/useMatchEvents.ts`
-**Used in:** `leaderboard/page.tsx`, `admin/page.tsx` (for ScheduleMatchTab and UpdateMatchTab)
+**Used in:** `admin/page.tsx` (for ScheduleMatchTab and UpdateMatchTab)
 
 Fetches the distinct set of `event_id` values that appear on actual matches (as opposed to all events), then combines them with labels from `useEventMap` to produce `EventOption[]` — the `{ id, label }` shape used by filter dropdowns.
 
@@ -97,21 +97,6 @@ Accepts a `refreshKey` prop — when this string changes, the hook re-fetches. T
 ---
 
 ### Derived / Client-Side
-
----
-
-#### `useLeaderboardData`
-
-**File:** `src/lib/useLeaderboardData.ts`
-**Used in:** `leaderboard/page.tsx`, `app/page.tsx` (homepage top players section)
-
-The most complex hook in the codebase. Calls one of two Supabase RPC functions (`get_leaderboard` or `get_leaderboard_ratings`) depending on `selectedMode`, aggregates results across multiple rows per player (because the RPC can return one row per event per player), applies minimum match thresholds, sorts, then computes tied ranks.
-
-Also fires a secondary query to fetch `image_link` and `nickname` for the top 10 players, which the RPC doesn't return.
-
-**Returns:** `{ rows, topPlayersById, loading, error, minMatchesRequired, rankedRowsWithTopTies }`
-
-**Note:** The aggregation logic in this hook (combining rows by `player_id`) is non-trivial. It handles edge cases like which `latest_rating` to use when a player appears in multiple result rows from different match types.
 
 ---
 
@@ -265,7 +250,7 @@ This is a well-designed abstraction — one component handles all three calendar
 #### `PlayerCard`
 
 **File:** `src/components/PlayerCard.tsx`
-**Used in:** `players/page.tsx`, `dashboard/page.tsx`, `leaderboard/page.tsx` (indirectly via TopPlayersTable), `admin/EditPlayerTab.tsx`, `TeamCard.tsx`
+**Used in:** `players/page.tsx`, `dashboard/page.tsx`, `admin/EditPlayerTab.tsx`, `TeamCard.tsx`
 
 Renders a player with avatar, name, nickname, last match date, and rating badge. Has two main layout modes:
 
@@ -302,25 +287,6 @@ A text input with a dropdown suggestion list. Supports keyboard navigation (arro
 
 ---
 
-### Leaderboard Domain
-
----
-
-#### `TopPlayersTable`
-
-**File:** `src/components/TopPlayersTable.tsx`
-**Used in:** `leaderboard/page.tsx`, `app/page.tsx`
-
-A styled table showing ranked players with avatar, name, wins, matches played, sets won/lost, and rating. First place gets a crown icon instead of a rank number. Rating cells have a subtle background highlight. All player names link to their profile page.
-
-**Props:**
-
-- `rows` — `TopPlayersTableRow[]` (a leaderboard-specific shape, not the full `Player` type)
-- `loading` — shows a pulse animation
-- `emptyMessage` — shown when rows is empty
-
----
-
 ### Layout / Shared
 
 ---
@@ -330,7 +296,7 @@ A styled table showing ranked players with avatar, name, wins, matches played, s
 **File:** `src/components/SiteHeader.tsx`
 **Used in:** Nearly every page
 
-Sticky navigation bar with the Padel League logo, nav links (Calendar, Players, Leaderboard), and a right slot for page-specific actions (sign in button, sign out button, dashboard link). Manages its own auth state internally via `supabase.auth.getUser()` and `onAuthStateChange` to show the correct right-side content.
+Sticky navigation bar with the Padel League logo, nav links (Calendar and Players), and a right slot for page-specific actions (sign in button, sign out button, dashboard link). Manages its own auth state internally via `supabase.auth.getUser()` and `onAuthStateChange` to show the correct right-side content.
 
 The `activePath` prop highlights the current nav link. If not passed, it uses `usePathname()` to determine it automatically.
 
@@ -344,7 +310,7 @@ The `activePath` prop highlights the current nav link. If not passed, it uses `u
 #### `BackToHome`
 
 **File:** `src/components/BackToHome.tsx`
-**Used in:** `matches/page.tsx`, `players/page.tsx`, `leaderboard/page.tsx`, `admin/page.tsx`
+**Used in:** `matches/page.tsx`, `players/page.tsx`, `admin/page.tsx`
 
 A thin wrapper that renders `<SiteHeader />` with no props. Exists so pages that just want the header don't need to import `SiteHeader` directly. In practice this adds a layer of indirection with no benefit — these pages could just use `<SiteHeader />` directly.
 
@@ -353,9 +319,9 @@ A thin wrapper that renders `<SiteHeader />` with no props. Exists so pages that
 #### `MatchFiltersCard`
 
 **File:** `src/components/MatchFiltersCard.tsx`
-**Used in:** `players/page.tsx`, `leaderboard/page.tsx`
+**Used in:** `players/page.tsx`
 
-Two dropdowns: one for filtering by event, one for filtering by match type. Both are fully controlled — the parent manages state and passes callbacks. The event dropdown is always shown; the type dropdown can be hidden via `showTypeFilter={false}` (used on the leaderboard where type filtering isn't relevant).
+Two dropdowns: one for filtering by event, one for filtering by match type. Both are fully controlled — the parent manages state and passes callbacks. The event dropdown is always shown; the type dropdown can be hidden via `showTypeFilter={false}` when a page only needs season selection.
 
 **Props:**
 

@@ -51,25 +51,21 @@ export default function PlayerDiscoveryCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            {hasName ? (
-              player.name
-            ) : (
-              <span className="block h-4 w-28 rounded bg-slate-200/70 dark:bg-slate-700/70 animate-pulse" />
-            )}
+            {hasName ? player.name : "-"}
           </div>
-          <div className="mt-1 inline-flex max-w-full items-center rounded-md border border-slate-200/90 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-            {hasNickname ? (
-              <span className="truncate">{player.nickname}</span>
-            ) : (
-              <span className="block h-3 w-20 rounded bg-slate-200/80 dark:bg-slate-700/80 animate-pulse" />
-            )}
-          </div>
+          {hasNickname ? (
+            <div className="mt-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate">
+              {player.nickname}
+            </div>
+          ) : null}
           <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate">
             Last Match:{" "}
-            {hasLatestMatchDate ? (
+            {loadingLifetimeMatches ? (
+              <span className="inline-block align-middle h-3 w-16 rounded bg-slate-200/80 dark:bg-slate-700/80 animate-pulse" />
+            ) : hasLatestMatchDate ? (
               formatMatchDate(effectiveLatestMatchDate)
             ) : (
-              <span className="inline-block align-middle h-3 w-16 rounded bg-slate-200/80 dark:bg-slate-700/80 animate-pulse" />
+              "-"
             )}
           </div>
         </div>
