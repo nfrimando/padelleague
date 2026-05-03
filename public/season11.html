@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+@import url('https://cdn.jsdelivr.net/npm/@fontsource/barlow-condensed@5/700-italic.css');
+@import url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5/400.css');
+@import url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5/600.css');
+@import url('https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5/400.css');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0E1523;
+  color: #ffffff;
+  font-family: 'Inter', Arial, sans-serif;
+  width: 480px;
+  padding: 0;
+}
+
+.page {
+  padding: 32px 28px 28px;
+}
+
+.plh { font-family: 'Barlow Condensed','Arial Narrow',Arial,sans-serif; font-style:italic; font-weight:700; }
+.plm { font-family: 'JetBrains Mono','Courier New',monospace; }
+.teal { color: #00C8DC; }
+.slate { color: #687FA3; }
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #1E3050;
+  margin-bottom: 24px;
+}
+.logo-box {
+  width: 36px; height: 36px; background: #00C8DC; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.header-right {
+  margin-left: auto; text-align: right;
+}
+
+/* SECTION */
+.matchup-section {
+  margin-bottom: 20px;
+}
+.matchup-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(0,200,220,0.15);
+}
+.matchup-title {
+  font-size: 20px;
+  line-height: 1;
+}
+.matchup-badge {
+  font-size: 9px;
+  letter-spacing: 1px;
+  background: rgba(0,200,220,0.1);
+  color: #00C8DC;
+  border: 1px solid rgba(0,200,220,0.25);
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-family: 'JetBrains Mono', monospace;
+  margin-left: auto;
+}
+
+/* MATCH ROW */
+.match-row {
+  display: flex;
+  align-items: center;
+  padding: 9px 12px;
+  margin-bottom: 4px;
+  background: #162032;
+  border-radius: 6px;
+  border: 1px solid #1E3050;
+}
+.match-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #00C8DC;
+  min-width: 28px;
+  flex-shrink: 0;
+}
+.match-pair {
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+  flex: 1;
+  line-height: 1.4;
+}
+.match-vs {
+  font-size: 10px;
+  color: #687FA3;
+  margin: 0 8px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.match-pair-right {
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+  flex: 1;
+  text-align: right;
+  line-height: 1.4;
+}
+.sit-out {
+  font-size: 9px;
+  color: rgba(104,127,163,0.6);
+  font-family: 'JetBrains Mono', monospace;
+  margin-left: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* FOOTER */
+.footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #1E3050;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.footer-text {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: #687FA3;
+}
+
+/* STATS BAR */
+.stats-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.stat-pill {
+  flex: 1;
+  background: #162032;
+  border: 1px solid #1E3050;
+  border-radius: 6px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.stat-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: #00C8DC;
+  line-height: 1;
+}
+.stat-lbl {
+  font-size: 7.5px;
+  letter-spacing: 1.2px;
+  color: #687FA3;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-box">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <ellipse cx="12" cy="8.5" rx="7" ry="5.5" stroke="white" stroke-width="1.6"/>
+        <line x1="12" y1="14" x2="12" y2="20" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+        <line x1="9.5" y1="18" x2="14.5" y2="18" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="plh" style="font-size:14px;letter-spacing:2px;line-height:1.1;">PADEL LEAGUE <span class="slate">PH</span></div>
+      <div style="font-size:8px;letter-spacing:1.5px;color:#687FA3;margin-top:2px;">SEASON MATCH LIST · BRACKET 4×3</div>
+    </div>
+    <div class="header-right">
+      <div class="plh teal" style="font-size:28px;line-height:0.9;">18</div>
+      <div style="font-size:7px;letter-spacing:1.5px;color:#687FA3;margin-top:3px;">MATCHES</div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-bar">
+    <div class="stat-pill">
+      <div class="stat-val">4</div>
+      <div class="stat-lbl">Teams</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-val">12</div>
+      <div class="stat-lbl">Players</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-val">6</div>
+      <div class="stat-lbl">Per Player</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-val">6</div>
+      <div class="stat-lbl">Weeks</div>
+    </div>
+  </div>
+
+  <!-- TEAM 1 vs TEAM 8 -->
+  <div class="matchup-section">
+    <div class="matchup-header">
+      <div class="plh matchup-title">Team 1 <span class="slate">vs</span> Team 8</div>
+      <div class="matchup-badge">3 MATCHES</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">01</div>
+      <div class="match-pair">Pancho & Josh</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Nigel & Norifumi</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">02</div>
+      <div class="match-pair">Josh & Amaury</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Henrik & Norifumi</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">03</div>
+      <div class="match-pair">Pancho & Amaury</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Henrik & Nigel</div>
+    </div>
+  </div>
+
+  <!-- TEAM 1 vs TEAM 3 -->
+  <div class="matchup-section">
+    <div class="matchup-header">
+      <div class="plh matchup-title">Team 1 <span class="slate">vs</span> Team 3</div>
+      <div class="matchup-badge">3 MATCHES</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">04</div>
+      <div class="match-pair">Pancho & Josh</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Luca & Pedro</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">05</div>
+      <div class="match-pair">Josh & Amaury</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Angel & Pedro</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">06</div>
+      <div class="match-pair">Pancho & Amaury</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Angel & Luca</div>
+    </div>
+  </div>
+
+  <!-- TEAM 1 vs TEAM 9 -->
+  <div class="matchup-section">
+    <div class="matchup-header">
+      <div class="plh matchup-title">Team 1 <span class="slate">vs</span> Team 9</div>
+      <div class="matchup-badge">3 MATCHES</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">07</div>
+      <div class="match-pair">Pancho & Josh</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Hein & Jerry</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">08</div>
+      <div class="match-pair">Josh & Amaury</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Armand & Jerry</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">09</div>
+      <div class="match-pair">Pancho & Amaury</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Armand & Hein</div>
+    </div>
+  </div>
+
+  <!-- TEAM 8 vs TEAM 3 -->
+  <div class="matchup-section">
+    <div class="matchup-header">
+      <div class="plh matchup-title">Team 8 <span class="slate">vs</span> Team 3</div>
+      <div class="matchup-badge">3 MATCHES</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">10</div>
+      <div class="match-pair">Henrik & Nigel</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Luca & Pedro</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">11</div>
+      <div class="match-pair">Nigel & Norifumi</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Angel & Pedro</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">12</div>
+      <div class="match-pair">Henrik & Norifumi</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Angel & Luca</div>
+    </div>
+  </div>
+
+  <!-- TEAM 8 vs TEAM 9 -->
+  <div class="matchup-section">
+    <div class="matchup-header">
+      <div class="plh matchup-title">Team 8 <span class="slate">vs</span> Team 9</div>
+      <div class="matchup-badge">3 MATCHES</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">13</div>
+      <div class="match-pair">Henrik & Nigel</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Hein & Jerry</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">14</div>
+      <div class="match-pair">Nigel & Norifumi</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Armand & Jerry</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">15</div>
+      <div class="match-pair">Henrik & Norifumi</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Armand & Hein</div>
+    </div>
+  </div>
+
+  <!-- TEAM 3 vs TEAM 9 -->
+  <div class="matchup-section">
+    <div class="matchup-header">
+      <div class="plh matchup-title">Team 3 <span class="slate">vs</span> Team 9</div>
+      <div class="matchup-badge">3 MATCHES</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">16</div>
+      <div class="match-pair">Angel & Luca</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Hein & Jerry</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">17</div>
+      <div class="match-pair">Luca & Pedro</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Armand & Jerry</div>
+    </div>
+    <div class="match-row">
+      <div class="match-num">18</div>
+      <div class="match-pair">Angel & Pedro</div>
+      <div class="match-vs">VS</div>
+      <div class="match-pair-right">Armand & Hein</div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-text">PADELPH.COM</div>
+    <div class="footer-text">OPEN SCHEDULING · ANY VENUE · 6 WEEKS</div>
+  </div>
+
+</div>
+</body>
+</html>
