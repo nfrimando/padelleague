@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Padel League PH — Season 11 Matchups</title>
+<style>
+@import url('https://cdn.jsdelivr.net/npm/@fontsource/barlow-condensed@5/700-italic.css');
+@import url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5/400.css');
+@import url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5/600.css');
+@import url('https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5/400.css');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0E1523;
+  color: #ffffff;
+  font-family: 'Inter', Arial, sans-serif;
+  min-height: 100vh;
+  padding: 0;
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+}
+
+.plh { font-family: 'Barlow Condensed','Arial Narrow',Arial,sans-serif; font-style:italic; font-weight:700; }
+.plm { font-family: 'JetBrains Mono','Courier New',monospace; }
+.teal { color: #00C8DC; }
+.slate { color: #687FA3; }
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #1E3050;
+  margin-bottom: 24px;
+}
+.logo-box {
+  width: 36px; height: 36px; background: #00C8DC; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.header-right {
+  margin-left: auto; text-align: right;
+}
+
+/* SEARCH */
+.search-wrap {
+  margin-bottom: 18px;
+  position: relative;
+}
+.search-input {
+  width: 100%;
+  background: #162032;
+  border: 1px solid #1E3050;
+  color: #fff;
+  font-family: 'Inter', Arial, sans-serif;
+  font-size: 14px;
+  padding: 14px 16px 14px 44px;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-input:focus {
+  border-color: #00C8DC;
+}
+.search-input::placeholder { color: #687FA3; }
+.search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #687FA3;
+  pointer-events: none;
+}
+.suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #162032;
+  border: 1px solid #1E3050;
+  border-radius: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 10;
+  display: none;
+}
+.suggestions.open { display: block; }
+.suggestion {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(30,48,80,0.5);
+}
+.suggestion:last-child { border-bottom: none; }
+.suggestion:hover, .suggestion.active {
+  background: rgba(0,200,220,0.08);
+  color: #00C8DC;
+}
+.suggestion-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #687FA3;
+  float: right;
+}
+
+/* PLAYER PILLS */
+.player-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.player-pill {
+  background: #162032;
+  border: 1px solid #1E3050;
+  color: rgba(255,255,255,0.85);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: 'Inter', Arial, sans-serif;
+}
+.player-pill:hover {
+  border-color: #00C8DC;
+  color: #00C8DC;
+}
+.player-pill.selected {
+  background: #00C8DC;
+  color: #0E1523;
+  border-color: #00C8DC;
+  font-weight: 600;
+}
+
+/* SUMMARY */
+.summary {
+  background: #162032;
+  border: 1px solid #1E3050;
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  display: none;
+}
+.summary.show { display: block; }
+.summary-name {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+.summary-meta {
+  font-size: 11px;
+  color: #687FA3;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.summary-stats {
+  display: flex;
+  gap: 18px;
+  margin-top: 12px;
+}
+.summary-stat {
+  font-size: 11px;
+  color: #687FA3;
+}
+.summary-stat strong {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  color: #00C8DC;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* SECTION */
+.bracket-section {
+  margin-bottom: 28px;
+}
+.bracket-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(0,200,220,0.15);
+}
+.bracket-title {
+  font-size: 18px;
+  line-height: 1;
+}
+.bracket-badge {
+  font-size: 9px;
+  letter-spacing: 1px;
+  background: rgba(0,200,220,0.1);
+  color: #00C8DC;
+  border: 1px solid rgba(0,200,220,0.25);
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-family: 'JetBrains Mono', monospace;
+  margin-left: auto;
+}
+
+/* MATCH ROW */
+.match-row {
+  display: flex;
+  align-items: center;
+  padding: 11px 14px;
+  margin-bottom: 5px;
+  background: #162032;
+  border-radius: 6px;
+  border: 1px solid #1E3050;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.match-row.is-mine {
+  border-color: rgba(0,200,220,0.5);
+  background: rgba(0,200,220,0.05);
+}
+.match-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #00C8DC;
+  min-width: 32px;
+  flex-shrink: 0;
+}
+.match-team-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: #687FA3;
+  min-width: 50px;
+  flex-shrink: 0;
+}
+.match-pair {
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+  flex: 1;
+  line-height: 1.4;
+  min-width: 0;
+}
+.match-vs {
+  font-size: 10px;
+  color: #687FA3;
+  margin: 0 8px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.match-pair-right {
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+  flex: 1;
+  text-align: right;
+  line-height: 1.4;
+  min-width: 0;
+}
+.player-hl {
+  color: #00C8DC;
+  font-weight: 600;
+}
+
+.empty-state {
+  text-align: center;
+  color: #687FA3;
+  padding: 40px 20px;
+  font-size: 13px;
+}
+
+.no-results {
+  text-align: center;
+  color: #687FA3;
+  padding: 32px 20px;
+  font-size: 12px;
+  background: #162032;
+  border: 1px dashed #1E3050;
+  border-radius: 8px;
+}
+
+/* FOOTER */
+.footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid #1E3050;
+  text-align: center;
+}
+.footer-text {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: #687FA3;
+}
+
+@media (max-width: 480px) {
+  .page { padding: 20px 14px 32px; }
+  .match-pair, .match-pair-right { font-size: 12px; }
+  .summary-name { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-box">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <ellipse cx="12" cy="8.5" rx="7" ry="5.5" stroke="white" stroke-width="1.6"/>
+        <line x1="12" y1="14" x2="12" y2="20" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+        <line x1="9.5" y1="18" x2="14.5" y2="18" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="plh" style="font-size:16px;letter-spacing:2px;line-height:1.1;">PADEL LEAGUE <span class="slate">PH</span></div>
+      <div style="font-size:9px;letter-spacing:1.5px;color:#687FA3;margin-top:3px;">SEASON 11 · ALL MATCHUPS</div>
+    </div>
+    <div class="header-right">
+      <div class="plh teal" style="font-size:30px;line-height:0.9;" id="totalMatches">78</div>
+      <div style="font-size:8px;letter-spacing:1.5px;color:#687FA3;margin-top:3px;">MATCHES</div>
+    </div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="search-wrap">
+    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"/>
+      <line x1="21" y1="21" x2="16.5" y2="16.5"/>
+    </svg>
+    <input type="text" class="search-input" id="search" placeholder="Search your name to see your matches…" autocomplete="off">
+    <div class="suggestions" id="suggestions"></div>
+  </div>
+
+  <!-- QUICK PILLS -->
+  <div class="player-pills" id="playerPills"></div>
+
+  <!-- SUMMARY -->
+  <div class="summary" id="summary">
+    <div class="plh summary-name" id="summaryName"></div>
+    <div class="summary-meta" id="summaryMeta"></div>
+    <div class="summary-stats" id="summaryStats"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results"></div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-text">PADELPH.COM · SEASON 11 · OPEN SCHEDULING</div>
+  </div>
+
+</div>
+
+<script>
+const MATCHES = [{"bracket": "Group A", "sourceFile": "11a.html", "num": "01", "teamLeft": "Team 1", "teamRight": "Team 8", "pairLeft": "Pancho & Josh", "pairRight": "Nigel & Norifumi", "playersLeft": ["Pancho", "Josh"], "playersRight": ["Nigel", "Norifumi"], "allPlayers": ["Pancho", "Josh", "Nigel", "Norifumi"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "02", "teamLeft": "Team 1", "teamRight": "Team 8", "pairLeft": "Josh & Amaury", "pairRight": "Henrik & Norifumi", "playersLeft": ["Josh", "Amaury"], "playersRight": ["Henrik", "Norifumi"], "allPlayers": ["Josh", "Amaury", "Henrik", "Norifumi"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "03", "teamLeft": "Team 1", "teamRight": "Team 8", "pairLeft": "Pancho & Amaury", "pairRight": "Henrik & Nigel", "playersLeft": ["Pancho", "Amaury"], "playersRight": ["Henrik", "Nigel"], "allPlayers": ["Pancho", "Amaury", "Henrik", "Nigel"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "04", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Pancho & Josh", "pairRight": "Luca & Pedro", "playersLeft": ["Pancho", "Josh"], "playersRight": ["Luca", "Pedro"], "allPlayers": ["Pancho", "Josh", "Luca", "Pedro"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "05", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Josh & Amaury", "pairRight": "Angel & Pedro", "playersLeft": ["Josh", "Amaury"], "playersRight": ["Angel", "Pedro"], "allPlayers": ["Josh", "Amaury", "Angel", "Pedro"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "06", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Pancho & Amaury", "pairRight": "Angel & Luca", "playersLeft": ["Pancho", "Amaury"], "playersRight": ["Angel", "Luca"], "allPlayers": ["Pancho", "Amaury", "Angel", "Luca"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "07", "teamLeft": "Team 1", "teamRight": "Team 9", "pairLeft": "Pancho & Josh", "pairRight": "Hein & Jerry", "playersLeft": ["Pancho", "Josh"], "playersRight": ["Hein", "Jerry"], "allPlayers": ["Pancho", "Josh", "Hein", "Jerry"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "08", "teamLeft": "Team 1", "teamRight": "Team 9", "pairLeft": "Josh & Amaury", "pairRight": "Armand & Jerry", "playersLeft": ["Josh", "Amaury"], "playersRight": ["Armand", "Jerry"], "allPlayers": ["Josh", "Amaury", "Armand", "Jerry"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "09", "teamLeft": "Team 1", "teamRight": "Team 9", "pairLeft": "Pancho & Amaury", "pairRight": "Armand & Hein", "playersLeft": ["Pancho", "Amaury"], "playersRight": ["Armand", "Hein"], "allPlayers": ["Pancho", "Amaury", "Armand", "Hein"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "10", "teamLeft": "Team 8", "teamRight": "Team 3", "pairLeft": "Henrik & Nigel", "pairRight": "Luca & Pedro", "playersLeft": ["Henrik", "Nigel"], "playersRight": ["Luca", "Pedro"], "allPlayers": ["Henrik", "Nigel", "Luca", "Pedro"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "11", "teamLeft": "Team 8", "teamRight": "Team 3", "pairLeft": "Nigel & Norifumi", "pairRight": "Angel & Pedro", "playersLeft": ["Nigel", "Norifumi"], "playersRight": ["Angel", "Pedro"], "allPlayers": ["Nigel", "Norifumi", "Angel", "Pedro"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "12", "teamLeft": "Team 8", "teamRight": "Team 3", "pairLeft": "Henrik & Norifumi", "pairRight": "Angel & Luca", "playersLeft": ["Henrik", "Norifumi"], "playersRight": ["Angel", "Luca"], "allPlayers": ["Henrik", "Norifumi", "Angel", "Luca"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "13", "teamLeft": "Team 8", "teamRight": "Team 9", "pairLeft": "Henrik & Nigel", "pairRight": "Hein & Jerry", "playersLeft": ["Henrik", "Nigel"], "playersRight": ["Hein", "Jerry"], "allPlayers": ["Henrik", "Nigel", "Hein", "Jerry"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "14", "teamLeft": "Team 8", "teamRight": "Team 9", "pairLeft": "Nigel & Norifumi", "pairRight": "Armand & Jerry", "playersLeft": ["Nigel", "Norifumi"], "playersRight": ["Armand", "Jerry"], "allPlayers": ["Nigel", "Norifumi", "Armand", "Jerry"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "15", "teamLeft": "Team 8", "teamRight": "Team 9", "pairLeft": "Henrik & Norifumi", "pairRight": "Armand & Hein", "playersLeft": ["Henrik", "Norifumi"], "playersRight": ["Armand", "Hein"], "allPlayers": ["Henrik", "Norifumi", "Armand", "Hein"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "16", "teamLeft": "Team 3", "teamRight": "Team 9", "pairLeft": "Angel & Luca", "pairRight": "Hein & Jerry", "playersLeft": ["Angel", "Luca"], "playersRight": ["Hein", "Jerry"], "allPlayers": ["Angel", "Luca", "Hein", "Jerry"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "17", "teamLeft": "Team 3", "teamRight": "Team 9", "pairLeft": "Luca & Pedro", "pairRight": "Armand & Jerry", "playersLeft": ["Luca", "Pedro"], "playersRight": ["Armand", "Jerry"], "allPlayers": ["Luca", "Pedro", "Armand", "Jerry"]}, {"bracket": "Group A", "sourceFile": "11a.html", "num": "18", "teamLeft": "Team 3", "teamRight": "Team 9", "pairLeft": "Angel & Pedro", "pairRight": "Armand & Hein", "playersLeft": ["Angel", "Pedro"], "playersRight": ["Armand", "Hein"], "allPlayers": ["Angel", "Pedro", "Armand", "Hein"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "01", "teamLeft": "Team 2", "teamRight": "Team 5", "pairLeft": "Tiger & JM", "pairRight": "Kino & Andy", "playersLeft": ["Tiger", "JM"], "playersRight": ["Kino", "Andy"], "allPlayers": ["Tiger", "JM", "Kino", "Andy"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "02", "teamLeft": "Team 2", "teamRight": "Team 5", "pairLeft": "JM & Petar", "pairRight": "Vic & Andy", "playersLeft": ["JM", "Petar"], "playersRight": ["Vic", "Andy"], "allPlayers": ["JM", "Petar", "Vic", "Andy"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "03", "teamLeft": "Team 2", "teamRight": "Team 5", "pairLeft": "Tiger & Petar", "pairRight": "Vic & Kino", "playersLeft": ["Tiger", "Petar"], "playersRight": ["Vic", "Kino"], "allPlayers": ["Tiger", "Petar", "Vic", "Kino"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "04", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Tiger & JM", "pairRight": "Alexis & Shogo", "playersLeft": ["Tiger", "JM"], "playersRight": ["Alexis", "Shogo"], "allPlayers": ["Tiger", "JM", "Alexis", "Shogo"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "05", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "JM & Petar", "pairRight": "Gil & Shogo", "playersLeft": ["JM", "Petar"], "playersRight": ["Gil", "Shogo"], "allPlayers": ["JM", "Petar", "Gil", "Shogo"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "06", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Tiger & Petar", "pairRight": "Gil & Alexis", "playersLeft": ["Tiger", "Petar"], "playersRight": ["Gil", "Alexis"], "allPlayers": ["Tiger", "Petar", "Gil", "Alexis"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "07", "teamLeft": "Team 2", "teamRight": "Team 6", "pairLeft": "Tiger & JM", "pairRight": "Misagh & Leandro", "playersLeft": ["Tiger", "JM"], "playersRight": ["Misagh", "Leandro"], "allPlayers": ["Tiger", "JM", "Misagh", "Leandro"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "08", "teamLeft": "Team 2", "teamRight": "Team 6", "pairLeft": "JM & Petar", "pairRight": "Kevin & Leandro", "playersLeft": ["JM", "Petar"], "playersRight": ["Kevin", "Leandro"], "allPlayers": ["JM", "Petar", "Kevin", "Leandro"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "09", "teamLeft": "Team 2", "teamRight": "Team 6", "pairLeft": "Tiger & Petar", "pairRight": "Kevin & Misagh", "playersLeft": ["Tiger", "Petar"], "playersRight": ["Kevin", "Misagh"], "allPlayers": ["Tiger", "Petar", "Kevin", "Misagh"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "10", "teamLeft": "Team 5", "teamRight": "Team 4", "pairLeft": "Vic & Kino", "pairRight": "Alexis & Shogo", "playersLeft": ["Vic", "Kino"], "playersRight": ["Alexis", "Shogo"], "allPlayers": ["Vic", "Kino", "Alexis", "Shogo"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "11", "teamLeft": "Team 5", "teamRight": "Team 4", "pairLeft": "Kino & Andy", "pairRight": "Gil & Shogo", "playersLeft": ["Kino", "Andy"], "playersRight": ["Gil", "Shogo"], "allPlayers": ["Kino", "Andy", "Gil", "Shogo"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "12", "teamLeft": "Team 5", "teamRight": "Team 4", "pairLeft": "Vic & Andy", "pairRight": "Gil & Alexis", "playersLeft": ["Vic", "Andy"], "playersRight": ["Gil", "Alexis"], "allPlayers": ["Vic", "Andy", "Gil", "Alexis"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "13", "teamLeft": "Team 5", "teamRight": "Team 6", "pairLeft": "Vic & Kino", "pairRight": "Misagh & Leandro", "playersLeft": ["Vic", "Kino"], "playersRight": ["Misagh", "Leandro"], "allPlayers": ["Vic", "Kino", "Misagh", "Leandro"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "14", "teamLeft": "Team 5", "teamRight": "Team 6", "pairLeft": "Kino & Andy", "pairRight": "Kevin & Leandro", "playersLeft": ["Kino", "Andy"], "playersRight": ["Kevin", "Leandro"], "allPlayers": ["Kino", "Andy", "Kevin", "Leandro"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "15", "teamLeft": "Team 5", "teamRight": "Team 6", "pairLeft": "Vic & Andy", "pairRight": "Kevin & Misagh", "playersLeft": ["Vic", "Andy"], "playersRight": ["Kevin", "Misagh"], "allPlayers": ["Vic", "Andy", "Kevin", "Misagh"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "16", "teamLeft": "Team 4", "teamRight": "Team 6", "pairLeft": "Gil & Alexis", "pairRight": "Misagh & Leandro", "playersLeft": ["Gil", "Alexis"], "playersRight": ["Misagh", "Leandro"], "allPlayers": ["Gil", "Alexis", "Misagh", "Leandro"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "17", "teamLeft": "Team 4", "teamRight": "Team 6", "pairLeft": "Alexis & Shogo", "pairRight": "Kevin & Leandro", "playersLeft": ["Alexis", "Shogo"], "playersRight": ["Kevin", "Leandro"], "allPlayers": ["Alexis", "Shogo", "Kevin", "Leandro"]}, {"bracket": "Group B", "sourceFile": "11b.html", "num": "18", "teamLeft": "Team 4", "teamRight": "Team 6", "pairLeft": "Gil & Shogo", "pairRight": "Kevin & Misagh", "playersLeft": ["Gil", "Shogo"], "playersRight": ["Kevin", "Misagh"], "allPlayers": ["Gil", "Shogo", "Kevin", "Misagh"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "01", "teamLeft": "Team 1", "teamRight": "Team 2", "pairLeft": "Alan & John", "pairRight": "Nicholai & George", "playersLeft": ["Alan", "John"], "playersRight": ["Nicholai", "George"], "allPlayers": ["Alan", "John", "Nicholai", "George"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "02", "teamLeft": "Team 1", "teamRight": "Team 2", "pairLeft": "John & JF", "pairRight": "Robin & George", "playersLeft": ["John", "JF"], "playersRight": ["Robin", "George"], "allPlayers": ["John", "JF", "Robin", "George"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "03", "teamLeft": "Team 1", "teamRight": "Team 2", "pairLeft": "Alan & JF", "pairRight": "Robin & Nicholai", "playersLeft": ["Alan", "JF"], "playersRight": ["Robin", "Nicholai"], "allPlayers": ["Alan", "JF", "Robin", "Nicholai"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "04", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Alan & John", "pairRight": "Rave & Ted", "playersLeft": ["Alan", "John"], "playersRight": ["Rave", "Ted"], "allPlayers": ["Alan", "John", "Rave", "Ted"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "05", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "John & JF", "pairRight": "Kres & Ted", "playersLeft": ["John", "JF"], "playersRight": ["Kres", "Ted"], "allPlayers": ["John", "JF", "Kres", "Ted"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "06", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Alan & JF", "pairRight": "Kres & Rave", "playersLeft": ["Alan", "JF"], "playersRight": ["Kres", "Rave"], "allPlayers": ["Alan", "JF", "Kres", "Rave"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "07", "teamLeft": "Team 1", "teamRight": "Team 4", "pairLeft": "Alan & John", "pairRight": "Miggy & BJ", "playersLeft": ["Alan", "John"], "playersRight": ["Miggy", "BJ"], "allPlayers": ["Alan", "John", "Miggy", "BJ"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "08", "teamLeft": "Team 1", "teamRight": "Team 4", "pairLeft": "John & JF", "pairRight": "Erwin & BJ", "playersLeft": ["John", "JF"], "playersRight": ["Erwin", "BJ"], "allPlayers": ["John", "JF", "Erwin", "BJ"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "09", "teamLeft": "Team 1", "teamRight": "Team 4", "pairLeft": "Alan & JF", "pairRight": "Erwin & Miggy", "playersLeft": ["Alan", "JF"], "playersRight": ["Erwin", "Miggy"], "allPlayers": ["Alan", "JF", "Erwin", "Miggy"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "10", "teamLeft": "Team 2", "teamRight": "Team 3", "pairLeft": "Robin & Nicholai", "pairRight": "Rave & Ted", "playersLeft": ["Robin", "Nicholai"], "playersRight": ["Rave", "Ted"], "allPlayers": ["Robin", "Nicholai", "Rave", "Ted"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "11", "teamLeft": "Team 2", "teamRight": "Team 3", "pairLeft": "Nicholai & George", "pairRight": "Kres & Ted", "playersLeft": ["Nicholai", "George"], "playersRight": ["Kres", "Ted"], "allPlayers": ["Nicholai", "George", "Kres", "Ted"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "12", "teamLeft": "Team 2", "teamRight": "Team 3", "pairLeft": "Robin & George", "pairRight": "Kres & Rave", "playersLeft": ["Robin", "George"], "playersRight": ["Kres", "Rave"], "allPlayers": ["Robin", "George", "Kres", "Rave"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "13", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Robin & Nicholai", "pairRight": "Miggy & BJ", "playersLeft": ["Robin", "Nicholai"], "playersRight": ["Miggy", "BJ"], "allPlayers": ["Robin", "Nicholai", "Miggy", "BJ"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "14", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Nicholai & George", "pairRight": "Erwin & BJ", "playersLeft": ["Nicholai", "George"], "playersRight": ["Erwin", "BJ"], "allPlayers": ["Nicholai", "George", "Erwin", "BJ"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "15", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Robin & George", "pairRight": "Erwin & Miggy", "playersLeft": ["Robin", "George"], "playersRight": ["Erwin", "Miggy"], "allPlayers": ["Robin", "George", "Erwin", "Miggy"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "16", "teamLeft": "Team 3", "teamRight": "Team 4", "pairLeft": "Kres & Rave", "pairRight": "Miggy & BJ", "playersLeft": ["Kres", "Rave"], "playersRight": ["Miggy", "BJ"], "allPlayers": ["Kres", "Rave", "Miggy", "BJ"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "17", "teamLeft": "Team 3", "teamRight": "Team 4", "pairLeft": "Rave & Ted", "pairRight": "Erwin & BJ", "playersLeft": ["Rave", "Ted"], "playersRight": ["Erwin", "BJ"], "allPlayers": ["Rave", "Ted", "Erwin", "BJ"]}, {"bracket": "Group C", "sourceFile": "11c.html", "num": "18", "teamLeft": "Team 3", "teamRight": "Team 4", "pairLeft": "Kres & Ted", "pairRight": "Erwin & Miggy", "playersLeft": ["Kres", "Ted"], "playersRight": ["Erwin", "Miggy"], "allPlayers": ["Kres", "Ted", "Erwin", "Miggy"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "01", "teamLeft": "Team 1", "teamRight": "Team 2", "pairLeft": "Jopet & Ian", "pairRight": "Miggy & Chut", "playersLeft": ["Jopet", "Ian"], "playersRight": ["Miggy", "Chut"], "allPlayers": ["Jopet", "Ian", "Miggy", "Chut"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "02", "teamLeft": "Team 1", "teamRight": "Team 2", "pairLeft": "Jopet & Ian", "pairRight": "Ron & Austin", "playersLeft": ["Jopet", "Ian"], "playersRight": ["Ron", "Austin"], "allPlayers": ["Jopet", "Ian", "Ron", "Austin"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "03", "teamLeft": "Team 1", "teamRight": "Team 2", "pairLeft": "Joel & Jolo", "pairRight": "Miggy & Chut", "playersLeft": ["Joel", "Jolo"], "playersRight": ["Miggy", "Chut"], "allPlayers": ["Joel", "Jolo", "Miggy", "Chut"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "04", "teamLeft": "Team 1", "teamRight": "Team 2", "pairLeft": "Joel & Jolo", "pairRight": "Ron & Austin", "playersLeft": ["Joel", "Jolo"], "playersRight": ["Ron", "Austin"], "allPlayers": ["Joel", "Jolo", "Ron", "Austin"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "05", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Jopet & Joel", "pairRight": "Alfonso & PJ", "playersLeft": ["Jopet", "Joel"], "playersRight": ["Alfonso", "PJ"], "allPlayers": ["Jopet", "Joel", "Alfonso", "PJ"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "06", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Jopet & Joel", "pairRight": "Fred & Phee", "playersLeft": ["Jopet", "Joel"], "playersRight": ["Fred", "Phee"], "allPlayers": ["Jopet", "Joel", "Fred", "Phee"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "07", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Ian & Jolo", "pairRight": "Alfonso & PJ", "playersLeft": ["Ian", "Jolo"], "playersRight": ["Alfonso", "PJ"], "allPlayers": ["Ian", "Jolo", "Alfonso", "PJ"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "08", "teamLeft": "Team 1", "teamRight": "Team 3", "pairLeft": "Ian & Jolo", "pairRight": "Fred & Phee", "playersLeft": ["Ian", "Jolo"], "playersRight": ["Fred", "Phee"], "allPlayers": ["Ian", "Jolo", "Fred", "Phee"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "09", "teamLeft": "Team 1", "teamRight": "Team 4", "pairLeft": "Jopet & Jolo", "pairRight": "Joe & Nikko", "playersLeft": ["Jopet", "Jolo"], "playersRight": ["Joe", "Nikko"], "allPlayers": ["Jopet", "Jolo", "Joe", "Nikko"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "10", "teamLeft": "Team 1", "teamRight": "Team 4", "pairLeft": "Jopet & Jolo", "pairRight": "Karlo & Jon", "playersLeft": ["Jopet", "Jolo"], "playersRight": ["Karlo", "Jon"], "allPlayers": ["Jopet", "Jolo", "Karlo", "Jon"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "11", "teamLeft": "Team 1", "teamRight": "Team 4", "pairLeft": "Ian & Joel", "pairRight": "Joe & Nikko", "playersLeft": ["Ian", "Joel"], "playersRight": ["Joe", "Nikko"], "allPlayers": ["Ian", "Joel", "Joe", "Nikko"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "12", "teamLeft": "Team 1", "teamRight": "Team 4", "pairLeft": "Ian & Joel", "pairRight": "Karlo & Jon", "playersLeft": ["Ian", "Joel"], "playersRight": ["Karlo", "Jon"], "allPlayers": ["Ian", "Joel", "Karlo", "Jon"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "13", "teamLeft": "Team 2", "teamRight": "Team 3", "pairLeft": "Miggy & Austin", "pairRight": "Alfonso & Phee", "playersLeft": ["Miggy", "Austin"], "playersRight": ["Alfonso", "Phee"], "allPlayers": ["Miggy", "Austin", "Alfonso", "Phee"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "14", "teamLeft": "Team 2", "teamRight": "Team 3", "pairLeft": "Miggy & Austin", "pairRight": "Fred & PJ", "playersLeft": ["Miggy", "Austin"], "playersRight": ["Fred", "PJ"], "allPlayers": ["Miggy", "Austin", "Fred", "PJ"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "15", "teamLeft": "Team 2", "teamRight": "Team 3", "pairLeft": "Chut & Ron", "pairRight": "Alfonso & Phee", "playersLeft": ["Chut", "Ron"], "playersRight": ["Alfonso", "Phee"], "allPlayers": ["Chut", "Ron", "Alfonso", "Phee"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "16", "teamLeft": "Team 2", "teamRight": "Team 3", "pairLeft": "Chut & Ron", "pairRight": "Fred & PJ", "playersLeft": ["Chut", "Ron"], "playersRight": ["Fred", "PJ"], "allPlayers": ["Chut", "Ron", "Fred", "PJ"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "17", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Miggy & Ron", "pairRight": "Joe & Jon", "playersLeft": ["Miggy", "Ron"], "playersRight": ["Joe", "Jon"], "allPlayers": ["Miggy", "Ron", "Joe", "Jon"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "18", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Miggy & Ron", "pairRight": "Karlo & Nikko", "playersLeft": ["Miggy", "Ron"], "playersRight": ["Karlo", "Nikko"], "allPlayers": ["Miggy", "Ron", "Karlo", "Nikko"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "19", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Chut & Austin", "pairRight": "Joe & Jon", "playersLeft": ["Chut", "Austin"], "playersRight": ["Joe", "Jon"], "allPlayers": ["Chut", "Austin", "Joe", "Jon"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "20", "teamLeft": "Team 2", "teamRight": "Team 4", "pairLeft": "Chut & Austin", "pairRight": "Karlo & Nikko", "playersLeft": ["Chut", "Austin"], "playersRight": ["Karlo", "Nikko"], "allPlayers": ["Chut", "Austin", "Karlo", "Nikko"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "21", "teamLeft": "Team 3", "teamRight": "Team 4", "pairLeft": "Alfonso & Fred", "pairRight": "Joe & Karlo", "playersLeft": ["Alfonso", "Fred"], "playersRight": ["Joe", "Karlo"], "allPlayers": ["Alfonso", "Fred", "Joe", "Karlo"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "22", "teamLeft": "Team 3", "teamRight": "Team 4", "pairLeft": "Alfonso & Fred", "pairRight": "Jon & Nikko", "playersLeft": ["Alfonso", "Fred"], "playersRight": ["Jon", "Nikko"], "allPlayers": ["Alfonso", "Fred", "Jon", "Nikko"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "23", "teamLeft": "Team 3", "teamRight": "Team 4", "pairLeft": "PJ & Phee", "pairRight": "Joe & Karlo", "playersLeft": ["PJ", "Phee"], "playersRight": ["Joe", "Karlo"], "allPlayers": ["PJ", "Phee", "Joe", "Karlo"]}, {"bracket": "Group D", "sourceFile": "11d.html", "num": "24", "teamLeft": "Team 3", "teamRight": "Team 4", "pairLeft": "PJ & Phee", "pairRight": "Jon & Nikko", "playersLeft": ["PJ", "Phee"], "playersRight": ["Jon", "Nikko"], "allPlayers": ["PJ", "Phee", "Jon", "Nikko"]}];
+const PLAYERS = ["Alan", "Alexis", "Alfonso", "Amaury", "Andy", "Angel", "Armand", "Austin", "BJ", "Chut", "Erwin", "Fred", "George", "Gil", "Hein", "Henrik", "Ian", "Jerry", "JF", "JM", "Joe", "Joel", "John", "Jolo", "Jon", "Jopet", "Josh", "Karlo", "Kevin", "Kino", "Kres", "Leandro", "Luca", "Miggy", "Misagh", "Nicholai", "Nigel", "Nikko", "Norifumi", "Pancho", "Pedro", "Petar", "Phee", "PJ", "Rave", "Robin", "Ron", "Shogo", "Ted", "Tiger", "Vic"];
+
+const search = document.getElementById('search');
+const suggestionsEl = document.getElementById('suggestions');
+const pillsEl = document.getElementById('playerPills');
+const resultsEl = document.getElementById('results');
+const summaryEl = document.getElementById('summary');
+const summaryNameEl = document.getElementById('summaryName');
+const summaryMetaEl = document.getElementById('summaryMeta');
+const summaryStatsEl = document.getElementById('summaryStats');
+const totalEl = document.getElementById('totalMatches');
+
+totalEl.textContent = MATCHES.length;
+
+let selectedPlayer = null;
+
+// Build matches-per-player count
+const playerMatchCount = {};
+PLAYERS.forEach(p => playerMatchCount[p] = 0);
+MATCHES.forEach(m => m.allPlayers.forEach(p => { playerMatchCount[p] = (playerMatchCount[p] || 0) + 1; }));
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function highlight(pair, player) {
+  if (!player) return escapeHtml(pair);
+  return escapeHtml(pair).replace(
+    new RegExp('\\b' + player.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'),
+    '<span class="player-hl">' + escapeHtml(player) + '</span>'
+  );
+}
+
+function renderPills() {
+  pillsEl.innerHTML = PLAYERS.map(p =>
+    `<button class="player-pill${selectedPlayer === p ? ' selected' : ''}" data-player="${escapeHtml(p)}">${escapeHtml(p)}</button>`
+  ).join('');
+}
+
+function renderResults() {
+  let list = MATCHES;
+  if (selectedPlayer) {
+    list = MATCHES.filter(m => m.allPlayers.includes(selectedPlayer));
+  }
+
+  if (list.length === 0) {
+    resultsEl.innerHTML = '<div class="no-results">No matches found.</div>';
+    return;
+  }
+
+  // Group by bracket
+  const byBracket = {};
+  list.forEach(m => {
+    if (!byBracket[m.bracket]) byBracket[m.bracket] = [];
+    byBracket[m.bracket].push(m);
+  });
+
+  resultsEl.innerHTML = Object.keys(byBracket).sort().map(bracket => {
+    const items = byBracket[bracket];
+    const rows = items.map(m => {
+      const isMine = selectedPlayer && m.allPlayers.includes(selectedPlayer);
+      return `
+        <div class="match-row${isMine ? ' is-mine' : ''}">
+          <div class="match-num">${escapeHtml(m.num)}</div>
+          <div class="match-pair">${highlight(m.pairLeft, selectedPlayer)}</div>
+          <div class="match-vs">VS</div>
+          <div class="match-pair-right">${highlight(m.pairRight, selectedPlayer)}</div>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div class="bracket-section">
+        <div class="bracket-header">
+          <div class="plh bracket-title">${escapeHtml(bracket)}</div>
+          <div class="bracket-badge">${items.length} ${items.length === 1 ? 'MATCH' : 'MATCHES'}</div>
+        </div>
+        ${rows}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderSummary() {
+  if (!selectedPlayer) {
+    summaryEl.classList.remove('show');
+    return;
+  }
+  const playerMatches = MATCHES.filter(m => m.allPlayers.includes(selectedPlayer));
+  const partners = new Set();
+  const opponents = new Set();
+  const brackets = new Set();
+  playerMatches.forEach(m => {
+    brackets.add(m.bracket);
+    const onLeft = m.playersLeft.includes(selectedPlayer);
+    const myPair = onLeft ? m.playersLeft : m.playersRight;
+    const oppPair = onLeft ? m.playersRight : m.playersLeft;
+    myPair.forEach(p => { if (p !== selectedPlayer) partners.add(p); });
+    oppPair.forEach(p => opponents.add(p));
+  });
+
+  summaryEl.classList.add('show');
+  summaryNameEl.textContent = selectedPlayer;
+  summaryMetaEl.textContent = `${[...brackets].sort().join(', ')} · Season 11`;
+  summaryStatsEl.innerHTML = `
+    <div class="summary-stat"><strong>${playerMatches.length}</strong>Matches</div>
+    <div class="summary-stat"><strong>${partners.size}</strong>Partners</div>
+    <div class="summary-stat"><strong>${opponents.size}</strong>Opponents</div>
+  `;
+}
+
+function selectPlayer(name) {
+  selectedPlayer = name;
+  search.value = name || '';
+  suggestionsEl.classList.remove('open');
+  renderPills();
+  renderSummary();
+  renderResults();
+  if (name) {
+    // Scroll to summary on mobile
+    setTimeout(() => summaryEl.scrollIntoView({behavior:'smooth', block:'start'}), 50);
+  }
+}
+
+function renderSuggestions(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    suggestionsEl.classList.remove('open');
+    return;
+  }
+  const matches = PLAYERS.filter(p => p.toLowerCase().includes(q)).slice(0, 12);
+  if (matches.length === 0) {
+    suggestionsEl.innerHTML = '<div class="suggestion" style="cursor:default;color:#687FA3">No player found</div>';
+    suggestionsEl.classList.add('open');
+    return;
+  }
+  suggestionsEl.innerHTML = matches.map(p =>
+    `<div class="suggestion" data-player="${escapeHtml(p)}">${escapeHtml(p)}<span class="suggestion-count">${playerMatchCount[p]} matches</span></div>`
+  ).join('');
+  suggestionsEl.classList.add('open');
+}
+
+// Events
+search.addEventListener('input', e => {
+  if (selectedPlayer && e.target.value !== selectedPlayer) {
+    selectedPlayer = null;
+    renderPills();
+    renderSummary();
+    renderResults();
+  }
+  renderSuggestions(e.target.value);
+});
+
+search.addEventListener('focus', () => {
+  if (search.value.trim()) renderSuggestions(search.value);
+});
+
+document.addEventListener('click', e => {
+  if (!suggestionsEl.contains(e.target) && e.target !== search) {
+    suggestionsEl.classList.remove('open');
+  }
+});
+
+suggestionsEl.addEventListener('click', e => {
+  const target = e.target.closest('.suggestion');
+  if (target && target.dataset.player) selectPlayer(target.dataset.player);
+});
+
+pillsEl.addEventListener('click', e => {
+  const target = e.target.closest('.player-pill');
+  if (!target) return;
+  const name = target.dataset.player;
+  selectPlayer(selectedPlayer === name ? null : name);
+});
+
+search.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const q = search.value.trim().toLowerCase();
+    const exact = PLAYERS.find(p => p.toLowerCase() === q);
+    const first = PLAYERS.find(p => p.toLowerCase().includes(q));
+    if (exact) selectPlayer(exact);
+    else if (first) selectPlayer(first);
+  }
+  if (e.key === 'Escape') {
+    selectPlayer(null);
+  }
+});
+
+// Init
+renderPills();
+renderResults();
+</script>
+</body>
+</html>
