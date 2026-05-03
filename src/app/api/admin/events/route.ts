@@ -116,10 +116,14 @@ export async function PATCH(request: Request) {
   if (typeof body.requires_payment === "boolean") {
     update.requires_payment = body.requires_payment;
   }
-  if (typeof body.start_date === "string") update.start_date = body.start_date;
-  if (typeof body.end_date === "string") update.end_date = body.end_date;
-  if (typeof body.image_url === "string") update.image_url = body.image_url || null;
-  if (typeof body.description === "string") update.description = body.description || null;
+  if (typeof body.start_date === "string" && body.start_date.trim()) update.start_date = body.start_date.trim();
+  if (typeof body.end_date === "string" && body.end_date.trim()) update.end_date = body.end_date.trim();
+  if (Object.prototype.hasOwnProperty.call(body, "image_url")) {
+    update.image_url = typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "description")) {
+    update.description = typeof body.description === "string" && body.description.trim() ? body.description.trim() : null;
+  }
   if (Object.prototype.hasOwnProperty.call(body, "deleted_at") && body.deleted_at === null) {
     update.deleted_at = null;
   }
