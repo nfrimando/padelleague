@@ -12,12 +12,7 @@ import { useEventSignup } from "@/lib/useEventSignup";
 import type { User } from "@supabase/supabase-js";
 import type { Event } from "@/lib/types";
 
-type SignupStatus =
-  | "none"
-  | "pending_payment"
-  | "registered"
-  | "waitlisted"
-  | "cancelled";
+type SignupStatus = "none" | "registered" | "waitlisted" | "cancelled";
 type VerifyStatus = "verified" | "pending" | "unknown";
 
 type RegisterLookupPlayer = {
@@ -85,7 +80,6 @@ export default function RegisterPage() {
       setSignupStatus("registered");
     }
   }, [signupResult]);
-
   useEffect(() => {
     if (!user) {
       setSignupStatus("none");
@@ -124,27 +118,6 @@ export default function RegisterPage() {
         .maybeSingle();
 
       let status = (existing?.status as SignupStatus) ?? "none";
-
-      if (status === "pending_payment") {
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          if (session) {
-            const res = await fetch("/api/payments/confirm", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            });
-            if (res.ok) {
-              const json = (await res.json()) as { status: string };
-              if (json.status === "registered") status = "registered";
-            }
-          }
-        } catch {
-          // Keep DB state when confirm fails.
-        }
-      }
-
       setSignupStatus(status);
     }
 
@@ -214,7 +187,7 @@ export default function RegisterPage() {
             Event Registration
           </h1>
           <p className="text-white/50 mb-8 text-sm">
-            Register and pay to join the upcoming event.
+            Sign up for the upcoming event.
           </p>
 
           {!user && (
@@ -286,53 +259,48 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {user &&
-            (signupStatus === "registered" ||
-              signupStatus === "pending_payment") && (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
-                <p className="text-white/50 text-sm">Signed in as</p>
-                <p className="font-medium">{user.email}</p>
-                {signupStatus === "registered" ? (
-                  <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
-                    ✓ Registered for{" "}
-                    {selectedEvent ? eventLabel(selectedEvent) : "this event"}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2 rounded-lg text-sm font-bold">
-                      ⏳ Payment pending for{" "}
-                      {selectedEvent ? eventLabel(selectedEvent) : "this event"}
-                    </div>
-                    <p className="text-white/50 text-sm">
-                      Your registration is reserved — complete payment to
-                      confirm your spot.
-                    </p>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={submitting}
-                      className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-sm uppercase tracking-widest py-3 px-6 rounded-xl transition-all"
-                    >
-                      {submitting ? (
-                        <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        "Complete Payment"
-                      )}
-                    </button>
-                    {error && (
-                      <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-                        {error}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <Link
-                  href="/dashboard"
-                  className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
-                >
-                  Go to your dashboard →
-                </Link>
+          {user && signupStatus === "registered" && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
+              <p className="text-white/50 text-sm">Signed in as</p>
+              <p className="font-medium">{user.email}</p>
+              <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
+                ✓ Registered for{" "}
+                {selectedEvent ? eventLabel(selectedEvent) : "this event"}
               </div>
-            )}
+              <Link
+                href="/dashboard"
+                className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
+              >
+                Go to your dashboard →
+              </Link>
+            </div>
+          )}
+
+          {user && signupResult === "no_profile" && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
+              <p className="text-white/50 text-sm">Signed in as</p>
+              <p className="font-medium">{user.email}</p>
+              <div className="flex gap-3 text-left">
+                <span className="text-xl mt-0.5">🔗</span>
+                <div>
+                  <p className="font-bold text-amber-300 mb-1">
+                    No profile linked
+                  </p>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    Your account isn&apos;t linked to a player profile yet. Go
+                    to your dashboard to claim an existing profile or register
+                    as a new player.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard"
+                className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
+              >
+                Go to your dashboard →
+              </Link>
+            </div>
+          )}
 
           {user && signupStatus === "none" && verifyStatus !== "pending" && (
             <form
@@ -414,7 +382,9 @@ export default function RegisterPage() {
               )}
 
               <div className="flex items-center justify-between text-sm py-3 border-t border-white/10">
-                <span className="text-white/60">Registration fee</span>
+                <span className="text-white/60">
+                  Registration fee (Pay later)
+                </span>
                 <span className="font-bold text-[#00C8DC]">
                   {isSelectedEventFree ? "Free" : `₱${fee.toLocaleString()}`}
                 </span>
@@ -428,18 +398,12 @@ export default function RegisterPage() {
                 {submitting ? (
                   <>
                     <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-                    Processing…
+                    Registering…
                   </>
-                ) : isSelectedEventFree ? (
-                  "Register for Free"
                 ) : (
-                  `Register & Pay ₱${fee.toLocaleString()}`
+                  "Register"
                 )}
               </button>
-
-              <p className="text-center text-xs text-white/30">
-                You will be redirected to PayMongo to complete payment.
-              </p>
             </form>
           )}
         </div>

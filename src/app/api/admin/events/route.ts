@@ -67,6 +67,8 @@ export async function POST(request: Request) {
         ? body.registration_status
         : "closed",
     status: typeof body.status === "string" ? body.status : "upcoming",
+    image_url: typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null,
+    description: typeof body.description === "string" && body.description.trim() ? body.description.trim() : null,
   };
 
   const { supabase } = authResult;
@@ -116,6 +118,8 @@ export async function PATCH(request: Request) {
   }
   if (typeof body.start_date === "string") update.start_date = body.start_date;
   if (typeof body.end_date === "string") update.end_date = body.end_date;
+  if (typeof body.image_url === "string") update.image_url = body.image_url || null;
+  if (typeof body.description === "string") update.description = body.description || null;
   if (Object.prototype.hasOwnProperty.call(body, "deleted_at") && body.deleted_at === null) {
     update.deleted_at = null;
   }

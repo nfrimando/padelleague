@@ -20,6 +20,8 @@ CREATE TABLE public.events (
   end_date date,
   deleted_at timestamp with time zone,
   requires_payment boolean NOT NULL DEFAULT true,
+  image_url text,
+  description text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT events_pkey PRIMARY KEY (event_id)
@@ -113,11 +115,23 @@ CREATE TABLE public.players (
   is_profile_complete boolean NOT NULL DEFAULT false,
   CONSTRAINT players_pkey PRIMARY KEY (player_id)
 );
+CREATE TABLE public.player_claims (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  player_id bigint NOT NULL,
+  claimed_by_email text NOT NULL,
+  claimed_by_name text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  reviewed_at timestamp with time zone,
+  CONSTRAINT player_claims_pkey PRIMARY KEY (id),
+  CONSTRAINT player_claims_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id),
+  CONSTRAINT player_claims_player_email_unique UNIQUE (player_id, claimed_by_email)
+);
 CREATE TABLE public.signups (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id bigint NOT NULL,
   event_type text NOT NULL,
-  status text NOT NULL DEFAULT 'pending_payment'::text CHECK (status = ANY (ARRAY['pending_payment'::text, 'registered'::text, 'waitlisted'::text, 'cancelled'::text])),
+  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['registered'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   event_id bigint NOT NULL,

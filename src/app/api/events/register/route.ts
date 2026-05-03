@@ -73,41 +73,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // 4. Auto-create player record when missing, then block pending verification
+  // 4. No player linked to this email — ask them to claim or register via dashboard
   if (!player) {
-    const fullName: string =
-      (user.user_metadata?.full_name as string | undefined)?.trim() ||
-      user.email?.split("@")[0] ||
-      "New Player";
-
-    const nickname = fullName.split(" ")[0] ?? fullName;
-
-    const { data: created, error: createError } = await serviceClient
-      .from("players")
-      .insert({
-        name: fullName,
-        nickname,
-        email: user.email,
-        image_link: (user.user_metadata?.avatar_url as string | undefined) ?? null,
-        is_profile_complete: false,
-        auto_renew_season: false,
-      })
-      .select("player_id, name, email, is_profile_complete")
-      .single();
-
-    if (createError || !created) {
-      console.error("Failed to create player record:", createError?.message);
-      return NextResponse.json(
-        { error: "Failed to create player profile. Please try again." },
-        { status: 500 },
-      );
-    }
-
     return NextResponse.json(
       {
         error:
-          "Your account is pending verification. An admin will approve it shortly.",
-        pendingVerification: true,
+          "No player profile is linked to your account. Visit your dashboard to claim an existing profile or register as a new player.",
+        noProfile: true,
       },
       { status: 403 },
     );
@@ -128,7 +100,7 @@ export async function POST(request: Request) {
   // 6. Load event (must exist, not soft-deleted, and registration open)
   const { data: event, error: eventError } = await serviceClient
     .from("events")
-    .select("event_id, requires_payment, registration_status, deleted_at")
+    .select("event_id, registration_status, deleted_at")
     .eq("event_id", eventId)
     .is("deleted_at", null)
     .eq("registration_status", "open")
@@ -141,8 +113,6 @@ export async function POST(request: Request) {
       { status: 404 },
     );
   }
-
-  const requiresPayment = event.requires_payment === true;
 
   // 7. Existing signup checks
   const { data: existingSignup, error: existingSignupError } = await serviceClient
@@ -161,70 +131,40 @@ export async function POST(request: Request) {
   }
 
   if (existingSignup) {
-    if (existingSignup.status === "registered") {
+    if (
+      existingSignup.status === "registered" ||
+      existingSignup.status === "accepted"
+    ) {
       return NextResponse.json(
         { error: "You have already signed up for this event." },
         { status: 409 },
       );
     }
-
-    if (existingSignup.status === "pending_payment") {
-      if (requiresPayment) {
-        return NextResponse.json(
-          { requires_payment: true, pending: true },
-          { status: 200 },
-        );
-      }
-
-      const { error: deleteStaleSignupError } = await serviceClient
-        .from("signups")
-        .delete()
-        .eq("id", existingSignup.id);
-
-      if (deleteStaleSignupError) {
-        console.error(
-          "Failed to delete stale pending_payment signup:",
-          deleteStaleSignupError.message,
-        );
-        return NextResponse.json(
-          { error: "Failed to clean up stale signup." },
-          { status: 500 },
-        );
-      }
-    } else {
-      return NextResponse.json(
-        { error: "You have already signed up for this event." },
-        { status: 409 },
-      );
-    }
+    // For waitlisted/cancelled, allow re-signup
   }
 
-  // 8. Free vs paid branch
-  if (!requiresPayment) {
-    const { data: signup, error: signupError } = await serviceClient
-      .from("signups")
-      .insert({
-        event_id: eventId,
-        player_id: player.player_id,
-        event_type: "event_registration",
-        status: "registered",
-      })
-      .select("id")
-      .single();
+  // 8. Create signup with status registered
+  const { data: signup, error: signupError } = await serviceClient
+    .from("signups")
+    .insert({
+      event_id: eventId,
+      player_id: player.player_id,
+      event_type: "event_registration",
+      status: "registered",
+    })
+    .select("id")
+    .single();
 
-    if (signupError || !signup) {
-      console.error("Failed to create free signup:", signupError?.message);
-      return NextResponse.json(
-        { error: "Failed to create signup." },
-        { status: 500 },
-      );
-    }
-
+  if (signupError || !signup) {
+    console.error("Failed to create signup:", signupError?.message);
     return NextResponse.json(
-      { registered: true, signup_id: signup.id },
-      { status: 201 },
+      { error: "Failed to create signup." },
+      { status: 500 },
     );
   }
 
-  return NextResponse.json({ requires_payment: true }, { status: 200 });
+  return NextResponse.json(
+    { registered: true, signup_id: signup.id },
+    { status: 201 },
+  );
 }

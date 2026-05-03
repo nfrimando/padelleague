@@ -10,6 +10,9 @@ import {
   Calendar,
   LogOut,
   Users,
+  Search,
+  Link2,
+  UserPlus,
 } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import {
@@ -24,6 +27,14 @@ import type { User } from "@supabase/supabase-js";
 import type { Event, Player } from "@/lib/types";
 
 // ─── Local types ──────────────────────────────────────────────────────────────
+
+type ClaimablePlayer = {
+  player_id: number;
+  name: string;
+  nickname: string;
+};
+
+type ClaimStatus = "none" | "pending" | "rejected";
 
 type SignupRow = {
   id: string;
@@ -65,10 +76,10 @@ function SignupBadge({ status }: { status: string }) {
       cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
       dot: "bg-emerald-400",
     },
-    pending_payment: {
-      label: "Pending Payment",
-      cls: "bg-amber-500/10 border-amber-500/30 text-amber-400",
-      dot: "bg-amber-400",
+    accepted: {
+      label: "Accepted",
+      cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
+      dot: "bg-emerald-400",
     },
     waitlisted: {
       label: "Waitlisted",
@@ -107,6 +118,21 @@ export default function DashboardPage() {
   const [signups, setSignups] = useState<SignupRow[]>([]);
   const [openEvents, setOpenEvents] = useState<Event[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  // ── Claim flow ─────────────────────────────────────────────────────────────
+  const [claimStatus, setClaimStatus] = useState<ClaimStatus | null>(null);
+  const [claimablePlayers, setClaimablePlayers] = useState<ClaimablePlayer[]>(
+    [],
+  );
+  const [claimSearch, setClaimSearch] = useState("");
+  const [claimTarget, setClaimTarget] = useState<number | null>(null);
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  // ── New player self-registration ───────────────────────────────────────────
+  const [showNewPlayerForm, setShowNewPlayerForm] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerNickname, setNewPlayerNickname] = useState("");
+  const [newPlayerSubmitting, setNewPlayerSubmitting] = useState(false);
+  const [newPlayerError, setNewPlayerError] = useState<string | null>(null);
   const {
     handleSignup,
     loading: payLoading,
@@ -154,33 +180,39 @@ export default function DashboardPage() {
       console.error("Failed player lookup on dashboard:", playerLookupError);
     }
 
-    let p = playerRow;
-
-    // Auto-create a player record if this Google user has never registered before
-    if (!p && user?.email) {
-      const fullName: string =
-        (user.user_metadata?.full_name as string | undefined)?.trim() ||
-        user.email.split("@")[0];
-      const nickname = fullName.split(" ")[0] ?? fullName;
-
-      const { data: created } = await supabase
-        .from("players")
-        .insert({
-          name: fullName,
-          nickname: nickname,
-          email: user.email,
-          image_link:
-            (user.user_metadata?.avatar_url as string | undefined) ?? null,
-          is_profile_complete: false,
-          auto_renew_season: false,
-        })
-        .select("*")
-        .single();
-
-      p = (created as Player | null) ?? null;
-    }
-
+    const p = playerRow ?? null;
     setPlayer(p);
+
+    if (!p) {
+      // No player linked to this email — check for an existing claim
+      const { data: existingClaim } = await supabase
+        .from("player_claims")
+        .select("id, status")
+        .eq("claimed_by_email", user?.email ?? "")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingClaim?.status === "pending") {
+        setClaimStatus("pending");
+      } else if (existingClaim?.status === "rejected") {
+        setClaimStatus("rejected");
+      } else {
+        setClaimStatus("none");
+      }
+
+      // Load claimable players for the claim search UI
+      const { data: claimableRows } = await supabase
+        .from("players")
+        .select("player_id, name, nickname")
+        .is("email", null)
+        .eq("is_profile_complete", true)
+        .order("name", { ascending: true });
+      setClaimablePlayers((claimableRows ?? []) as ClaimablePlayer[]);
+
+      setDataLoading(false);
+      return;
+    }
 
     if (p) {
       const supsResult = await supabase
@@ -193,43 +225,6 @@ export default function DashboardPage() {
 
       // Supabase infers FK joins as arrays; cast via unknown for correct runtime shape
       let typedSups = (supsResult.data ?? []) as unknown as SignupRow[];
-
-      // ── Auto-reconcile pending_payment signups ─────────────────────────
-      // If any signup is still pending_payment, ask the confirm API whether
-      // PayMongo has already received the payment. This fixes the case where
-      // the user paid but navigated away before the success page could confirm
-      // (or when the webhook hasn't fired on localhost).
-      const hasPending = typedSups.some((s) => s.status === "pending_payment");
-      if (hasPending) {
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          if (session) {
-            const res = await fetch("/api/payments/confirm", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            });
-            if (res.ok) {
-              const json = (await res.json()) as { status: string };
-              if (json.status === "registered") {
-                // Payment confirmed — re-fetch signups to get the updated status
-                const refreshed = await supabase
-                  .from("signups")
-                  .select(
-                    "id, event_id, status, event_type, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
-                  )
-                  .eq("player_id", p!.player_id)
-                  .order("created_at", { ascending: false });
-
-                typedSups = (refreshed.data ?? []) as unknown as SignupRow[];
-              }
-            }
-          }
-        } catch {
-          // Confirm failed silently — show whatever the DB has
-        }
-      }
 
       setSignups(typedSups);
 
@@ -258,6 +253,72 @@ export default function DashboardPage() {
       void load();
     }
   }, [signupResult, load]);
+
+  const handleClaim = useCallback(async () => {
+    if (!claimTarget || !user) return;
+    setClaimSubmitting(true);
+    setClaimError(null);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setClaimError("Session expired. Please sign in again.");
+        return;
+      }
+      const res = await fetch("/api/players/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ player_id: claimTarget }),
+      });
+      const json = (await res.json()) as { claimed?: boolean; error?: string };
+      if (json.claimed) {
+        setClaimStatus("pending");
+      } else {
+        setClaimError(json.error ?? "Failed to submit claim.");
+      }
+    } catch {
+      setClaimError("Network error. Please try again.");
+    } finally {
+      setClaimSubmitting(false);
+    }
+  }, [claimTarget, user]);
+
+  const handleNewPlayer = useCallback(async () => {
+    if (!user?.email || !newPlayerName.trim()) return;
+    setNewPlayerSubmitting(true);
+    setNewPlayerError(null);
+    try {
+      const name = newPlayerName.trim();
+      const nickname = newPlayerNickname.trim() || (name.split(" ")[0] ?? name);
+      const { data: created, error: createError } = await supabase
+        .from("players")
+        .insert({
+          name,
+          nickname,
+          email: user.email,
+          image_link:
+            (user.user_metadata?.avatar_url as string | undefined) ?? null,
+          is_profile_complete: false,
+          auto_renew_season: false,
+        })
+        .select("*")
+        .single();
+      if (createError) {
+        setNewPlayerError(createError.message ?? "Failed to create profile.");
+        return;
+      }
+      setPlayer(created as Player);
+      setClaimStatus(null);
+    } catch {
+      setNewPlayerError("Unexpected error. Please try again.");
+    } finally {
+      setNewPlayerSubmitting(false);
+    }
+  }, [user, newPlayerName, newPlayerNickname]);
 
   // ── Match stats (from existing hook) ──────────────────────────────────────
   const {
@@ -301,6 +362,13 @@ export default function DashboardPage() {
     player?.name ?? user.user_metadata?.full_name ?? user.email ?? "Player";
   const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
   const recentMatches = matches.slice(0, 5);
+
+  const filteredClaimable = claimablePlayers.filter(
+    (p) =>
+      claimSearch === "" ||
+      p.name.toLowerCase().includes(claimSearch.toLowerCase()) ||
+      p.nickname.toLowerCase().includes(claimSearch.toLowerCase()),
+  );
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -353,6 +421,231 @@ export default function DashboardPage() {
         {dataLoading ? (
           <div className="flex items-center justify-center py-24">
             <div className="w-8 h-8 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : !player ? (
+          /* ── No player linked: claim or register new ──────────────────────── */
+          <div className="space-y-6">
+            {claimStatus === "pending" && (
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-6 flex gap-4">
+                <span className="text-2xl mt-0.5">⏳</span>
+                <div>
+                  <p className="font-bold text-amber-300 mb-1">
+                    Claim Pending Review
+                  </p>
+                  <p className="text-amber-200/60 text-sm leading-relaxed">
+                    Your request to claim a player profile has been submitted.
+                    An admin will review it shortly. You&apos;ll be able to
+                    register for events once it&apos;s approved.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {claimStatus === "rejected" && (
+              <div className="space-y-4">
+                <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 flex gap-4">
+                  <span className="text-2xl mt-0.5">✗</span>
+                  <div>
+                    <p className="font-bold text-red-400 mb-1">
+                      Claim Rejected
+                    </p>
+                    <p className="text-red-200/60 text-sm leading-relaxed">
+                      Your profile claim was not approved. You can submit a new
+                      claim or register as a new player.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setClaimStatus("none")}
+                  className="text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors"
+                >
+                  ← Try again
+                </button>
+              </div>
+            )}
+
+            {claimStatus === "none" && !showNewPlayerForm && (
+              <div className="space-y-4">
+                <p className="text-[#687FA3] text-sm">
+                  Your Google account is not linked to a player profile yet. Are
+                  you an existing player?
+                </p>
+
+                {/* ── Claim existing profile ────────────────────────── */}
+                <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl p-6 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Link2 size={14} className="text-[#00C8DC] shrink-0" />
+                    <p className="font-bold text-sm">
+                      Claim an existing profile
+                    </p>
+                  </div>
+                  <p className="text-[#687FA3] text-xs leading-relaxed">
+                    If you&apos;ve played in previous seasons, find your name
+                    below and submit a claim. An admin will verify and link your
+                    account.
+                  </p>
+
+                  <div className="relative">
+                    <Search
+                      size={13}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-[#687FA3]"
+                    />
+                    <input
+                      type="text"
+                      value={claimSearch}
+                      onChange={(e) => setClaimSearch(e.target.value)}
+                      placeholder="Search by name…"
+                      className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+                    />
+                  </div>
+
+                  {claimSearch && filteredClaimable.length === 0 && (
+                    <p className="text-[#687FA3] text-xs text-center py-2">
+                      No players found.
+                    </p>
+                  )}
+
+                  {filteredClaimable.length > 0 && (
+                    <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                      {filteredClaimable.map((p) => (
+                        <button
+                          key={p.player_id}
+                          type="button"
+                          onClick={() =>
+                            setClaimTarget(
+                              claimTarget === p.player_id ? null : p.player_id,
+                            )
+                          }
+                          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left text-sm transition-all border ${
+                            claimTarget === p.player_id
+                              ? "border-[#00C8DC]/50 bg-[#00C8DC]/5 text-white"
+                              : "border-transparent hover:border-[#687FA3]/20 hover:bg-white/2 text-white/80"
+                          }`}
+                        >
+                          <span className="font-medium">{p.name}</span>
+                          <span className="text-[#687FA3] text-xs">
+                            {p.nickname}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {claimError && (
+                    <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                      {claimError}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={() => void handleClaim()}
+                    disabled={!claimTarget || claimSubmitting}
+                    className="w-full flex items-center justify-center gap-2 bg-[#00C8DC] hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed text-[#0E1523] font-black text-[11px] uppercase tracking-widest py-3 rounded-xl transition-all"
+                  >
+                    {claimSubmitting ? (
+                      <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Link2 size={13} />
+                        Submit Claim
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* ── New player ───────────────────────────────────────── */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const full =
+                      (
+                        user.user_metadata?.full_name as string | undefined
+                      )?.trim() ??
+                      user.email?.split("@")[0] ??
+                      "";
+                    setNewPlayerName(full);
+                    setNewPlayerNickname(full.split(" ")[0] ?? "");
+                    setShowNewPlayerForm(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-transparent border border-[#687FA3]/20 hover:border-[#687FA3]/50 text-[#687FA3] hover:text-white font-black text-[11px] uppercase tracking-widest py-3 rounded-xl transition-all"
+                >
+                  <UserPlus size={13} />
+                  I&apos;m a new player
+                </button>
+              </div>
+            )}
+
+            {claimStatus === "none" && showNewPlayerForm && (
+              <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <UserPlus size={14} className="text-[#00C8DC] shrink-0" />
+                  <p className="font-bold text-sm">Create a new profile</p>
+                </div>
+                <p className="text-[#687FA3] text-xs leading-relaxed">
+                  This will create a new player record linked to your Google
+                  account. An admin will verify it before you can register for
+                  events.
+                </p>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-2">
+                    Full name
+                  </label>
+                  <input
+                    type="text"
+                    value={newPlayerName}
+                    onChange={(e) => setNewPlayerName(e.target.value)}
+                    placeholder="e.g. Juan dela Cruz"
+                    className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-2">
+                    Nickname
+                  </label>
+                  <input
+                    type="text"
+                    value={newPlayerNickname}
+                    onChange={(e) => setNewPlayerNickname(e.target.value)}
+                    placeholder="e.g. Juan"
+                    className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+                  />
+                </div>
+
+                {newPlayerError && (
+                  <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                    {newPlayerError}
+                  </p>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPlayerForm(false)}
+                    className="flex-1 border border-[#687FA3]/20 hover:border-[#687FA3]/50 text-[#687FA3] hover:text-white font-black text-[11px] uppercase tracking-widest py-3 rounded-xl transition-all"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleNewPlayer()}
+                    disabled={
+                      !newPlayerName.trim() ||
+                      !newPlayerNickname.trim() ||
+                      newPlayerSubmitting
+                    }
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#00C8DC] hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed text-[#0E1523] font-black text-[11px] uppercase tracking-widest py-3 rounded-xl transition-all"
+                  >
+                    {newPlayerSubmitting ? (
+                      <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      "Create Profile"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-12">
@@ -443,9 +736,7 @@ export default function DashboardPage() {
                           {eventLabel(s.event)}
                         </p>
                         <p className="text-[#687FA3] text-xs mt-0.5">
-                          {s.status === "pending_payment"
-                            ? "Payment incomplete"
-                            : "Registered"}{" "}
+                          Registered{" "}
                           {new Date(s.created_at).toLocaleDateString("en-PH", {
                             month: "short",
                             day: "numeric",
@@ -455,21 +746,23 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
                         <SignupBadge status={s.status} />
-                        {s.status === "pending_payment" && (
-                          <button
-                            onClick={() => void handleSignup(s.event_id)}
-                            disabled={payLoading}
-                            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-full transition-all"
-                          >
-                            {payLoading ? (
-                              <span className="w-3 h-3 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <>
-                                Complete Payment <ChevronRight size={12} />
-                              </>
-                            )}
-                          </button>
-                        )}
+                        {s.status === "registered" &&
+                          (s.event as Event & { requires_payment?: boolean })
+                            ?.requires_payment === true && (
+                            <button
+                              onClick={() => void handleSignup(s.event_id)}
+                              disabled={payLoading}
+                              className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-full transition-all"
+                            >
+                              {payLoading ? (
+                                <span className="w-3 h-3 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <>
+                                  Pay Now <ChevronRight size={12} />
+                                </>
+                              )}
+                            </button>
+                          )}
                       </div>
                     </div>
                   ))
@@ -478,74 +771,74 @@ export default function DashboardPage() {
                     You are not registered for any event yet.
                   </div>
                 )}
-
-                {/* Open events CTA */}
-                {openEvents.length > 0 && (
-                  <div className="pt-4 space-y-3">
-                    <p className="text-[#687FA3] text-[10px] font-black uppercase tracking-[0.3em]">
-                      Open for Registration
-                    </p>
-                    {openEvents.map((event) => (
-                      <div
-                        key={event.event_id}
-                        className="bg-[#162032] border border-[#00C8DC]/20 hover:border-[#00C8DC]/40 rounded-2xl px-5 py-5 flex items-center justify-between gap-4 transition-colors"
-                      >
-                        <div>
-                          <p className="font-bold">{eventLabel(event)}</p>
-                          {event.start_date && event.end_date && (
-                            <p className="text-[#687FA3] text-xs mt-0.5">
-                              {new Date(event.start_date).toLocaleDateString(
-                                "en-PH",
-                                { month: "short", day: "numeric" },
-                              )}
-                              {" – "}
-                              {new Date(event.end_date).toLocaleDateString(
-                                "en-PH",
-                                {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                },
-                              )}
-                            </p>
-                          )}
-                          <p className="text-[#00C8DC] text-xs font-bold mt-1">
-                            {(event as Event & { requires_payment?: boolean })
-                              .requires_payment === false
-                              ? "Free"
-                              : `₱${(event.registration_fee ?? 5).toLocaleString()} registration fee`}
-                          </p>
-                        </div>
-                        {!player || !player.is_profile_complete ? (
-                          <span className="text-amber-400/70 text-xs font-bold">
-                            Verification required
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => void handleSignup(event.event_id)}
-                            disabled={payLoading}
-                            className="flex items-center gap-2 bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[11px] uppercase tracking-widest px-5 py-2.5 rounded-full transition-all shrink-0"
-                          >
-                            {payLoading ? (
-                              <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <>
-                                Sign Up <ChevronRight size={14} />
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-
-                    {payError && (
-                      <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
-                        {payError}
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
+
+              {/* Open events CTA */}
+              {openEvents.length > 0 && (
+                <div className="pt-4 space-y-3">
+                  <p className="text-[#687FA3] text-[10px] font-black uppercase tracking-[0.3em]">
+                    Open for Registration
+                  </p>
+                  {openEvents.map((event) => (
+                    <div
+                      key={event.event_id}
+                      className="bg-[#162032] border border-[#00C8DC]/20 hover:border-[#00C8DC]/40 rounded-2xl px-5 py-5 flex items-center justify-between gap-4 transition-colors"
+                    >
+                      <div>
+                        <p className="font-bold">{eventLabel(event)}</p>
+                        {event.start_date && event.end_date && (
+                          <p className="text-[#687FA3] text-xs mt-0.5">
+                            {new Date(event.start_date).toLocaleDateString(
+                              "en-PH",
+                              { month: "short", day: "numeric" },
+                            )}
+                            {" – "}
+                            {new Date(event.end_date).toLocaleDateString(
+                              "en-PH",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              },
+                            )}
+                          </p>
+                        )}
+                        <p className="text-[#00C8DC] text-xs font-bold mt-1">
+                          {(event as Event & { requires_payment?: boolean })
+                            .requires_payment === false
+                            ? "Free"
+                            : `₱${(event.registration_fee ?? 5).toLocaleString()} registration fee`}
+                        </p>
+                      </div>
+                      {!player || !player.is_profile_complete ? (
+                        <span className="text-amber-400/70 text-xs font-bold">
+                          Verification required
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => void handleSignup(event.event_id)}
+                          disabled={payLoading}
+                          className="flex items-center gap-2 bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[11px] uppercase tracking-widest px-5 py-2.5 rounded-full transition-all shrink-0"
+                        >
+                          {payLoading ? (
+                            <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              Sign Up <ChevronRight size={14} />
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {payError && (
+                    <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
+                      {payError}
+                    </p>
+                  )}
+                </div>
+              )}
             </section>
 
             {/* ── Match History ─────────────────────────────────────────────── */}

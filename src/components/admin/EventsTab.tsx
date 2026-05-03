@@ -17,16 +17,14 @@ type AdminEventRow = {
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
   requires_payment?: boolean | null;
+  image_url?: string | null;
+  description?: string | null;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 };
 
-type SignupStatus =
-  | "registered"
-  | "waitlisted"
-  | "cancelled"
-  | "pending_payment";
+type SignupStatus = "registered" | "accepted" | "waitlisted" | "cancelled";
 
 type AdminSignupRow = {
   id: string;
@@ -54,6 +52,8 @@ type EventEditForm = {
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
   requires_payment: boolean;
+  image_url: string;
+  description: string;
 };
 
 type EventStatusFilter =
@@ -70,9 +70,9 @@ const labelCls =
 
 const SIGNUP_STATUS_OPTIONS: SignupStatus[] = [
   "registered",
+  "accepted",
   "waitlisted",
   "cancelled",
-  "pending_payment",
 ];
 
 export function EventsTab({ enabled }: { enabled: boolean }) {
@@ -116,6 +116,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   const [newEventStart, setNewEventStart] = useState("");
   const [newEventEnd, setNewEventEnd] = useState("");
   const [newEventFee, setNewEventFee] = useState("1000");
+  const [newEventImageUrl, setNewEventImageUrl] = useState("");
+  const [newEventDescription, setNewEventDescription] = useState("");
   const [newEventRegStatus, setNewEventRegStatus] = useState<"open" | "closed">(
     "open",
   );
@@ -208,6 +210,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
         registration_fee: newEventFee ? Number(newEventFee) : 1000,
         registration_status: newEventRegStatus,
         status: newEventStatus,
+        image_url: newEventImageUrl || undefined,
+        description: newEventDescription || undefined,
       }),
     });
 
@@ -226,6 +230,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
       setNewEventStart("");
       setNewEventEnd("");
       setNewEventFee("1000");
+      setNewEventImageUrl("");
+      setNewEventDescription("");
     }
     setCreating(false);
   };
@@ -279,6 +285,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
       registration_status: event.registration_status,
       status: event.status,
       requires_payment: event.requires_payment !== false,
+      image_url: event.image_url ?? "",
+      description: event.description ?? "",
     });
     setSuccess(null);
     setError(null);
@@ -321,6 +329,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
         registration_status: editForm.registration_status,
         status: editForm.status,
         requires_payment: editForm.requires_payment,
+        image_url: editForm.image_url || null,
+        description: editForm.description || null,
       }),
     });
 
@@ -925,6 +935,45 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                                 Requires payment
                               </label>
                             </div>
+                            <div className="sm:col-span-2 lg:col-span-3">
+                              <label className={labelCls}>
+                                Image URL (optional)
+                              </label>
+                              <input
+                                type="url"
+                                className={inputCls}
+                                placeholder="https://..."
+                                value={editForm.image_url}
+                                onChange={(ev) =>
+                                  setEditForm((prev) =>
+                                    prev
+                                      ? { ...prev, image_url: ev.target.value }
+                                      : prev,
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="sm:col-span-2 lg:col-span-3">
+                              <label className={labelCls}>
+                                Description (optional)
+                              </label>
+                              <textarea
+                                rows={3}
+                                className={inputCls}
+                                placeholder="Short description of the event..."
+                                value={editForm.description}
+                                onChange={(ev) =>
+                                  setEditForm((prev) =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          description: ev.target.value,
+                                        }
+                                      : prev,
+                                  )
+                                }
+                              />
+                            </div>
                           </div>
                           <div className="mt-3 flex gap-2">
                             <button
@@ -1211,6 +1260,26 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
               <option value="ongoing">Ongoing</option>
               <option value="completed">Completed</option>
             </select>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className={labelCls}>Image URL (optional)</label>
+            <input
+              type="url"
+              className={inputCls}
+              placeholder="https://..."
+              value={newEventImageUrl}
+              onChange={(ev) => setNewEventImageUrl(ev.target.value)}
+            />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className={labelCls}>Description (optional)</label>
+            <textarea
+              rows={3}
+              className={inputCls}
+              placeholder="Short description of the event..."
+              value={newEventDescription}
+              onChange={(ev) => setNewEventDescription(ev.target.value)}
+            />
           </div>
         </div>
 

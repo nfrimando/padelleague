@@ -13,6 +13,7 @@ type SiteHeaderProps = {
 };
 
 const NAV_LINKS = [
+  { href: "/events", label: "Events" },
   { href: "/matches", label: "Calendar" },
   { href: "/players", label: "Players" },
 ] as const;
