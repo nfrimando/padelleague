@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-const WEBSITE_VERSION = "0.8.16";
+const WEBSITE_VERSION = "0.8.17";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -269,12 +269,12 @@ export default function HomePage() {
                     MY DASHBOARD
                   </Link>
                 ) : (
-                  <button
-                    onClick={handleGoogleSignIn}
+                  <Link
+                    href="/join"
                     className="bg-[#162032] border border-[#687FA3]/20 text-white px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:border-[#00C8DC] transition-all"
                   >
                     JOIN THE LEAGUE
-                  </button>
+                  </Link>
                 )}
               </div>
             </div>

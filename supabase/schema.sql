@@ -129,12 +129,16 @@ CREATE TABLE public.player_claims (
 );
 CREATE TABLE public.signups (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  player_id bigint NOT NULL,
+  player_id bigint,
   event_type text NOT NULL,
   status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['registered'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  event_id bigint NOT NULL,
+  event_id bigint,
+  applicant_name text,
+  applicant_nickname text,
+  applicant_contact text,
+  applicant_email text,
   CONSTRAINT signups_pkey PRIMARY KEY (id),
   CONSTRAINT signups_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id),
   CONSTRAINT signups_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(event_id)

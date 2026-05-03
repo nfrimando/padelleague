@@ -12,13 +12,13 @@ type Section = {
 };
 
 function buildSections(events: Event[]): Section[] {
-  const open = events.filter((e) => e.registration_status === "open");
+  const open = events.filter(
+    (e) => e.registration_status === "open" && e.status !== "ongoing",
+  );
   const upcoming = events.filter(
     (e) => e.status === "upcoming" && e.registration_status !== "open",
   );
-  const ongoing = events.filter(
-    (e) => e.status === "ongoing" && e.registration_status !== "open",
-  );
+  const ongoing = events.filter((e) => e.status === "ongoing");
   const completed = events.filter((e) => e.status === "completed");
 
   return [
