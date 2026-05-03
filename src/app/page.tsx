@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-const WEBSITE_VERSION = "0.8.17";
+const WEBSITE_VERSION = "0.8.21";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -47,6 +47,8 @@ export default function HomePage() {
   const [recentMatches, setRecentMatches] = useState<MatchWithTeams[]>([]);
   const [loading, setLoading] = useState(true);
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
@@ -67,12 +69,33 @@ export default function HomePage() {
 
   // Auth state
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setAuthUser(data.user));
+    let active = true;
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (!active) {
+        return;
+      }
+      setAuthUser(data.user);
+      setAuthResolved(true);
+    });
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setAuthUser(session?.user ?? null);
+      setAuthResolved(true);
     });
-    return () => sub.subscription.unsubscribe();
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  const isAuthenticated = hasMounted && authResolved && authUser !== null;
+  const showGuestUi = hasMounted && !isAuthenticated;
 
   // Fetch all homepage data
   useEffect(() => {
@@ -80,6 +103,8 @@ export default function HomePage() {
 
     async function load() {
       setLoading(true);
+      setStats(null);
+      setRecentMatches([]);
 
       // ── 1. League stats ──────────────────────────────────────────────────
       const [
@@ -208,7 +233,7 @@ export default function HomePage() {
         <SiteHeader
           activePath="/"
           rightSlot={
-            authUser ? undefined : (
+            showGuestUi ? (
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
@@ -216,7 +241,7 @@ export default function HomePage() {
               >
                 Sign In
               </button>
-            )
+            ) : undefined
           }
         />
       </div>
@@ -248,12 +273,33 @@ export default function HomePage() {
                 players in the Philippines.
               </p>
               <div className="flex flex-wrap gap-3 md:gap-4 pt-2 md:pt-4 pb-12 md:pb-16">
+                {!hasMounted ? (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-[46px] w-[208px] rounded-full bg-[#162032] border border-[#00C8DC]/25 animate-pulse"
+                  />
+                ) : isAuthenticated ? (
+                  <Link
+                    href="/dashboard"
+                    className="bg-[#00C8DC] text-[#0E1523] px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:bg-white transition-all flex items-center gap-2 group"
+                  >
+                    MY DASHBOARD
+                    <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                ) : (
+                  <Link
+                    href="/join"
+                    className="bg-[#00C8DC] text-[#0E1523] px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:bg-white transition-all flex items-center gap-2 group"
+                  >
+                    JOIN THE LEAGUE
+                    <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                )}
                 <Link
                   href="/matches"
-                  className="bg-[#00C8DC] text-[#0E1523] px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:bg-white transition-all flex items-center gap-2 group"
+                  className="bg-[#162032] border border-[#00C8DC]/40 text-[#00C8DC] px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:border-[#00C8DC] transition-all"
                 >
-                  VIEW CALENDAR
-                  <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+                  VIEW MATCHES
                 </Link>
                 <Link
                   href="/events"
@@ -261,21 +307,6 @@ export default function HomePage() {
                 >
                   EVENTS
                 </Link>
-                {authUser ? (
-                  <Link
-                    href="/dashboard"
-                    className="bg-[#162032] border border-[#00C8DC]/40 text-[#00C8DC] px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:border-[#00C8DC] transition-all"
-                  >
-                    MY DASHBOARD
-                  </Link>
-                ) : (
-                  <Link
-                    href="/join"
-                    className="bg-[#162032] border border-[#687FA3]/20 text-white px-8 md:px-10 py-3 md:py-4 rounded-full font-black text-[11px] tracking-widest hover:border-[#00C8DC] transition-all"
-                  >
-                    JOIN THE LEAGUE
-                  </Link>
-                )}
               </div>
             </div>
           </div>
@@ -290,10 +321,8 @@ export default function HomePage() {
                 className="bg-[#162032] border border-[#687FA3]/10 p-5 sm:p-6 md:p-8 rounded-2xl shadow-2xl group hover:border-[#00C8DC]/50 transition-all duration-500"
               >
                 <div className="text-3xl md:text-4xl font-black mb-1 tracking-tighter group-hover:text-[#00C8DC] transition-colors">
-                  {loading ? (
-                    <span className="text-[#687FA3] text-xl animate-pulse">
-                      ...
-                    </span>
+                  {loading || stats === null ? (
+                    <span className="inline-flex h-9 md:h-10 w-16 md:w-24 animate-pulse rounded-md bg-[#687FA3]/30" />
                   ) : (
                     stat.value
                   )}
@@ -397,7 +426,7 @@ export default function HomePage() {
               href="/matches"
               className="hover:text-white transition-colors"
             >
-              Calendar
+              Matches
             </Link>
           </div>
         </div>

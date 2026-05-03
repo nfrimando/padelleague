@@ -90,7 +90,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
             Events
           </a>
           <a href="/matches" className={desktopLinkClass("/matches")}>
-            Calendar
+            Matches
           </a>
           <a href="/players" className={desktopLinkClass("/players")}>
             Players
@@ -157,7 +157,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                 href="/matches"
                 className="hover:text-[#00C8DC] transition-colors"
               >
-                Calendar
+                Matches
               </a>
               <a
                 href="/players"

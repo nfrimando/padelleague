@@ -12,6 +12,9 @@ import { Player } from "@/lib/types";
 function PlayersPageContent() {
   const [search, setSearch] = useState("");
   const [committedSearch, setCommittedSearch] = useState("");
+  const commitSearch = useCallback((value: string) => {
+    setCommittedSearch(value.trim());
+  }, []);
   const playerCardHrefBuilder = useCallback((playerId: string) => {
     return `/players/${encodeURIComponent(playerId)}`;
   }, []);
@@ -20,27 +23,11 @@ function PlayersPageContent() {
   const filteredPlayers = usePlayerSearch(players, search);
   const filteredPlayersForGrid = usePlayerSearch(players, committedSearch);
 
-  useEffect(() => {
-    const trimmedSearch = search.trim();
-    if (!trimmedSearch) {
-      setCommittedSearch("");
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setCommittedSearch(trimmedSearch);
-    }, 450);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [search]);
-
   const [randomPlayers, setRandomPlayers] = useState<Player[]>([]);
   const pickRandomPlayers = () => {
     if (players.length === 0) return [];
     const shuffled = [...players].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 8);
+    return shuffled.slice(0, 9);
   };
   useEffect(() => {
     if (players.length > 0) {
@@ -98,11 +85,16 @@ function PlayersPageContent() {
               maxSuggestions={6}
               placeholder="Search players by name or nickname..."
               onValueChange={setSearch}
-              onClear={() => setSearch("")}
+              onCommitValue={commitSearch}
+              onInputBlur={commitSearch}
+              onClear={() => {
+                setSearch("");
+                setCommittedSearch("");
+              }}
               onSelectPlayer={(player) => {
                 const selectedName = String(player.name || "").trim();
                 setSearch(selectedName);
-                setCommittedSearch(selectedName);
+                commitSearch(selectedName);
               }}
             />
           </div>

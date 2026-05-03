@@ -37,7 +37,7 @@ function PlayerNamePart({
 
   return (
     <Link
-      href={`/players?playerId=${encodeURIComponent(String(player.player_id))}`}
+      href={`/players/${encodeURIComponent(String(player.player_id))}`}
       className={baseClass}
     >
       {name}

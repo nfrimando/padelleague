@@ -122,7 +122,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (user === null) router.replace("/events/register");
+    if (user === null) router.replace("/");
   }, [user, router]);
 
   // ── Data ───────────────────────────────────────────────────────────────────
@@ -364,7 +364,7 @@ export default function DashboardPage() {
                 {player && (
                   <div className="mt-3 text-right">
                     <Link
-                      href={`/players?playerId=${encodeURIComponent(player.player_id)}`}
+                      href={`/players/${encodeURIComponent(String(player.player_id))}`}
                       className="text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors"
                     >
                       Full profile →
@@ -544,6 +544,13 @@ export default function DashboardPage() {
                           [oppTeam?.player_1?.name, oppTeam?.player_2?.name]
                             .filter(Boolean)
                             .join(" & ") || "TBD";
+                        const myPartnerLabel =
+                          myTeam == null
+                            ? "TBD"
+                            : String(myTeam.player_1?.player_id) ===
+                                String(player.player_id)
+                              ? (myTeam.player_2?.name ?? "TBD")
+                              : (myTeam.player_1?.name ?? "TBD");
 
                         // Set score summary e.g. "6‑3  3‑6  7‑5"
                         const setScores = (match.sets ?? [])
@@ -568,7 +575,9 @@ export default function DashboardPage() {
 
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-sm truncate">
-                                vs {oppLabel}
+                                {myPartnerLabel !== "TBD"
+                                  ? `You + ${myPartnerLabel} vs ${oppLabel}`
+                                  : `You vs ${oppLabel}`}
                               </p>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 <span className="text-[#687FA3] text-xs">
@@ -611,7 +620,7 @@ export default function DashboardPage() {
 
                       {matches.length > 5 && (
                         <Link
-                          href={`/players?playerId=${encodeURIComponent(player.player_id)}`}
+                          href={`/players/${encodeURIComponent(String(player.player_id))}`}
                           className="flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors py-4"
                         >
                           View all {matches.length} matches{" "}
