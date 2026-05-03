@@ -7,11 +7,16 @@ export async function GET(request: Request) {
   if (!authResult.ok) return authResult.response;
 
   const { supabase } = authResult;
+  const url = new URL(request.url);
+  const includeDeleted =
+    url.searchParams.get("include_deleted")?.toLowerCase() === "true";
 
-  const { data, error } = await supabase
-    .from("events")
-    .select("*")
-    .order("event_id", { ascending: false });
+  let query = supabase.from("events").select("*");
+  if (!includeDeleted) {
+    query = query.is("deleted_at", null);
+  }
+
+  const { data, error } = await query.order("event_id", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -106,8 +111,14 @@ export async function PATCH(request: Request) {
   if (typeof body.registration_fee === "number") {
     update.registration_fee = body.registration_fee;
   }
+  if (typeof body.requires_payment === "boolean") {
+    update.requires_payment = body.requires_payment;
+  }
   if (typeof body.start_date === "string") update.start_date = body.start_date;
   if (typeof body.end_date === "string") update.end_date = body.end_date;
+  if (Object.prototype.hasOwnProperty.call(body, "deleted_at") && body.deleted_at === null) {
+    update.deleted_at = null;
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "No fields to update." }, { status: 400 });
@@ -118,6 +129,64 @@ export async function PATCH(request: Request) {
   const { data, error } = await supabase
     .from("events")
     .update(update)
+    .eq("event_id", eventId)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!data) {
+    return NextResponse.json({ error: "Event not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({ event: data });
+}
+
+/** DELETE /api/admin/events — soft-delete (archive) an event
+ *  Body: { event_id }
+ */
+export async function DELETE(request: Request) {
+  const authResult = await getAuthorizedAdminClient(request);
+  if (!authResult.ok) return authResult.response;
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const eventId = typeof body.event_id === "number" ? body.event_id : null;
+  if (!eventId) {
+    return NextResponse.json({ error: "event_id is required." }, { status: 400 });
+  }
+
+  const { supabase } = authResult;
+
+  const { count, error: signupError } = await supabase
+    .from("signups")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .neq("status", "cancelled");
+
+  if (signupError) {
+    return NextResponse.json({ error: signupError.message }, { status: 500 });
+  }
+
+  if ((count ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        error: "Event has active signups. Cancel all signups before archiving.",
+      },
+      { status: 409 },
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("events")
+    .update({ deleted_at: new Date().toISOString() })
     .eq("event_id", eventId)
     .select("*")
     .maybeSingle();

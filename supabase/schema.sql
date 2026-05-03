@@ -18,6 +18,8 @@ CREATE TABLE public.events (
   status text NOT NULL DEFAULT 'upcoming'::text CHECK (status = ANY (ARRAY['upcoming'::text, 'ongoing'::text, 'completed'::text])),
   start_date date,
   end_date date,
+  deleted_at timestamp with time zone,
+  requires_payment boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT events_pkey PRIMARY KEY (event_id)

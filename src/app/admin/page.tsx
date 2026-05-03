@@ -254,7 +254,7 @@ function AdminPageContent() {
   return (
     <>
       <BackToHome />
-      <div className="p-6 max-w-[96rem] mx-auto">
+      <div className="w-full p-6 max-w-[96rem] mx-auto">
         <div className="w-full md:w-[24rem] md:max-w-[24rem] mx-auto mb-6">
           <h1 className="text-2xl font-bold mb-2">Admin</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -309,7 +309,7 @@ function AdminPageContent() {
             </div>
 
             {isAdmin ? (
-              <div className="w-full xl:max-w-[88rem] mx-auto rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 xl:p-6">
+              <div className="w-full md:w-3/4 mx-auto rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 xl:p-6">
                 <div className="space-y-4">
                   <div className="mx-auto w-full max-w-md text-center">
                     <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import {
   PLAYER_LOOKUP_DASHBOARD_SELECT,
 } from "@/lib/playerLookup";
 import { supabase } from "@/lib/supabase";
+import { useEventSignup } from "@/lib/useEventSignup";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
 import { formatMatchDate } from "@/lib/utils";
 import type { User } from "@supabase/supabase-js";
@@ -106,8 +107,12 @@ export default function DashboardPage() {
   const [signups, setSignups] = useState<SignupRow[]>([]);
   const [openEvents, setOpenEvents] = useState<Event[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [payLoading, setPayLoading] = useState(false);
-  const [payError, setPayError] = useState<string | null>(null);
+  const {
+    handleSignup,
+    loading: payLoading,
+    error: payError,
+    result: signupResult,
+  } = useEventSignup();
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -123,131 +128,136 @@ export default function DashboardPage() {
   }, [user, router]);
 
   // ── Data ───────────────────────────────────────────────────────────────────
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!user) return;
 
-    async function load() {
-      setDataLoading(true);
+    setDataLoading(true);
 
-      const [
-        { player: playerRow, error: playerLookupError },
-        { data: openEventRows },
-      ] = await Promise.all([
-        fetchPlayerByEmail<Player>({
-          email: user?.email,
-          select: PLAYER_LOOKUP_DASHBOARD_SELECT,
-        }),
-        supabase
-          .from("events")
-          .select(
-            "event_id, name, event_type, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at",
-          )
-          .eq("registration_status", "open")
-          .order("event_id", { ascending: false }),
-      ]);
+    const [
+      { player: playerRow, error: playerLookupError },
+      { data: openEventRows },
+    ] = await Promise.all([
+      fetchPlayerByEmail<Player>({
+        email: user?.email,
+        select: PLAYER_LOOKUP_DASHBOARD_SELECT,
+      }),
+      supabase
+        .from("events")
+        .select(
+          "event_id, name, event_type, registration_fee, requires_payment, start_date, end_date, registration_status, status, created_at, updated_at",
+        )
+        .eq("registration_status", "open")
+        .order("event_id", { ascending: false }),
+    ]);
 
-      if (playerLookupError) {
-        console.error("Failed player lookup on dashboard:", playerLookupError);
-      }
-
-      let p = playerRow;
-
-      // Auto-create a player record if this Google user has never registered before
-      if (!p && user?.email) {
-        const fullName: string =
-          (user.user_metadata?.full_name as string | undefined)?.trim() ||
-          user.email.split("@")[0];
-        const nickname = fullName.split(" ")[0] ?? fullName;
-
-        const { data: created } = await supabase
-          .from("players")
-          .insert({
-            name: fullName,
-            nickname: nickname,
-            email: user.email,
-            image_link:
-              (user.user_metadata?.avatar_url as string | undefined) ?? null,
-            is_profile_complete: false,
-            auto_renew_season: false,
-          })
-          .select("*")
-          .single();
-
-        p = (created as Player | null) ?? null;
-      }
-
-      setPlayer(p);
-
-      if (p) {
-        const supsResult = await supabase
-          .from("signups")
-          .select(
-            "id, event_id, status, event_type, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
-          )
-          .eq("player_id", p.player_id)
-          .order("created_at", { ascending: false });
-
-        // Supabase infers FK joins as arrays; cast via unknown for correct runtime shape
-        let typedSups = (supsResult.data ?? []) as unknown as SignupRow[];
-
-        // ── Auto-reconcile pending_payment signups ─────────────────────────
-        // If any signup is still pending_payment, ask the confirm API whether
-        // PayMongo has already received the payment. This fixes the case where
-        // the user paid but navigated away before the success page could confirm
-        // (or when the webhook hasn't fired on localhost).
-        const hasPending = typedSups.some(
-          (s) => s.status === "pending_payment",
-        );
-        if (hasPending) {
-          try {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            if (session) {
-              const res = await fetch("/api/payments/confirm", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${session.access_token}` },
-              });
-              if (res.ok) {
-                const json = (await res.json()) as { status: string };
-                if (json.status === "registered") {
-                  // Payment confirmed — re-fetch signups to get the updated status
-                  const refreshed = await supabase
-                    .from("signups")
-                    .select(
-                      "id, event_id, status, event_type, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
-                    )
-                    .eq("player_id", p!.player_id)
-                    .order("created_at", { ascending: false });
-
-                  typedSups = (refreshed.data ?? []) as unknown as SignupRow[];
-                }
-              }
-            }
-          } catch {
-            // Confirm failed silently — show whatever the DB has
-          }
-        }
-
-        setSignups(typedSups);
-
-        // Filter out events already signed up for
-        const signedUpEventIds = new Set(typedSups.map((s) => s.event_id));
-        setOpenEvents(
-          ((openEventRows ?? []) as Event[]).filter(
-            (s) => !signedUpEventIds.has(s.event_id),
-          ),
-        );
-      } else {
-        setSignups([]);
-        setOpenEvents((openEventRows ?? []) as Event[]);
-      }
-
-      setDataLoading(false);
+    if (playerLookupError) {
+      console.error("Failed player lookup on dashboard:", playerLookupError);
     }
 
-    load();
+    let p = playerRow;
+
+    // Auto-create a player record if this Google user has never registered before
+    if (!p && user?.email) {
+      const fullName: string =
+        (user.user_metadata?.full_name as string | undefined)?.trim() ||
+        user.email.split("@")[0];
+      const nickname = fullName.split(" ")[0] ?? fullName;
+
+      const { data: created } = await supabase
+        .from("players")
+        .insert({
+          name: fullName,
+          nickname: nickname,
+          email: user.email,
+          image_link:
+            (user.user_metadata?.avatar_url as string | undefined) ?? null,
+          is_profile_complete: false,
+          auto_renew_season: false,
+        })
+        .select("*")
+        .single();
+
+      p = (created as Player | null) ?? null;
+    }
+
+    setPlayer(p);
+
+    if (p) {
+      const supsResult = await supabase
+        .from("signups")
+        .select(
+          "id, event_id, status, event_type, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
+        )
+        .eq("player_id", p.player_id)
+        .order("created_at", { ascending: false });
+
+      // Supabase infers FK joins as arrays; cast via unknown for correct runtime shape
+      let typedSups = (supsResult.data ?? []) as unknown as SignupRow[];
+
+      // ── Auto-reconcile pending_payment signups ─────────────────────────
+      // If any signup is still pending_payment, ask the confirm API whether
+      // PayMongo has already received the payment. This fixes the case where
+      // the user paid but navigated away before the success page could confirm
+      // (or when the webhook hasn't fired on localhost).
+      const hasPending = typedSups.some((s) => s.status === "pending_payment");
+      if (hasPending) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session) {
+            const res = await fetch("/api/payments/confirm", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (res.ok) {
+              const json = (await res.json()) as { status: string };
+              if (json.status === "registered") {
+                // Payment confirmed — re-fetch signups to get the updated status
+                const refreshed = await supabase
+                  .from("signups")
+                  .select(
+                    "id, event_id, status, event_type, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
+                  )
+                  .eq("player_id", p!.player_id)
+                  .order("created_at", { ascending: false });
+
+                typedSups = (refreshed.data ?? []) as unknown as SignupRow[];
+              }
+            }
+          }
+        } catch {
+          // Confirm failed silently — show whatever the DB has
+        }
+      }
+
+      setSignups(typedSups);
+
+      // Filter out events already signed up for
+      const signedUpEventIds = new Set(typedSups.map((s) => s.event_id));
+      setOpenEvents(
+        ((openEventRows ?? []) as Event[]).filter(
+          (s) => !signedUpEventIds.has(s.event_id),
+        ),
+      );
+    } else {
+      setSignups([]);
+      setOpenEvents((openEventRows ?? []) as Event[]);
+    }
+
+    setDataLoading(false);
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    load();
+  }, [user, load]);
+
+  useEffect(() => {
+    if (signupResult === "registered") {
+      void load();
+    }
+  }, [signupResult, load]);
 
   // ── Match stats (from existing hook) ──────────────────────────────────────
   const {
@@ -266,44 +276,6 @@ export default function DashboardPage() {
     return myTeam && m.winner_team === myTeam.team_number;
   }).length;
   const losses = completedMatches.length - wins;
-
-  // ── Sign up for event ──────────────────────────────────────────────────────
-  async function handleEventSignup(eventId: number) {
-    if (!user) return;
-    setPayLoading(true);
-    setPayError(null);
-
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
-        setPayError("Session expired. Please sign in again.");
-        return;
-      }
-
-      const res = await fetch("/api/payments/create-link", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ event_id: eventId }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) {
-        setPayError(json.error ?? "Something went wrong.");
-        return;
-      }
-
-      window.location.href = json.checkout_url;
-    } catch {
-      setPayError("Network error. Please try again.");
-    } finally {
-      setPayLoading(false);
-    }
-  }
 
   async function handleSignOut() {
     try {
@@ -485,7 +457,7 @@ export default function DashboardPage() {
                         <SignupBadge status={s.status} />
                         {s.status === "pending_payment" && (
                           <button
-                            onClick={() => handleEventSignup(s.event_id)}
+                            onClick={() => void handleSignup(s.event_id)}
                             disabled={payLoading}
                             className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-full transition-all"
                           >
@@ -538,8 +510,10 @@ export default function DashboardPage() {
                             </p>
                           )}
                           <p className="text-[#00C8DC] text-xs font-bold mt-1">
-                            ₱{(event.registration_fee ?? 5).toLocaleString()}{" "}
-                            registration fee
+                            {(event as Event & { requires_payment?: boolean })
+                              .requires_payment === false
+                              ? "Free"
+                              : `₱${(event.registration_fee ?? 5).toLocaleString()} registration fee`}
                           </p>
                         </div>
                         {!player || !player.is_profile_complete ? (
@@ -548,7 +522,7 @@ export default function DashboardPage() {
                           </span>
                         ) : (
                           <button
-                            onClick={() => handleEventSignup(event.event_id)}
+                            onClick={() => void handleSignup(event.event_id)}
                             disabled={payLoading}
                             className="flex items-center gap-2 bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[11px] uppercase tracking-widest px-5 py-2.5 rounded-full transition-all shrink-0"
                           >

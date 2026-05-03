@@ -8,6 +8,7 @@ import {
   PLAYER_LOOKUP_REGISTER_SELECT,
 } from "@/lib/playerLookup";
 import { supabase } from "@/lib/supabase";
+import { useEventSignup } from "@/lib/useEventSignup";
 import type { User } from "@supabase/supabase-js";
 import type { Event } from "@/lib/types";
 
@@ -42,8 +43,12 @@ export default function RegisterPage() {
   const [signupStatus, setSignupStatus] = useState<SignupStatus>("none");
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("unknown");
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    handleSignup,
+    loading: submitting,
+    error,
+    result: signupResult,
+  } = useEventSignup();
 
   useEffect(() => {
     async function init() {
@@ -55,7 +60,7 @@ export default function RegisterPage() {
       const { data: eventData } = await supabase
         .from("events")
         .select(
-          "event_id, name, event_type, registration_fee, start_date, end_date, registration_status, status, created_at, updated_at",
+          "event_id, name, event_type, registration_fee, requires_payment, start_date, end_date, registration_status, status, created_at, updated_at",
         )
         .eq("registration_status", "open")
         .order("event_id", { ascending: false });
@@ -74,6 +79,12 @@ export default function RegisterPage() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (signupResult === "registered") {
+      setSignupStatus("registered");
+    }
+  }, [signupResult]);
 
   useEffect(() => {
     if (!user) {
@@ -164,43 +175,13 @@ export default function RegisterPage() {
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!user || !selectedEventId) return;
-
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
-        setError("Session expired. Please sign in again.");
-        return;
-      }
-
-      const res = await fetch("/api/payments/create-link", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ event_id: selectedEventId }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.error ?? "Something went wrong. Please try again.");
-        return;
-      }
-
-      window.location.href = json.checkout_url;
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    await handleSignup(selectedEventId);
   };
 
   const selectedEvent = events.find((e) => e.event_id === selectedEventId);
+  const isSelectedEventFree =
+    (selectedEvent as (Event & { requires_payment?: boolean }) | undefined)
+      ?.requires_payment === false;
   const fee = selectedEvent?.registration_fee ?? 5;
 
   if (loading) {
@@ -435,7 +416,7 @@ export default function RegisterPage() {
               <div className="flex items-center justify-between text-sm py-3 border-t border-white/10">
                 <span className="text-white/60">Registration fee</span>
                 <span className="font-bold text-[#00C8DC]">
-                  ₱{fee.toLocaleString()}
+                  {isSelectedEventFree ? "Free" : `₱${fee.toLocaleString()}`}
                 </span>
               </div>
 
@@ -449,6 +430,8 @@ export default function RegisterPage() {
                     <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
                     Processing…
                   </>
+                ) : isSelectedEventFree ? (
+                  "Register for Free"
                 ) : (
                   `Register & Pay ₱${fee.toLocaleString()}`
                 )}
