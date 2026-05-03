@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
 import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabase";
@@ -29,7 +29,7 @@ const COUNTRY_CODES = [
   { value: "other", label: "Other" },
 ] as const;
 
-export default function JoinPage() {
+function JoinPageContent() {
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -357,5 +357,19 @@ export default function JoinPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#0E1523]">
+          <div className="w-8 h-8 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <JoinPageContent />
+    </Suspense>
   );
 }
