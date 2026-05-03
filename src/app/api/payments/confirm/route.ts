@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 
   // 3. Find the most recent pending_payment signup for this player
   const { data: signup } = await serviceClient
-    .from("signups")
+    .from("signups_events")
     .select("id, event_id, status")
     .eq("player_id", player.player_id)
     .eq("status", "pending_payment")
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
   if (!signup) {
     // Check if already registered (race: webhook fired first)
     const { data: registered } = await serviceClient
-      .from("signups")
+      .from("signups_events")
       .select("id, event_id, status")
       .eq("player_id", player.player_id)
       .eq("status", "registered")
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
   if (payment.status === "paid") {
     // Payment already marked paid — just confirm the signup
     await serviceClient
-      .from("signups")
+      .from("signups_events")
       .update({ status: "registered", updated_at: new Date().toISOString() })
       .eq("id", signup.id);
 
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
 
     // Update signup → registered
     await serviceClient
-      .from("signups")
+      .from("signups_events")
       .update({ status: "registered", updated_at: new Date().toISOString() })
       .eq("id", signup.id);
 

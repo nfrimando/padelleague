@@ -71,7 +71,7 @@ export function makeUserClient(user: unknown = null) {
  *   makeServiceClient({
  *     players: { data: playerRow },
  *     seasons: [{ data: season }, { data: seasonExtra }],
- *     signups: { data: null },
+ *     signups_events: { data: null },
  *   })
  */
 export function makeServiceClient(

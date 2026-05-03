@@ -30,7 +30,6 @@ type AdminSignupRow = {
   id: string;
   event_id: number;
   player_id: number;
-  event_type: string;
   status: SignupStatus;
   created_at: string;
   updated_at: string;

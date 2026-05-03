@@ -135,7 +135,7 @@ describe("POST /api/payments/create-link", () => {
     setupClients({ id: "user-1", email: "robin@example.com", user_metadata: { full_name: "Robin Kwee" } }, {
       players:          { data: VERIFIED_PLAYER },
       events:           [{ data: OPEN_EVENT }, { data: { name: "Summer Open", registration_fee: 5 } }],
-      signups:          [{ data: null }, { data: SIGNUP_ROW }],       // check (none) + insert
+      signups_events:   [{ data: null }, { data: SIGNUP_ROW }],       // check (none) + insert
       payments:         [{ data: PAYMENT_ROW }, { data: null }],      // insert + update ref
       payments_paymongo: { data: null },                              // insert
     });
@@ -166,7 +166,7 @@ describe("POST /api/payments/create-link", () => {
     setupClients({ id: "user-1", email: "robin@example.com" }, {
       players:          { data: VERIFIED_PLAYER },
       events:           [{ data: OPEN_EVENT }, { data: null }],
-      signups:          { data: existingSignup },
+      signups_events:   { data: existingSignup },
       payments:         { data: existingPayment },
       payments_paymongo: { data: existingPmLink },
     });
@@ -185,7 +185,7 @@ describe("POST /api/payments/create-link", () => {
     setupClients({ id: "user-1", email: "robin@example.com" }, {
       players: { data: VERIFIED_PLAYER },
       events: [{ data: OPEN_EVENT }, { data: null }],
-      signups: { data: { id: "signup-id", status: "registered" } },
+      signups_events: { data: { id: "signup-id", status: "registered" } },
     });
     const res = await POST(makeRequest());
     expect(res.status).toBe(409);
@@ -217,7 +217,7 @@ describe("POST /api/payments/create-link", () => {
     setupClients({ id: "user-1", email: "robin@example.com", user_metadata: {} }, {
       players:  { data: VERIFIED_PLAYER },
       events:   [{ data: OPEN_EVENT }, { data: null }],
-      signups:  [{ data: null }, { data: SIGNUP_ROW }],
+      signups_events:  [{ data: null }, { data: SIGNUP_ROW }],
       payments: [{ data: PAYMENT_ROW }, { data: null }, { data: null }], // insert, update, delete (rollback)
     });
 

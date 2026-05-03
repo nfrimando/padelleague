@@ -28,7 +28,6 @@ type SignupRow = {
   id: string;
   event_id: number;
   status: string;
-  event_type: string;
   created_at: string;
   event: Pick<
     Event,
@@ -165,9 +164,9 @@ export default function DashboardPage() {
 
     if (p) {
       const supsResult = await supabase
-        .from("signups")
+        .from("signups_events")
         .select(
-          "id, event_id, status, event_type, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
+          "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
         )
         .eq("player_id", p.player_id)
         .order("created_at", { ascending: false });

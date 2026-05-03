@@ -192,7 +192,7 @@ export async function POST(request: Request) {
 
   // 5. Guard duplicate signups — but resume if payment is still pending
   const { data: existingSignup } = await serviceClient
-    .from("signups")
+    .from("signups_events")
     .select("id, status")
     .eq("player_id", player.player_id)
     .eq("event_id", eventId)
@@ -232,7 +232,7 @@ export async function POST(request: Request) {
         await serviceClient.from("payments_paymongo").delete().eq("payment_id", pmRow.payment_id);
         await serviceClient.from("payments").delete().eq("payment_id", pmRow.payment_id);
       }
-      await serviceClient.from("signups").delete().eq("id", existingSignup.id);
+      await serviceClient.from("signups_events").delete().eq("id", existingSignup.id);
       // Fall through to create fresh signup + payment below
     } else {
       return NextResponse.json(
@@ -263,13 +263,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create payment record." }, { status: 500 });
   }
 
-  // 7. Create the `signups` record (pending_payment)
+  // 7. Create the signup record (pending_payment)
   const { data: signup, error: signupInsertError } = await serviceClient
-    .from("signups")
+    .from("signups_events")
     .insert({
       event_id: eventId,
       player_id: player.player_id,
-      event_type: "event_registration",
       status: "pending_payment",
     })
     .select("id")
@@ -302,7 +301,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     // Roll back both records
-    await serviceClient.from("signups").delete().eq("id", signup.id);
+    await serviceClient.from("signups_events").delete().eq("id", signup.id);
     await serviceClient.from("payments").delete().eq("payment_id", payment.payment_id);
 
     return NextResponse.json(

@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 
 export type AdminMembershipApplication = {
   id: string;
-  event_type: string;
   status: "registered" | "accepted" | "waitlisted" | "cancelled";
   applicant_name: string | null;
   applicant_nickname: string | null;

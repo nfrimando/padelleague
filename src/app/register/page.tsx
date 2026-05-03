@@ -40,6 +40,7 @@ export default function RegisterPage() {
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("unknown");
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const {
     handleSignup,
     loading: submitting,
@@ -49,18 +50,20 @@ export default function RegisterPage() {
 
   useEffect(() => {
     async function init() {
-      const {
-        data: { user: u },
-      } = await supabase.auth.getUser();
+      const [{ data: authData }, { data: eventData }] = await Promise.all([
+        supabase.auth.getSession(),
+        supabase
+          .from("events")
+          .select(
+            "event_id, name, event_type, registration_fee, requires_payment, start_date, end_date, registration_status, status, created_at, updated_at",
+          )
+          .eq("registration_status", "open")
+          .order("event_id", { ascending: false }),
+      ]);
+
+      const u = authData.session?.user ?? null;
       if (u) setUser(u);
 
-      const { data: eventData } = await supabase
-        .from("events")
-        .select(
-          "event_id, name, event_type, registration_fee, requires_payment, start_date, end_date, registration_status, status, created_at, updated_at",
-        )
-        .eq("registration_status", "open")
-        .order("event_id", { ascending: false });
       if (eventData && eventData.length > 0) {
         setEvents(eventData as Event[]);
         setSelectedEventId(eventData[0].event_id);
@@ -85,45 +88,65 @@ export default function RegisterPage() {
   useEffect(() => {
     if (!user) {
       setSignupStatus("none");
+      setProfileLoading(false);
       return;
     }
 
+    let active = true;
+
     async function lookup() {
-      const { player: playerRow, error: playerLookupError } =
-        await fetchPlayerByEmail<RegisterLookupPlayer>({
-          email: user?.email,
-          select: PLAYER_LOOKUP_REGISTER_SELECT,
-        });
+      setProfileLoading(true);
+      try {
+        const { player: playerRow, error: playerLookupError } =
+          await fetchPlayerByEmail<RegisterLookupPlayer>({
+            email: user?.email,
+            select: PLAYER_LOOKUP_REGISTER_SELECT,
+          });
 
-      if (playerLookupError) {
-        console.error("Failed player lookup on register:", playerLookupError);
+        if (!active) return;
+
+        if (playerLookupError) {
+          console.error("Failed player lookup on register:", playerLookupError);
+        }
+
+        const pid = playerRow?.player_id ?? null;
+        setPlayerName(playerRow?.name ?? user!.user_metadata?.full_name ?? "");
+        if (playerRow) {
+          setVerifyStatus(
+            playerRow.is_profile_complete ? "verified" : "pending",
+          );
+        } else {
+          setVerifyStatus("unknown");
+        }
+
+        if (!pid || !selectedEventId) {
+          setSignupStatus("none");
+          return;
+        }
+
+        const { data: existing } = await supabase
+          .from("signups_events")
+          .select("status")
+          .eq("player_id", pid)
+          .eq("event_id", selectedEventId)
+          .maybeSingle();
+
+        if (!active) return;
+
+        let status = (existing?.status as SignupStatus) ?? "none";
+        setSignupStatus(status);
+      } finally {
+        if (active) {
+          setProfileLoading(false);
+        }
       }
-
-      const pid = playerRow?.player_id ?? null;
-      setPlayerName(playerRow?.name ?? user!.user_metadata?.full_name ?? "");
-      if (playerRow) {
-        setVerifyStatus(playerRow.is_profile_complete ? "verified" : "pending");
-      } else {
-        setVerifyStatus("unknown");
-      }
-
-      if (!pid || !selectedEventId) {
-        setSignupStatus("none");
-        return;
-      }
-
-      const { data: existing } = await supabase
-        .from("signups")
-        .select("status")
-        .eq("player_id", pid)
-        .eq("event_id", selectedEventId)
-        .maybeSingle();
-
-      let status = (existing?.status as SignupStatus) ?? "none";
-      setSignupStatus(status);
     }
 
-    lookup();
+    void lookup();
+
+    return () => {
+      active = false;
+    };
   }, [user, selectedEventId, profileRefreshKey]);
 
   const handleGoogleSignIn = async () => {
@@ -231,186 +254,220 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {user && verifyStatus === "pending" && signupStatus === "none" && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-5">
+          {user && profileLoading && signupStatus === "none" && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6 animate-pulse">
               <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-                {user.user_metadata?.avatar_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={user.user_metadata.avatar_url}
-                    alt="avatar"
-                    className="w-9 h-9 rounded-full"
-                  />
-                )}
-                <div>
-                  <p className="text-sm font-medium">{user.email}</p>
-                  <p className="text-xs text-white/40">Signed in with Google</p>
+                <div className="w-9 h-9 rounded-full bg-white/10" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-3 w-40 bg-white/10 rounded" />
+                  <div className="h-3 w-28 bg-white/10 rounded" />
                 </div>
               </div>
-              <div className="flex gap-3">
-                <span className="text-xl">⏳</span>
-                <div>
-                  <p className="font-bold text-amber-300 mb-1">
-                    Pending Verification
-                  </p>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    Your account is waiting for admin approval before you can
-                    register for an event. You&apos;ll be notified once
-                    you&apos;re verified.
-                  </p>
-                </div>
+              <div className="space-y-3">
+                <div className="h-4 w-32 bg-white/10 rounded" />
+                <div className="h-12 w-full bg-white/10 rounded-xl" />
               </div>
-              <button
-                onClick={handleSignOut}
-                className="text-xs text-white/40 hover:text-white transition-colors"
-              >
-                Use a different account
-              </button>
+              <div className="h-10 w-full bg-white/10 rounded-xl" />
             </div>
           )}
+
+          {user &&
+            !profileLoading &&
+            verifyStatus === "pending" &&
+            signupStatus === "none" && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-5">
+                <div className="flex items-center gap-3 pb-4 border-b border-white/10">
+                  {user.user_metadata?.avatar_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      alt="avatar"
+                      className="w-9 h-9 rounded-full"
+                    />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium">{user.email}</p>
+                    <p className="text-xs text-white/40">
+                      Signed in with Google
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <span className="text-xl">⏳</span>
+                  <div>
+                    <p className="font-bold text-amber-300 mb-1">
+                      Pending Verification
+                    </p>
+                    <p className="text-white/60 text-sm leading-relaxed">
+                      Your account is waiting for admin approval before you can
+                      register for an event. You&apos;ll be notified once
+                      you&apos;re verified.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="text-xs text-white/40 hover:text-white transition-colors"
+                >
+                  Use a different account
+                </button>
+              </div>
+            )}
 
           {user && signupStatus === "registered" && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
               <p className="text-white/50 text-sm">Signed in as</p>
               <p className="font-medium">{user.email}</p>
-              <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
+              <div className="mx-auto flex w-fit items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold">
                 ✓ Registered for{" "}
                 {selectedEvent ? eventLabel(selectedEvent) : "this event"}
               </div>
               <Link
                 href="/dashboard"
-                className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
+                className="mt-3 block text-[#00C8DC] text-sm font-bold hover:underline"
               >
                 Go to your dashboard →
               </Link>
-              <p className="text-white/40 text-xs">
-                Not in the league yet?{" "}
-                <Link href="/join" className="text-[#00C8DC] hover:underline">
-                  Submit a membership application
-                </Link>
-                .
-              </p>
             </div>
           )}
 
-          {user && verifyStatus === "unknown" && signupStatus === "none" && (
-            <ProfileLinkingPanel
-              user={user}
-              onProfileLinked={(linkedPlayer: Player) => {
-                setPlayerName(linkedPlayer.name ?? user.email ?? "");
-                setVerifyStatus(
-                  linkedPlayer.is_profile_complete ? "verified" : "pending",
-                );
-                setSignupStatus("none");
-                setProfileRefreshKey((prev) => prev + 1);
-              }}
-            />
-          )}
+          {user &&
+            !profileLoading &&
+            verifyStatus === "unknown" &&
+            signupStatus === "none" && (
+              <ProfileLinkingPanel
+                user={user}
+                onProfileLinked={(linkedPlayer: Player) => {
+                  setPlayerName(linkedPlayer.name ?? user.email ?? "");
+                  setVerifyStatus(
+                    linkedPlayer.is_profile_complete ? "verified" : "pending",
+                  );
+                  setSignupStatus("none");
+                  setProfileRefreshKey((prev) => prev + 1);
+                }}
+              />
+            )}
 
-          {user && signupStatus === "none" && verifyStatus === "verified" && (
-            <form
-              onSubmit={handleSubmit}
-              className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6"
-            >
-              <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-                {user.user_metadata?.avatar_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={user.user_metadata.avatar_url}
-                    alt="avatar"
-                    className="w-9 h-9 rounded-full"
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">
-                    {playerName || user.email}
-                  </p>
-                  <p className="text-xs text-white/40">Signed in with Google</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="text-xs text-white/40 hover:text-white transition-colors shrink-0"
-                >
-                  Switch
-                </button>
-              </div>
-
-              {events.length > 1 && (
-                <div>
-                  <label className="block text-sm font-medium text-white/70 mb-2">
-                    Event
-                  </label>
-                  <select
-                    value={selectedEventId ?? ""}
-                    onChange={(e) => setSelectedEventId(Number(e.target.value))}
-                    className="w-full bg-white text-slate-900 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-[#00C8DC] dark:bg-white/10 dark:text-white transition-colors"
-                  >
-                    {events.map((event) => (
-                      <option
-                        key={event.event_id}
-                        value={event.event_id}
-                        className="bg-white text-slate-900 dark:bg-[#0E1523] dark:text-white"
-                      >
-                        {eventLabel(event)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {selectedEvent && (
-                <div className="bg-[#162032] border border-[#687FA3]/10 rounded-xl px-4 py-3 text-sm space-y-1">
-                  <p className="font-bold text-white">
-                    {eventLabel(selectedEvent)}
-                  </p>
-                  {selectedEvent.start_date && selectedEvent.end_date && (
-                    <p className="text-[#687FA3]">
-                      {new Date(selectedEvent.start_date).toLocaleDateString(
-                        "en-PH",
-                        { month: "short", day: "numeric", year: "numeric" },
-                      )}
-                      {" – "}
-                      {new Date(selectedEvent.end_date).toLocaleDateString(
-                        "en-PH",
-                        { month: "short", day: "numeric", year: "numeric" },
-                      )}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {error && (
-                <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
-                  {error}
-                </p>
-              )}
-
-              <div className="flex items-center justify-between text-sm py-3 border-t border-white/10">
-                <span className="text-white/60">
-                  Registration fee (Pay later)
-                </span>
-                <span className="font-bold text-[#00C8DC]">
-                  {isSelectedEventFree ? "Free" : `₱${fee.toLocaleString()}`}
-                </span>
-              </div>
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
+          {user &&
+            !profileLoading &&
+            signupStatus === "none" &&
+            verifyStatus === "verified" && (
+              <form
+                onSubmit={handleSubmit}
+                className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6"
               >
-                {submitting ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-                    Registering…
-                  </>
-                ) : (
-                  "Register"
+                <div className="flex items-center gap-3 pb-4 border-b border-white/10">
+                  {user.user_metadata?.avatar_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      alt="avatar"
+                      className="w-9 h-9 rounded-full"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">
+                      {playerName || user.email}
+                    </p>
+                    <p className="text-xs text-white/40">
+                      Signed in with Google
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="text-xs text-white/40 hover:text-white transition-colors shrink-0"
+                  >
+                    Switch
+                  </button>
+                </div>
+
+                {events.length > 1 && (
+                  <div>
+                    <label className="block text-sm font-medium text-white/70 mb-2">
+                      Event
+                    </label>
+                    <select
+                      value={selectedEventId ?? ""}
+                      onChange={(e) =>
+                        setSelectedEventId(Number(e.target.value))
+                      }
+                      className="w-full bg-white text-slate-900 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:border-[#00C8DC] dark:bg-white/10 dark:text-white transition-colors"
+                    >
+                      {events.map((event) => (
+                        <option
+                          key={event.event_id}
+                          value={event.event_id}
+                          className="bg-white text-slate-900 dark:bg-[#0E1523] dark:text-white"
+                        >
+                          {eventLabel(event)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
-              </button>
-            </form>
-          )}
+
+                {selectedEvent && (
+                  <div className="bg-[#162032] border border-[#687FA3]/10 rounded-xl px-4 py-3 text-sm space-y-1">
+                    <p className="font-bold text-white">
+                      {eventLabel(selectedEvent)}
+                    </p>
+                    {selectedEvent.start_date && selectedEvent.end_date && (
+                      <p className="text-[#687FA3]">
+                        {new Date(selectedEvent.start_date).toLocaleDateString(
+                          "en-PH",
+                          { month: "short", day: "numeric", year: "numeric" },
+                        )}
+                        {" – "}
+                        {new Date(selectedEvent.end_date).toLocaleDateString(
+                          "en-PH",
+                          { month: "short", day: "numeric", year: "numeric" },
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {error && (
+                  <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
+                    {error}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between text-sm py-3 border-t border-white/10">
+                  <span className="text-white/60">
+                    Registration fee (Pay later)
+                  </span>
+                  <span className="font-bold text-[#00C8DC]">
+                    {isSelectedEventFree ? "Free" : `₱${fee.toLocaleString()}`}
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {submitting ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
+                      Registering…
+                    </>
+                  ) : (
+                    "Register"
+                  )}
+                </button>
+              </form>
+            )}
+
+          <div className="mt-6 flex justify-center">
+            <Link
+              href="/events"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/70 transition-colors hover:border-[#00C8DC]/60 hover:text-white"
+            >
+              ← Back to Events
+            </Link>
+          </div>
         </div>
       </div>
     </div>

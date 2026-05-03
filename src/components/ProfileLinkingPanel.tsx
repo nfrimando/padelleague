@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Link2, Search, UserPlus } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Player } from "@/lib/types";
@@ -19,7 +20,7 @@ type Props = {
   onProfileLinked?: (player: Player) => void;
 };
 
-export default function ProfileLinkingPanel({ user, onProfileLinked }: Props) {
+export default function ProfileLinkingPanel({ user }: Props) {
   const [loading, setLoading] = useState(true);
   const [claimStatus, setClaimStatus] = useState<ClaimStatus>("none");
   const [claimablePlayers, setClaimablePlayers] = useState<ClaimablePlayer[]>(
@@ -29,12 +30,6 @@ export default function ProfileLinkingPanel({ user, onProfileLinked }: Props) {
   const [claimTarget, setClaimTarget] = useState<number | null>(null);
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
-
-  const [showNewPlayerForm, setShowNewPlayerForm] = useState(false);
-  const [newPlayerName, setNewPlayerName] = useState("");
-  const [newPlayerNickname, setNewPlayerNickname] = useState("");
-  const [newPlayerSubmitting, setNewPlayerSubmitting] = useState(false);
-  const [newPlayerError, setNewPlayerError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,49 +116,6 @@ export default function ProfileLinkingPanel({ user, onProfileLinked }: Props) {
     }
   }, [claimTarget]);
 
-  const handleNewPlayer = useCallback(async () => {
-    if (!user.email || !newPlayerName.trim()) return;
-
-    setNewPlayerSubmitting(true);
-    setNewPlayerError(null);
-
-    try {
-      const name = newPlayerName.trim();
-      const nickname = newPlayerNickname.trim() || (name.split(" ")[0] ?? name);
-
-      const { data: created, error } = await supabase
-        .from("players")
-        .insert({
-          name,
-          nickname,
-          email: user.email,
-          image_link:
-            (user.user_metadata?.avatar_url as string | undefined) ?? null,
-          is_profile_complete: false,
-          auto_renew_season: false,
-        })
-        .select("*")
-        .single();
-
-      if (error || !created) {
-        setNewPlayerError(error?.message ?? "Failed to create profile.");
-        return;
-      }
-
-      onProfileLinked?.(created as Player);
-    } catch {
-      setNewPlayerError("Unexpected error. Please try again.");
-    } finally {
-      setNewPlayerSubmitting(false);
-    }
-  }, [
-    newPlayerName,
-    newPlayerNickname,
-    onProfileLinked,
-    user.email,
-    user.user_metadata,
-  ]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -212,7 +164,7 @@ export default function ProfileLinkingPanel({ user, onProfileLinked }: Props) {
         </div>
       )}
 
-      {claimStatus === "none" && !showNewPlayerForm && (
+      {claimStatus === "none" && (
         <div className="space-y-4">
           <p className="text-[#687FA3] text-sm">
             Your Google account is not linked to a player profile yet. Are you
@@ -296,93 +248,13 @@ export default function ProfileLinkingPanel({ user, onProfileLinked }: Props) {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              const full =
-                (user.user_metadata?.full_name as string | undefined)?.trim() ??
-                user.email?.split("@")[0] ??
-                "";
-              setNewPlayerName(full);
-              setNewPlayerNickname(full.split(" ")[0] ?? "");
-              setShowNewPlayerForm(true);
-            }}
+          <Link
+            href="/join"
             className="w-full flex items-center justify-center gap-2 bg-transparent border border-[#687FA3]/20 hover:border-[#687FA3]/50 text-[#687FA3] hover:text-white font-black text-[11px] uppercase tracking-widest py-3 rounded-xl transition-all"
           >
             <UserPlus size={13} />
             I&apos;m a new player
-          </button>
-        </div>
-      )}
-
-      {claimStatus === "none" && showNewPlayerForm && (
-        <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <UserPlus size={14} className="text-[#00C8DC] shrink-0" />
-            <p className="font-bold text-sm">Create a new profile</p>
-          </div>
-          <p className="text-[#687FA3] text-xs leading-relaxed">
-            This will create a new player record linked to your Google account.
-            An admin will verify it before you can register for events.
-          </p>
-
-          <div>
-            <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-2">
-              Full name
-            </label>
-            <input
-              type="text"
-              value={newPlayerName}
-              onChange={(e) => setNewPlayerName(e.target.value)}
-              placeholder="e.g. Juan dela Cruz"
-              className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-2">
-              Nickname
-            </label>
-            <input
-              type="text"
-              value={newPlayerNickname}
-              onChange={(e) => setNewPlayerNickname(e.target.value)}
-              placeholder="e.g. Juan"
-              className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
-            />
-          </div>
-
-          {newPlayerError && (
-            <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-              {newPlayerError}
-            </p>
-          )}
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setShowNewPlayerForm(false)}
-              className="flex-1 border border-[#687FA3]/20 hover:border-[#687FA3]/50 text-[#687FA3] hover:text-white font-black text-[11px] uppercase tracking-widest py-3 rounded-xl transition-all"
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleNewPlayer()}
-              disabled={
-                !newPlayerName.trim() ||
-                !newPlayerNickname.trim() ||
-                newPlayerSubmitting
-              }
-              className="flex-1 flex items-center justify-center gap-2 bg-[#00C8DC] hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed text-[#0E1523] font-black text-[11px] uppercase tracking-widest py-3 rounded-xl transition-all"
-            >
-              {newPlayerSubmitting ? (
-                <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-              ) : (
-                "Create Profile"
-              )}
-            </button>
-          </div>
+          </Link>
         </div>
       )}
     </div>

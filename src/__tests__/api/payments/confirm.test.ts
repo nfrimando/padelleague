@@ -70,7 +70,7 @@ describe("POST /api/payments/confirm", () => {
   it("TC-6.3 returns 404 status:not_found when no pending signup", async () => {
     setupClients({ id: "u1", email: "robin@example.com" }, {
       players: { data: PLAYER },
-      signups: [{ data: null }, { data: null }], // pending_payment query, then registered query
+      signups_events: [{ data: null }, { data: null }], // pending_payment query, then registered query
     });
     const res = await POST(makeRequest());
     expect(res.status).toBe(404);
@@ -82,7 +82,7 @@ describe("POST /api/payments/confirm", () => {
   it("TC-6.4 returns registered when webhook already confirmed signup", async () => {
     setupClients({ id: "u1", email: "robin@example.com" }, {
       players: { data: PLAYER },
-      signups: [
+      signups_events: [
         { data: null },                                        // pending_payment → none
         { data: { id: "signup-id", status: "registered" } },  // registered → found
       ],
@@ -99,7 +99,7 @@ describe("POST /api/payments/confirm", () => {
 
     setupClients({ id: "u1", email: "robin@example.com" }, {
       players:          { data: PLAYER },
-      signups:          [{ data: PENDING_SIGNUP }, { data: null }], // pending + update
+      signups_events:   [{ data: PENDING_SIGNUP }, { data: null }], // pending + update
       payments:         [{ data: PAYMENT_ROW }, { data: null }],    // find + update
       payments_paymongo: { data: PM_ROW },
     });
@@ -124,7 +124,7 @@ describe("POST /api/payments/confirm", () => {
 
     setupClients({ id: "u1", email: "robin@example.com" }, {
       players:          { data: PLAYER },
-      signups:          { data: PENDING_SIGNUP },
+      signups_events:   { data: PENDING_SIGNUP },
       payments:         { data: PAYMENT_ROW },
       payments_paymongo: { data: PM_ROW },
     });
@@ -139,7 +139,7 @@ describe("POST /api/payments/confirm", () => {
   it("TC-6.7 returns pending when no payment record found", async () => {
     setupClients({ id: "u1", email: "robin@example.com" }, {
       players: { data: PLAYER },
-      signups: { data: PENDING_SIGNUP },
+      signups_events: { data: PENDING_SIGNUP },
       payments: { data: null },
     });
 
@@ -153,7 +153,7 @@ describe("POST /api/payments/confirm", () => {
   it("TC-6.8 confirms signup immediately when payment is already paid in DB", async () => {
     setupClients({ id: "u1", email: "robin@example.com" }, {
       players:  { data: PLAYER },
-      signups:  [{ data: PENDING_SIGNUP }, { data: null }], // find + update
+      signups_events:  [{ data: PENDING_SIGNUP }, { data: null }], // find + update
       payments: { data: { ...PAYMENT_ROW, status: "paid" } },
     });
 

@@ -127,21 +127,30 @@ CREATE TABLE public.player_claims (
   CONSTRAINT player_claims_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id),
   CONSTRAINT player_claims_player_email_unique UNIQUE (player_id, claimed_by_email)
 );
-CREATE TABLE public.signups (
+CREATE TABLE public.signups_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  player_id bigint,
-  event_type text NOT NULL,
-  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['registered'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
+  player_id bigint NOT NULL,
+  event_id bigint NOT NULL,
+  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['registered'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text, 'pending_payment'::text])),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  event_id bigint,
+  CONSTRAINT signups_events_pkey PRIMARY KEY (id),
+  CONSTRAINT signups_events_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id),
+  CONSTRAINT signups_events_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(event_id),
+  CONSTRAINT signups_events_player_event_unique UNIQUE (player_id, event_id)
+);
+CREATE TABLE public.signups_players (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  player_id bigint,
+  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['registered'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
   applicant_name text,
   applicant_nickname text,
   applicant_contact text,
   applicant_email text,
-  CONSTRAINT signups_pkey PRIMARY KEY (id),
-  CONSTRAINT signups_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id),
-  CONSTRAINT signups_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(event_id)
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT signups_players_pkey PRIMARY KEY (id),
+  CONSTRAINT signups_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
 );
 CREATE TABLE public.teams (
   team_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
