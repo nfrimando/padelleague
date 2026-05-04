@@ -20,7 +20,7 @@ export type LeaderboardEvent = {
   status: "upcoming" | "ongoing" | "completed";
 };
 
-type MatchRow = { match_id: number; winner_team: number | null; date_local: string | null; type: string | null };
+type MatchRow = { match_id: number; winner_team: number | null; date_local: string | null; match_type: string | null };
 type TeamRow = { match_id: number; team_number: number | null; player_1_id: number | null; player_2_id: number | null };
 type RatingRow = { match_id: number; player_id: number | string; rating_pre: number | null; rating_post: number | null; formula_name: string | null };
 type PlayerRow = { player_id: number | string; name: string | null; nickname: string | null; image_link: string | null };
