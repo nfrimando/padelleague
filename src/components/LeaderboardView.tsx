@@ -60,6 +60,19 @@ function RankBadge({ rank }: { rank: number }) {
   return <span className="text-[#687FA3]">{rank}</span>;
 }
 
+function winRate(row: LeaderboardRow): number | null {
+  return row.matchesPlayed > 0 ? row.wins / row.matchesPlayed : null;
+}
+
+function compareWinRates(a: LeaderboardRow, b: LeaderboardRow): number {
+  const aRate = winRate(a);
+  const bRate = winRate(b);
+  if (aRate !== null && bRate !== null && aRate !== bRate) return bRate - aRate;
+  if (aRate === null && bRate !== null) return 1;
+  if (aRate !== null && bRate === null) return -1;
+  return 0;
+}
+
 function sortRows(rows: LeaderboardRow[], key: SortKey, dir: SortDir): LeaderboardRow[] {
   return [...rows].sort((a, b) => {
     let aVal: number | null = null;
@@ -82,8 +95,8 @@ function sortRows(rows: LeaderboardRow[], key: SortKey, dir: SortDir): Leaderboa
         bVal = b.wins;
         break;
       case "winRate":
-        aVal = a.matchesPlayed > 0 ? a.wins / a.matchesPlayed : null;
-        bVal = b.matchesPlayed > 0 ? b.wins / b.matchesPlayed : null;
+        aVal = winRate(a);
+        bVal = winRate(b);
         break;
     }
     if (aVal === null && bVal === null) return a.name.localeCompare(b.name);
@@ -92,13 +105,10 @@ function sortRows(rows: LeaderboardRow[], key: SortKey, dir: SortDir): Leaderboa
     const cmp = bVal - aVal;
     const primary = dir === "desc" ? cmp : -cmp;
     if (primary !== 0) return primary;
-    // Tiebreaker: win rate (always descending)
+    // Tiebreaker when sorting by wins: win rate (always descending)
     if (key === "wins") {
-      const aRate = a.matchesPlayed > 0 ? a.wins / a.matchesPlayed : null;
-      const bRate = b.matchesPlayed > 0 ? b.wins / b.matchesPlayed : null;
-      if (aRate !== null && bRate !== null && aRate !== bRate) return bRate - aRate;
-      if (aRate === null && bRate !== null) return 1;
-      if (aRate !== null && bRate === null) return -1;
+      const rateCmp = compareWinRates(a, b);
+      if (rateCmp !== 0) return rateCmp;
     }
     return a.name.localeCompare(b.name);
   });
