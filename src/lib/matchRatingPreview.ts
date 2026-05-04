@@ -3,6 +3,7 @@ import {
   MatchPlayerSummary,
   MatchRatingPreview,
 } from "@/lib/types";
+import { calculateRatings } from "@/lib/ratingCalculator";
 
 type MatchRatingPreviewInput = {
   loadedMatchDetails: LoadedMatchDetails | null;
@@ -86,105 +87,47 @@ export function calculateMatchRatingPreview({
 
   const [t1p1, t1p2, t2p1, t2p2] = players as MatchPlayerSummary[];
 
-  const ELO_VAR_1 = 2.67;
-  const UTR_VAR_1 = 0.15;
-  const UTR_VAR_2 = 1.5;
-  const UTR_VAR_3 = 0.5;
-  const UTR_VAR_4 = 0.08;
-  const UTR_VAR_5 = 2;
-  const GAMES_NORMALIZATION = 1 - 14 / 32;
-
   const pre1 = loadedMatchDetails.preRatingsV3[t1p1.player_id] as number;
   const pre2 = loadedMatchDetails.preRatingsV3[t1p2.player_id] as number;
   const pre3 = loadedMatchDetails.preRatingsV3[t2p1.player_id] as number;
   const pre4 = loadedMatchDetails.preRatingsV3[t2p2.player_id] as number;
 
-  let team1SetsWon = 0;
-  let team2SetsWon = 0;
-  for (const set of sets) {
-    if (set.team1Games > set.team2Games) {
-      team1SetsWon += 1;
-    } else {
-      team2SetsWon += 1;
-    }
-  }
+  const result = calculateRatings(
+    {
+      sets,
+      team1: {
+        player1: { playerId: t1p1.player_id, preMatchRating: pre1 },
+        player2: { playerId: t1p2.player_id, preMatchRating: pre2 },
+      },
+      team2: {
+        player1: { playerId: t2p1.player_id, preMatchRating: pre3 },
+        player2: { playerId: t2p2.player_id, preMatchRating: pre4 },
+      },
+    },
+    "v3",
+  );
 
-  const winnerTeam =
-    team1SetsWon > team2SetsWon ? 1 : team2SetsWon > team1SetsWon ? 2 : null;
-  if (!winnerTeam) {
+  if (!result.winnerTeam) {
     return {
       error: "Set scores must produce a clear winner to preview ratings.",
     };
   }
 
-  const avg1 = (pre1 + pre2) / 2;
-  const avg2 = (pre3 + pre4) / 2;
-
-  const elo1 = Math.pow(10, avg1 / ELO_VAR_1);
-  const elo2 = Math.pow(10, avg2 / ELO_VAR_1);
-  const ewp1 = elo1 / (elo1 + elo2);
-  const ewp2 = elo2 / (elo1 + elo2);
-
-  const totalGames1 = sets.reduce((sum, s) => sum + s.team1Games, 0);
-  const totalGames2 = sets.reduce((sum, s) => sum + s.team2Games, 0);
-  const totalGames = totalGames1 + totalGames2;
-  const actualPerf1 = totalGames > 0 ? totalGames1 / totalGames : 0;
-  const actualPerf2 = totalGames > 0 ? totalGames2 / totalGames : 0;
-
-  const calcReward = (actualPerf: number, ewp: number) => {
-    if (actualPerf <= ewp) {
-      return 0;
-    }
-
-    const ratio = (actualPerf - ewp) / GAMES_NORMALIZATION;
-    const raw =
-      Math.pow(ratio, UTR_VAR_5) * (UTR_VAR_2 - UTR_VAR_1) + UTR_VAR_1;
-    return Math.min(raw, UTR_VAR_3);
-  };
-
-  let delta1 = 0;
-  let delta2 = 0;
-  if (winnerTeam === 1) {
-    const reward = Math.max(UTR_VAR_4, calcReward(actualPerf1, ewp1));
-    delta1 = reward;
-    delta2 = -reward;
-  } else if (winnerTeam === 2) {
-    const reward = Math.max(UTR_VAR_4, calcReward(actualPerf2, ewp2));
-    delta2 = reward;
-    delta1 = -reward;
-  }
+  const playerById = new Map<number, MatchPlayerSummary>([
+    [t1p1.player_id, t1p1],
+    [t1p2.player_id, t1p2],
+    [t2p1.player_id, t2p1],
+    [t2p2.player_id, t2p2],
+  ]);
 
   return {
-    winnerTeam,
-    rows: [
-      {
-        player: t1p1,
-        team: 1,
-        before: pre1,
-        after: pre1 + delta1,
-        delta: delta1,
-      },
-      {
-        player: t1p2,
-        team: 1,
-        before: pre2,
-        after: pre2 + delta1,
-        delta: delta1,
-      },
-      {
-        player: t2p1,
-        team: 2,
-        before: pre3,
-        after: pre3 + delta2,
-        delta: delta2,
-      },
-      {
-        player: t2p2,
-        team: 2,
-        before: pre4,
-        after: pre4 + delta2,
-        delta: delta2,
-      },
-    ],
+    winnerTeam: result.winnerTeam,
+    rows: result.ratings.map((rating) => ({
+      player: playerById.get(rating.playerId) as MatchPlayerSummary,
+      team: rating.team,
+      before: rating.ratingPre,
+      after: rating.ratingPost,
+      delta: rating.ratingDelta,
+    })),
   };
 }

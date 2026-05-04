@@ -7,6 +7,7 @@ import {
   normalizeOptionalString,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import { calculateRatings } from "@/lib/ratingCalculator";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 
 type MatchStatus = "scheduled" | "completed" | "forfeit" | "cancelled";
@@ -197,101 +198,6 @@ function validatePayload(payload: unknown): ValidationResult {
           : normalizeOptionalString(payload.type),
       sets: parsedSets,
     },
-  };
-}
-
-function calculateV3Ratings(input: {
-  sets: SetScoreInput[];
-  team1: { player1: { playerId: number; preMatchRating: number }; player2: { playerId: number; preMatchRating: number } };
-  team2: { player1: { playerId: number; preMatchRating: number }; player2: { playerId: number; preMatchRating: number } };
-}) {
-  const ELO_VAR_1 = 2.67;
-  const UTR_VAR_1 = 0.15;
-  const UTR_VAR_2 = 1.5;
-  const UTR_VAR_3 = 0.5;
-  const UTR_VAR_4 = 0.08;
-  const UTR_VAR_5 = 2;
-  const GAMES_NORMALIZATION = 1 - 14 / 32;
-
-  let team1SetsWon = 0;
-  let team2SetsWon = 0;
-  for (const set of input.sets) {
-    if (set.team1Games > set.team2Games) {
-      team1SetsWon += 1;
-    } else if (set.team2Games > set.team1Games) {
-      team2SetsWon += 1;
-    }
-  }
-
-  const winnerTeam = team1SetsWon > team2SetsWon ? 1 : team2SetsWon > team1SetsWon ? 2 : null;
-
-  const avgRating1 =
-    (input.team1.player1.preMatchRating + input.team1.player2.preMatchRating) /
-    2;
-  const avgRating2 =
-    (input.team2.player1.preMatchRating + input.team2.player2.preMatchRating) /
-    2;
-
-  const elo1 = Math.pow(10, avgRating1 / ELO_VAR_1);
-  const elo2 = Math.pow(10, avgRating2 / ELO_VAR_1);
-  const ewp1 = elo1 / (elo1 + elo2);
-  const ewp2 = elo2 / (elo1 + elo2);
-
-  const totalGames1 = input.sets.reduce((sum, s) => sum + s.team1Games, 0);
-  const totalGames2 = input.sets.reduce((sum, s) => sum + s.team2Games, 0);
-  const totalGames = totalGames1 + totalGames2;
-  const actualPerf1 = totalGames > 0 ? totalGames1 / totalGames : 0;
-  const actualPerf2 = totalGames > 0 ? totalGames2 / totalGames : 0;
-
-  const calcReward = (actualPerf: number, ewp: number): number => {
-    if (actualPerf <= ewp) return 0;
-    const ratio = (actualPerf - ewp) / GAMES_NORMALIZATION;
-    const raw = Math.pow(ratio, UTR_VAR_5) * (UTR_VAR_2 - UTR_VAR_1) + UTR_VAR_1;
-    return Math.min(raw, UTR_VAR_3);
-  };
-
-  let delta1 = 0;
-  let delta2 = 0;
-  if (winnerTeam === 1) {
-    const reward = Math.max(UTR_VAR_4, calcReward(actualPerf1, ewp1));
-    delta1 = reward;
-    delta2 = -reward;
-  } else if (winnerTeam === 2) {
-    const reward = Math.max(UTR_VAR_4, calcReward(actualPerf2, ewp2));
-    delta2 = reward;
-    delta1 = -reward;
-  }
-
-  return {
-    winnerTeam,
-    team1SetsWon,
-    team2SetsWon,
-    ratings: [
-      {
-        playerId: input.team1.player1.playerId,
-        ratingPre: input.team1.player1.preMatchRating,
-        ratingPost: input.team1.player1.preMatchRating + delta1,
-        result: winnerTeam === 1 ? "win" : "loss",
-      },
-      {
-        playerId: input.team1.player2.playerId,
-        ratingPre: input.team1.player2.preMatchRating,
-        ratingPost: input.team1.player2.preMatchRating + delta1,
-        result: winnerTeam === 1 ? "win" : "loss",
-      },
-      {
-        playerId: input.team2.player1.playerId,
-        ratingPre: input.team2.player1.preMatchRating,
-        ratingPost: input.team2.player1.preMatchRating + delta2,
-        result: winnerTeam === 2 ? "win" : "loss",
-      },
-      {
-        playerId: input.team2.player2.playerId,
-        ratingPre: input.team2.player2.preMatchRating,
-        ratingPost: input.team2.player2.preMatchRating + delta2,
-        result: winnerTeam === 2 ? "win" : "loss",
-      },
-    ],
   };
 }
 
@@ -592,7 +498,7 @@ export async function PATCH(
       );
     }
 
-    const calculation = calculateV3Ratings({
+    const calculation = calculateRatings({
       sets,
       team1: {
         player1: {
@@ -614,7 +520,7 @@ export async function PATCH(
           preMatchRating: preRatings[3] as number,
         },
       },
-    });
+    }, "v3");
 
     const { data: updatedMatchRow, error: matchUpdateError } = await supabase
       .from("matches")
@@ -707,7 +613,7 @@ export async function PATCH(
       match_id: matchId,
       rating_pre: rating.ratingPre,
       rating_post: rating.ratingPost,
-      result: rating.result,
+      result: rating.team === calculation.winnerTeam ? "win" : "loss",
       formula_name: "v3",
     }));
 
