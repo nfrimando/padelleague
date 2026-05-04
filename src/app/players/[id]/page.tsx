@@ -98,7 +98,26 @@ function PlayerProfilePageContent() {
       events.map((event) => [Number(event.event_id), event] as const),
     );
 
-    return getEventsFromMatches(playerMatches).map((id) => ({
+    const toStartTime = (eventId: number) => {
+      const raw = eventRowsById.get(eventId)?.start_date;
+      if (!raw) {
+        return Number.NEGATIVE_INFINITY;
+      }
+      const parsed = Date.parse(raw);
+      return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+    };
+
+    const sortedEventIds = [...getEventsFromMatches(playerMatches)].sort(
+      (a, b) => {
+        const byStartDate = toStartTime(b) - toStartTime(a);
+        if (byStartDate !== 0) {
+          return byStartDate;
+        }
+        return b - a;
+      },
+    );
+
+    return sortedEventIds.map((id) => ({
       id,
       label: formatEventOptionLabel(
         eventRowsById.get(id) ?? {
@@ -352,7 +371,7 @@ function PlayerProfilePageContent() {
                 </div>
                 <div className="h-20 min-w-0 text-center flex flex-col justify-center">
                   <div
-                    className="text-sm sm:text-base font-bold text-sky-700 dark:text-sky-200 leading-tight whitespace-normal break-words"
+                    className="px-1 text-[11px] sm:text-xs md:text-sm font-semibold text-sky-700 dark:text-sky-200 leading-snug whitespace-normal break-words"
                     title={mostRecentEventLabel ?? "N/A"}
                   >
                     {mostRecentEventLabel ?? "N/A"}

@@ -16,26 +16,16 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
   const selectedEventId: number | "ALL" =
     event === "ALL" ? "ALL" : event ? Number(event) : (defaultEventId ?? "ALL");
 
-  const selectedEvent =
-    typeof selectedEventId === "number"
-      ? events.find((e) => e.event_id === selectedEventId)
-      : undefined;
-
   const selectedType =
     type && type !== ALL_MATCH_FILTER ? type : ALL_MATCH_FILTER;
 
-  const rows = await getLeaderboard(
-    selectedEventId,
-    selectedEvent?.status,
-    selectedType,
-  );
+  const rows = await getLeaderboard(selectedEventId, selectedType);
 
   return (
     <LeaderboardView
       events={events}
       rows={rows}
       selectedEventId={selectedEventId}
-      selectedEventStatus={selectedEvent?.status}
       selectedType={selectedType}
     />
   );

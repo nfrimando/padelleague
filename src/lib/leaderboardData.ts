@@ -47,6 +47,7 @@ export async function fetchLeaderboardEvents(): Promise<LeaderboardEvent[]> {
   const { data, error } = await db
     .from("events")
     .select("event_id, name, status, start_date, end_date")
+    .order("start_date", { ascending: false, nullsFirst: false })
     .order("event_id", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -221,17 +222,10 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
   return rows;
 }
 
-// Completed events: cache forever — data will never change
-const getCompletedLeaderboard = unstable_cache(
+// Event-specific leaderboard: refresh every 2 minutes
+const getEventLeaderboard = unstable_cache(
   (eventId: number, matchType: string) => fetchLeaderboardData(eventId, matchType),
-  ["leaderboard-completed"],
-  { revalidate: false },
-);
-
-// Ongoing events: refresh every 2 minutes
-const getOngoingLeaderboard = unstable_cache(
-  (eventId: number, matchType: string) => fetchLeaderboardData(eventId, matchType),
-  ["leaderboard-ongoing"],
+  ["leaderboard-event"],
   { revalidate: 120 },
 );
 
@@ -244,10 +238,8 @@ const getAllTimeLeaderboard = unstable_cache(
 
 export async function getLeaderboard(
   eventId: number | "ALL",
-  eventStatus: "upcoming" | "ongoing" | "completed" | undefined,
   matchType: string,
 ): Promise<LeaderboardRow[]> {
   if (eventId === "ALL") return getAllTimeLeaderboard(matchType);
-  if (eventStatus === "completed") return getCompletedLeaderboard(eventId, matchType);
-  return getOngoingLeaderboard(eventId, matchType);
+  return getEventLeaderboard(eventId, matchType);
 }

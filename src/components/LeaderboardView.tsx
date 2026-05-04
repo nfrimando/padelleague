@@ -95,6 +95,10 @@ function compareWinRates(a: LeaderboardRow, b: LeaderboardRow): number {
   return 0;
 }
 
+function compareLeastSetsLost(a: LeaderboardRow, b: LeaderboardRow): number {
+  return a.setsLost - b.setsLost;
+}
+
 function sortRows(
   rows: LeaderboardRow[],
   key: SortKey,
@@ -136,6 +140,9 @@ function sortRows(
       const rateCmp = compareWinRates(a, b);
       if (rateCmp !== 0) return rateCmp;
     }
+    // Final performance tiebreaker: fewer sets lost ranks higher.
+    const setsLostCmp = compareLeastSetsLost(a, b);
+    if (setsLostCmp !== 0) return setsLostCmp;
     return a.name.localeCompare(b.name);
   });
 }
@@ -148,15 +155,15 @@ type Props = {
   events: LeaderboardEvent[];
   rows: LeaderboardRow[];
   selectedEventId: number | "ALL";
-  selectedEventStatus: "upcoming" | "ongoing" | "completed" | undefined;
   selectedType: string;
 };
+
+const MAX_LEADERBOARD_ROWS = 20;
 
 export default function LeaderboardView({
   events,
   rows,
   selectedEventId,
-  selectedEventStatus,
   selectedType,
 }: Props) {
   const router = useRouter();
@@ -166,6 +173,11 @@ export default function LeaderboardView({
   const displayRows = useMemo(
     () => sortRows(rows, sortKey, sortDir),
     [rows, sortKey, sortDir],
+  );
+
+  const limitedRows = useMemo(
+    () => displayRows.slice(0, MAX_LEADERBOARD_ROWS),
+    [displayRows],
   );
 
   function handleSort(key: SortKey) {
@@ -179,17 +191,32 @@ export default function LeaderboardView({
 
   const eventOptions = useMemo(
     () =>
-      events.map((ev) => ({
-        id: ev.event_id,
-        label: formatEventOptionLabel(ev),
-      })),
+      [...events]
+        .sort((a, b) => {
+          const aTime = a.start_date ? Date.parse(a.start_date) : Number.NaN;
+          const bTime = b.start_date ? Date.parse(b.start_date) : Number.NaN;
+          const aScore = Number.isFinite(aTime)
+            ? aTime
+            : Number.NEGATIVE_INFINITY;
+          const bScore = Number.isFinite(bTime)
+            ? bTime
+            : Number.NEGATIVE_INFINITY;
+
+          if (aScore !== bScore) {
+            return bScore - aScore;
+          }
+          return b.event_id - a.event_id;
+        })
+        .map((ev) => ({
+          id: ev.event_id,
+          label: formatEventOptionLabel(ev),
+        })),
     [events],
   );
 
   function handleEventChange(value: number | "ALL") {
     const params = new URLSearchParams();
     params.set("event", String(value));
-    if (selectedType !== ALL_MATCH_FILTER) params.set("type", selectedType);
     router.push(
       `/leaderboard${params.toString() ? `?${params.toString()}` : ""}`,
     );
@@ -204,7 +231,6 @@ export default function LeaderboardView({
     );
   }
 
-  const isCompleted = selectedEventStatus === "completed";
   const thBase =
     "px-3 py-3 text-left text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3] cursor-pointer select-none whitespace-nowrap hover:text-[#00C8DC] transition-colors";
 
@@ -217,9 +243,14 @@ export default function LeaderboardView({
           <div>
             <h1 className="text-2xl font-bold text-white">Leaderboard</h1>
             <p className="mt-1 text-xs text-[#687FA3]">
-              {isCompleted
-                ? "Final standings — event complete"
-                : "Event standings — click any column header to sort"}
+              Event standings — click any column header to sort
+            </p>
+            <p className="mt-1 text-xs text-[#687FA3]">
+              Showing top {Math.min(displayRows.length, MAX_LEADERBOARD_ROWS)}
+              {displayRows.length > MAX_LEADERBOARD_ROWS
+                ? ` of ${displayRows.length}`
+                : ""}
+              . Maximum visible: {MAX_LEADERBOARD_ROWS} players.
             </p>
           </div>
 
@@ -285,17 +316,17 @@ export default function LeaderboardView({
               </tr>
             </thead>
             <tbody>
-              {displayRows.length === 0 ? (
+              {limitedRows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
                     className="px-4 py-12 text-center text-sm text-[#687FA3]"
                   >
-                    No completed matches found for this event.
+                    No completed matches found for this event and type.
                   </td>
                 </tr>
               ) : (
-                displayRows.map((row, index) => {
+                limitedRows.map((row, index) => {
                   const winRate =
                     row.matchesPlayed > 0
                       ? (row.wins / row.matchesPlayed) * 100
@@ -367,11 +398,6 @@ export default function LeaderboardView({
         {displayRows.length > 0 && (
           <p className="mt-3 text-xs text-[#687FA3]">
             {displayRows.length} player{displayRows.length === 1 ? "" : "s"}
-            {isCompleted && (
-              <span className="ml-2 text-emerald-600/70">
-                · Final standings — data frozen
-              </span>
-            )}
           </p>
         )}
       </div>
