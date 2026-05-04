@@ -3,13 +3,21 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
+import MatchFiltersCard from "@/components/MatchFiltersCard";
+import { formatEventOptionLabel } from "@/lib/eventLabels";
 import type { LeaderboardRow, LeaderboardEvent } from "@/lib/leaderboardData";
-import { ALL_MATCH_FILTER, MATCH_TYPE_FILTER_OPTIONS } from "@/lib/matches";
+import { ALL_MATCH_FILTER } from "@/lib/matches";
 
-type SortKey = "rating" | "ratingChange" | "matches" | "wins" | "winRate";
+type SortKey = "ratingChange" | "matches" | "wins" | "setsWon" | "winRate";
 type SortDir = "asc" | "desc";
 
-function PlayerAvatar({ imageLink, name }: { imageLink: string | null; name: string }) {
+function PlayerAvatar({
+  imageLink,
+  name,
+}: {
+  imageLink: string | null;
+  name: string;
+}) {
   if (imageLink) {
     return (
       <img
@@ -29,25 +37,39 @@ function PlayerAvatar({ imageLink, name }: { imageLink: string | null; name: str
 function RatingDelta({ value }: { value: number | null }) {
   if (value === null) return <span className="text-[#687FA3]">—</span>;
   const abs = Math.abs(value).toFixed(2);
-  if (value > 0) return <span className="text-emerald-400 font-semibold">+{abs}</span>;
-  if (value < 0) return <span className="text-red-400 font-semibold">−{abs}</span>;
+  if (value > 0)
+    return <span className="text-emerald-400 font-semibold">+{abs}</span>;
+  if (value < 0)
+    return <span className="text-red-400 font-semibold">−{abs}</span>;
   return <span className="text-[#687FA3]">±0.00</span>;
 }
 
 function SortChevron({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) {
     return (
-      <svg className="inline ml-1 opacity-25 w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
+      <svg
+        className="inline ml-1 opacity-25 w-3 h-3"
+        viewBox="0 0 12 12"
+        fill="currentColor"
+      >
         <path d="M6 2l3 4H3zM6 10L3 6h6z" />
       </svg>
     );
   }
   return dir === "desc" ? (
-    <svg className="inline ml-1 w-3 h-3 text-[#00C8DC]" viewBox="0 0 12 12" fill="currentColor">
+    <svg
+      className="inline ml-1 w-3 h-3 text-[#00C8DC]"
+      viewBox="0 0 12 12"
+      fill="currentColor"
+    >
       <path d="M6 10L2 4h8z" />
     </svg>
   ) : (
-    <svg className="inline ml-1 w-3 h-3 text-[#00C8DC]" viewBox="0 0 12 12" fill="currentColor">
+    <svg
+      className="inline ml-1 w-3 h-3 text-[#00C8DC]"
+      viewBox="0 0 12 12"
+      fill="currentColor"
+    >
       <path d="M6 2l4 6H2z" />
     </svg>
   );
@@ -73,15 +95,15 @@ function compareWinRates(a: LeaderboardRow, b: LeaderboardRow): number {
   return 0;
 }
 
-function sortRows(rows: LeaderboardRow[], key: SortKey, dir: SortDir): LeaderboardRow[] {
+function sortRows(
+  rows: LeaderboardRow[],
+  key: SortKey,
+  dir: SortDir,
+): LeaderboardRow[] {
   return [...rows].sort((a, b) => {
     let aVal: number | null = null;
     let bVal: number | null = null;
     switch (key) {
-      case "rating":
-        aVal = a.currentRating;
-        bVal = b.currentRating;
-        break;
       case "ratingChange":
         aVal = a.ratingChange;
         bVal = b.ratingChange;
@@ -97,6 +119,10 @@ function sortRows(rows: LeaderboardRow[], key: SortKey, dir: SortDir): Leaderboa
       case "winRate":
         aVal = winRate(a);
         bVal = winRate(b);
+        break;
+      case "setsWon":
+        aVal = rowSetsWon(a);
+        bVal = rowSetsWon(b);
         break;
     }
     if (aVal === null && bVal === null) return a.name.localeCompare(b.name);
@@ -114,20 +140,33 @@ function sortRows(rows: LeaderboardRow[], key: SortKey, dir: SortDir): Leaderboa
   });
 }
 
+function rowSetsWon(row: LeaderboardRow): number {
+  return row.setsWon;
+}
+
 type Props = {
   events: LeaderboardEvent[];
   rows: LeaderboardRow[];
-  selectedEventId: number | "all";
+  selectedEventId: number | "ALL";
   selectedEventStatus: "upcoming" | "ongoing" | "completed" | undefined;
-  selectedMatchType: string;
+  selectedType: string;
 };
 
-export default function LeaderboardView({ events, rows, selectedEventId, selectedEventStatus, selectedMatchType }: Props) {
+export default function LeaderboardView({
+  events,
+  rows,
+  selectedEventId,
+  selectedEventStatus,
+  selectedType,
+}: Props) {
   const router = useRouter();
   const [sortKey, setSortKey] = useState<SortKey>("wins");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const displayRows = useMemo(() => sortRows(rows, sortKey, sortDir), [rows, sortKey, sortDir]);
+  const displayRows = useMemo(
+    () => sortRows(rows, sortKey, sortDir),
+    [rows, sortKey, sortDir],
+  );
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -138,18 +177,31 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
     }
   }
 
-  function handleEventChange(value: string) {
+  const eventOptions = useMemo(
+    () =>
+      events.map((ev) => ({
+        id: ev.event_id,
+        label: formatEventOptionLabel(ev),
+      })),
+    [events],
+  );
+
+  function handleEventChange(value: number | "ALL") {
     const params = new URLSearchParams();
-    if (value !== "all") params.set("event", value);
-    if (selectedMatchType !== ALL_MATCH_FILTER) params.set("type", selectedMatchType);
-    router.push(`/leaderboard${params.toString() ? `?${params.toString()}` : ""}`);
+    params.set("event", String(value));
+    if (selectedType !== ALL_MATCH_FILTER) params.set("type", selectedType);
+    router.push(
+      `/leaderboard${params.toString() ? `?${params.toString()}` : ""}`,
+    );
   }
 
   function handleTypeChange(value: string) {
     const params = new URLSearchParams();
-    if (selectedEventId !== "all") params.set("event", String(selectedEventId));
+    params.set("event", String(selectedEventId));
     if (value !== ALL_MATCH_FILTER) params.set("type", value);
-    router.push(`/leaderboard${params.toString() ? `?${params.toString()}` : ""}`);
+    router.push(
+      `/leaderboard${params.toString() ? `?${params.toString()}` : ""}`,
+    );
   }
 
   const isCompleted = selectedEventStatus === "completed";
@@ -171,43 +223,14 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2.5">
-              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3]">
-                Event
-              </label>
-              <select
-                value={selectedEventId}
-                onChange={(e) => handleEventChange(e.target.value)}
-                className="text-sm bg-[#162032] border border-[#22304a] text-white rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00C8DC] cursor-pointer"
-              >
-                <option value="all">All Time</option>
-                {events.map((ev) => (
-                  <option key={ev.event_id} value={ev.event_id}>
-                    {ev.name ?? `Event ${ev.event_id}`}
-                    {ev.status === "completed" ? " ✓" : ev.status === "ongoing" ? " ●" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3]">
-                Type
-              </label>
-              <select
-                value={selectedMatchType}
-                onChange={(e) => handleTypeChange(e.target.value)}
-                className="text-sm bg-[#162032] border border-[#22304a] text-white rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00C8DC] cursor-pointer"
-              >
-                {MATCH_TYPE_FILTER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <MatchFiltersCard
+            variant="dark"
+            eventFilter={selectedEventId}
+            events={eventOptions}
+            selectedTypeFilter={selectedType}
+            onEventChange={handleEventChange}
+            onTypeChange={handleTypeChange}
+          />
         </div>
 
         {/* Table */}
@@ -221,44 +244,62 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
                 <th className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3]">
                   Player
                 </th>
-                <th className={thBase} onClick={() => handleSort("rating")}>
-                  Rating <SortChevron active={sortKey === "rating"} dir={sortDir} />
-                </th>
-                <th className={thBase} onClick={() => handleSort("ratingChange")}>
-                  <span className="hidden sm:inline">Change</span>
-                  <span className="sm:hidden">±</span>
-                  <SortChevron active={sortKey === "ratingChange"} dir={sortDir} />
-                </th>
                 <th
                   className={`${thBase} hidden sm:table-cell`}
                   onClick={() => handleSort("matches")}
                 >
-                  Played <SortChevron active={sortKey === "matches"} dir={sortDir} />
+                  Played{" "}
+                  <SortChevron active={sortKey === "matches"} dir={sortDir} />
                 </th>
                 <th
                   className={`${thBase} hidden sm:table-cell`}
                   onClick={() => handleSort("wins")}
                 >
-                  W / L <SortChevron active={sortKey === "wins"} dir={sortDir} />
+                  W / L{" "}
+                  <SortChevron active={sortKey === "wins"} dir={sortDir} />
+                </th>
+                <th
+                  className={`${thBase} hidden sm:table-cell`}
+                  onClick={() => handleSort("setsWon")}
+                >
+                  Sets W / L{" "}
+                  <SortChevron active={sortKey === "setsWon"} dir={sortDir} />
                 </th>
                 <th className={thBase} onClick={() => handleSort("winRate")}>
                   <span className="hidden sm:inline">Win %</span>
                   <span className="sm:hidden">W%</span>
                   <SortChevron active={sortKey === "winRate"} dir={sortDir} />
                 </th>
+                <th
+                  className={thBase}
+                  onClick={() => handleSort("ratingChange")}
+                >
+                  <span title="Net rating change across filtered matches">
+                    Δ Rating
+                  </span>
+                  <SortChevron
+                    active={sortKey === "ratingChange"}
+                    dir={sortDir}
+                  />
+                </th>
               </tr>
             </thead>
             <tbody>
               {displayRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-[#687FA3]">
+                  <td
+                    colSpan={7}
+                    className="px-4 py-12 text-center text-sm text-[#687FA3]"
+                  >
                     No completed matches found for this event.
                   </td>
                 </tr>
               ) : (
                 displayRows.map((row, index) => {
                   const winRate =
-                    row.matchesPlayed > 0 ? (row.wins / row.matchesPlayed) * 100 : null;
+                    row.matchesPlayed > 0
+                      ? (row.wins / row.matchesPlayed) * 100
+                      : null;
                   const rank = index + 1;
 
                   return (
@@ -274,7 +315,10 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
                           href={`/players/${encodeURIComponent(row.playerId)}`}
                           className="flex items-center gap-2.5 group"
                         >
-                          <PlayerAvatar imageLink={row.imageLink} name={row.name} />
+                          <PlayerAvatar
+                            imageLink={row.imageLink}
+                            name={row.name}
+                          />
                           <div className="min-w-0">
                             <div className="text-sm font-semibold text-white group-hover:text-[#00C8DC] transition-colors truncate leading-tight">
                               {row.name}
@@ -287,12 +331,6 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
                           </div>
                         </a>
                       </td>
-                      <td className="px-3 py-3 font-mono font-bold text-sm text-white tabular-nums">
-                        {row.currentRating != null ? row.currentRating.toFixed(2) : "—"}
-                      </td>
-                      <td className="px-3 py-3 text-sm tabular-nums">
-                        <RatingDelta value={row.ratingChange} />
-                      </td>
                       <td className="px-3 py-3 hidden sm:table-cell text-sm text-[#687FA3] tabular-nums">
                         {row.matchesPlayed}
                       </td>
@@ -301,12 +339,22 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
                         <span className="text-[#687FA3]"> / </span>
                         <span className="text-red-400">{row.losses}</span>
                       </td>
+                      <td className="px-3 py-3 hidden sm:table-cell text-sm tabular-nums">
+                        <span className="text-emerald-400">{row.setsWon}</span>
+                        <span className="text-[#687FA3]"> / </span>
+                        <span className="text-red-400">{row.setsLost}</span>
+                      </td>
                       <td className="px-3 py-3 text-sm tabular-nums">
                         {winRate != null ? (
-                          <span className="text-white font-medium">{winRate.toFixed(0)}%</span>
+                          <span className="text-white font-medium">
+                            {winRate.toFixed(0)}%
+                          </span>
                         ) : (
                           <span className="text-[#687FA3]">—</span>
                         )}
+                      </td>
+                      <td className="px-3 py-3 text-sm tabular-nums">
+                        <RatingDelta value={row.ratingChange} />
                       </td>
                     </tr>
                   );
@@ -320,7 +368,9 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
           <p className="mt-3 text-xs text-[#687FA3]">
             {displayRows.length} player{displayRows.length === 1 ? "" : "s"}
             {isCompleted && (
-              <span className="ml-2 text-emerald-600/70">· Final standings — data frozen</span>
+              <span className="ml-2 text-emerald-600/70">
+                · Final standings — data frozen
+              </span>
             )}
           </p>
         )}

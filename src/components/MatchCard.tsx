@@ -165,7 +165,7 @@ export default function MatchCard({
   const seasonBadge = seasonBadgeFromEvent(seasonLabel, match.event_id);
 
   return (
-    <div className="bg-white dark:bg-[#162032]/50 border border-slate-200 dark:border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 md:p-6 transition-all duration-300 shadow-sm dark:shadow-none">
+    <div className="group bg-white dark:bg-[#162032]/50 border border-slate-200 dark:border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 md:p-6 transition-all duration-300 shadow-sm dark:shadow-none">
       {/* Meta row */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <span className="text-slate-500 dark:text-[#687FA3] text-[10px] font-black uppercase tracking-widest">
@@ -186,11 +186,16 @@ export default function MatchCard({
         >
           {statusLabel}
         </span>
-        {match.venue && (
-          <span className="text-slate-400 dark:text-[#687FA3]/50 text-[10px] font-bold ml-auto hidden md:block">
-            {match.venue}
+        <div className="ml-auto hidden items-center gap-3 md:flex">
+          {match.venue && (
+            <span className="text-slate-400 dark:text-[#687FA3]/50 text-[10px] font-bold">
+              {match.venue}
+            </span>
+          )}
+          <span className="text-slate-300 dark:text-[#687FA3]/30 text-[9px] font-mono opacity-0 group-hover:opacity-100 transition-opacity duration-200 select-none">
+            #{match.match_id}
           </span>
-        )}
+        </div>
       </div>
 
       {/* Teams vs score */}
