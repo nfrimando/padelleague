@@ -8,7 +8,7 @@ import { formatEventOptionLabel } from "@/lib/eventLabels";
 import type { LeaderboardRow, LeaderboardEvent } from "@/lib/leaderboardData";
 import { ALL_MATCH_FILTER } from "@/lib/matches";
 
-type SortKey = "ratingChange" | "matches" | "wins" | "setsWon" | "winRate";
+type SortMode = "wins" | "ratingChange";
 type SortDir = "asc" | "desc";
 
 function PlayerAvatar({
@@ -44,37 +44,6 @@ function RatingDelta({ value }: { value: number | null }) {
   return <span className="text-[#687FA3]">±0.00</span>;
 }
 
-function SortChevron({ active, dir }: { active: boolean; dir: SortDir }) {
-  if (!active) {
-    return (
-      <svg
-        className="inline ml-1 opacity-25 w-3 h-3"
-        viewBox="0 0 12 12"
-        fill="currentColor"
-      >
-        <path d="M6 2l3 4H3zM6 10L3 6h6z" />
-      </svg>
-    );
-  }
-  return dir === "desc" ? (
-    <svg
-      className="inline ml-1 w-3 h-3 text-[#00C8DC]"
-      viewBox="0 0 12 12"
-      fill="currentColor"
-    >
-      <path d="M6 10L2 4h8z" />
-    </svg>
-  ) : (
-    <svg
-      className="inline ml-1 w-3 h-3 text-[#00C8DC]"
-      viewBox="0 0 12 12"
-      fill="currentColor"
-    >
-      <path d="M6 2l4 6H2z" />
-    </svg>
-  );
-}
-
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="font-black text-yellow-400">1</span>;
   if (rank === 2) return <span className="font-black text-slate-300">2</span>;
@@ -99,56 +68,35 @@ function compareLeastSetsLost(a: LeaderboardRow, b: LeaderboardRow): number {
   return a.setsLost - b.setsLost;
 }
 
-function sortRows(
-  rows: LeaderboardRow[],
-  key: SortKey,
-  dir: SortDir,
-): LeaderboardRow[] {
+function sortByWins(rows: LeaderboardRow[]): LeaderboardRow[] {
   return [...rows].sort((a, b) => {
-    let aVal: number | null = null;
-    let bVal: number | null = null;
-    switch (key) {
-      case "ratingChange":
-        aVal = a.ratingChange;
-        bVal = b.ratingChange;
-        break;
-      case "matches":
-        aVal = a.matchesPlayed;
-        bVal = b.matchesPlayed;
-        break;
-      case "wins":
-        aVal = a.wins;
-        bVal = b.wins;
-        break;
-      case "winRate":
-        aVal = winRate(a);
-        bVal = winRate(b);
-        break;
-      case "setsWon":
-        aVal = rowSetsWon(a);
-        bVal = rowSetsWon(b);
-        break;
-    }
-    if (aVal === null && bVal === null) return a.name.localeCompare(b.name);
-    if (aVal === null) return 1;
-    if (bVal === null) return -1;
-    const cmp = bVal - aVal;
-    const primary = dir === "desc" ? cmp : -cmp;
-    if (primary !== 0) return primary;
-    // Tiebreaker when sorting by wins: win rate (always descending)
-    if (key === "wins") {
-      const rateCmp = compareWinRates(a, b);
-      if (rateCmp !== 0) return rateCmp;
-    }
-    // Final performance tiebreaker: fewer sets lost ranks higher.
+    if (a.wins !== b.wins) return b.wins - a.wins;
+    const rateCmp = compareWinRates(a, b);
+    if (rateCmp !== 0) return rateCmp;
+    if (a.setsWon !== b.setsWon) return b.setsWon - a.setsWon;
     const setsLostCmp = compareLeastSetsLost(a, b);
     if (setsLostCmp !== 0) return setsLostCmp;
     return a.name.localeCompare(b.name);
   });
 }
 
-function rowSetsWon(row: LeaderboardRow): number {
-  return row.setsWon;
+function sortByRatingChange(rows: LeaderboardRow[]): LeaderboardRow[] {
+  return [...rows].sort((a, b) => {
+    if (a.ratingChange === null && b.ratingChange === null)
+      return a.name.localeCompare(b.name);
+    if (a.ratingChange === null) return 1;
+    if (b.ratingChange === null) return -1;
+    if (a.ratingChange !== b.ratingChange)
+      return b.ratingChange - a.ratingChange;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function applySortMode(
+  rows: LeaderboardRow[],
+  mode: SortMode,
+): LeaderboardRow[] {
+  return mode === "ratingChange" ? sortByRatingChange(rows) : sortByWins(rows);
 }
 
 type Props = {
@@ -167,27 +115,15 @@ export default function LeaderboardView({
   selectedType,
 }: Props) {
   const router = useRouter();
-  const [sortKey, setSortKey] = useState<SortKey>("wins");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortMode, setSortMode] = useState<SortMode>("wins");
 
-  const displayRows = useMemo(
-    () => sortRows(rows, sortKey, sortDir),
-    [rows, sortKey, sortDir],
-  );
-
+  // Top-20 pool is determined by the active sort mode.
   const limitedRows = useMemo(
-    () => displayRows.slice(0, MAX_LEADERBOARD_ROWS),
-    [displayRows],
+    () => applySortMode(rows, sortMode).slice(0, MAX_LEADERBOARD_ROWS),
+    [rows, sortMode],
   );
 
-  function handleSort(key: SortKey) {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
-  }
+  const totalRows = rows.length;
 
   const eventOptions = useMemo(
     () =>
@@ -232,7 +168,7 @@ export default function LeaderboardView({
   }
 
   const thBase =
-    "px-3 py-3 text-left text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3] cursor-pointer select-none whitespace-nowrap hover:text-[#00C8DC] transition-colors";
+    "px-3 py-3 text-left text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3] whitespace-nowrap";
 
   return (
     <>
@@ -243,25 +179,39 @@ export default function LeaderboardView({
           <div>
             <h1 className="text-2xl font-bold text-white">Leaderboard</h1>
             <p className="mt-1 text-xs text-[#687FA3]">
-              Event standings — click any column header to sort
-            </p>
-            <p className="mt-1 text-xs text-[#687FA3]">
-              Showing top {Math.min(displayRows.length, MAX_LEADERBOARD_ROWS)}
-              {displayRows.length > MAX_LEADERBOARD_ROWS
-                ? ` of ${displayRows.length}`
-                : ""}
-              . Maximum visible: {MAX_LEADERBOARD_ROWS} players.
+              Showing top {Math.min(totalRows, MAX_LEADERBOARD_ROWS)}
+              {totalRows > MAX_LEADERBOARD_ROWS ? ` of ${totalRows}` : ""}{" "}
+              players. Maximum visible: {MAX_LEADERBOARD_ROWS}.
             </p>
           </div>
 
-          <MatchFiltersCard
-            variant="dark"
-            eventFilter={selectedEventId}
-            events={eventOptions}
-            selectedTypeFilter={selectedType}
-            onEventChange={handleEventChange}
-            onTypeChange={handleTypeChange}
-          />
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="sort-mode"
+                className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3]"
+              >
+                Sort by
+              </label>
+              <select
+                id="sort-mode"
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                className="text-sm bg-[#162032] border border-[#22304a] text-white rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00C8DC] cursor-pointer"
+              >
+                <option value="wins">Wins</option>
+                <option value="ratingChange">Δ Rating</option>
+              </select>
+            </div>
+            <MatchFiltersCard
+              variant="dark"
+              eventFilter={selectedEventId}
+              events={eventOptions}
+              selectedTypeFilter={selectedType}
+              onEventChange={handleEventChange}
+              onTypeChange={handleTypeChange}
+            />
+          </div>
         </div>
 
         {/* Table */}
@@ -275,43 +225,17 @@ export default function LeaderboardView({
                 <th className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3]">
                   Player
                 </th>
-                <th
-                  className={`${thBase} hidden sm:table-cell`}
-                  onClick={() => handleSort("matches")}
-                >
-                  Played{" "}
-                  <SortChevron active={sortKey === "matches"} dir={sortDir} />
-                </th>
-                <th
-                  className={`${thBase} hidden sm:table-cell`}
-                  onClick={() => handleSort("wins")}
-                >
-                  W / L{" "}
-                  <SortChevron active={sortKey === "wins"} dir={sortDir} />
-                </th>
-                <th
-                  className={`${thBase} hidden sm:table-cell`}
-                  onClick={() => handleSort("setsWon")}
-                >
-                  Sets W / L{" "}
-                  <SortChevron active={sortKey === "setsWon"} dir={sortDir} />
-                </th>
-                <th className={thBase} onClick={() => handleSort("winRate")}>
+                <th className={`${thBase} hidden sm:table-cell`}>Played</th>
+                <th className={`${thBase} hidden sm:table-cell`}>W / L</th>
+                <th className={`${thBase} hidden sm:table-cell`}>Sets W / L</th>
+                <th className={thBase}>
                   <span className="hidden sm:inline">Win %</span>
                   <span className="sm:hidden">W%</span>
-                  <SortChevron active={sortKey === "winRate"} dir={sortDir} />
                 </th>
-                <th
-                  className={thBase}
-                  onClick={() => handleSort("ratingChange")}
-                >
+                <th className={thBase}>
                   <span title="Net rating change across filtered matches">
                     Δ Rating
                   </span>
-                  <SortChevron
-                    active={sortKey === "ratingChange"}
-                    dir={sortDir}
-                  />
                 </th>
               </tr>
             </thead>
@@ -395,9 +319,9 @@ export default function LeaderboardView({
           </table>
         </div>
 
-        {displayRows.length > 0 && (
+        {totalRows > 0 && (
           <p className="mt-3 text-xs text-[#687FA3]">
-            {displayRows.length} player{displayRows.length === 1 ? "" : "s"}
+            {totalRows} player{totalRows === 1 ? "" : "s"} in pool
           </p>
         )}
       </div>
