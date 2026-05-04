@@ -12,7 +12,7 @@ export async function GET() {
     .from("events")
     .select("*")
     .is("deleted_at", null)
-    .order("start_date", { ascending: true, nullsFirst: false });
+    .order("start_date", { ascending: false, nullsFirst: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
