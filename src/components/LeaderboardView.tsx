@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import BackToHome from "@/components/BackToHome";
-import type { LeaderboardRow, LeaderboardEvent } from "@/lib/leaderboard-data";
+import type { LeaderboardRow, LeaderboardEvent } from "@/lib/leaderboardData";
+import { ALL_MATCH_FILTER, MATCH_TYPE_FILTER_OPTIONS } from "@/lib/matches";
 
 type SortKey = "rating" | "ratingChange" | "matches" | "wins" | "winRate";
 type SortDir = "asc" | "desc";
@@ -89,7 +90,17 @@ function sortRows(rows: LeaderboardRow[], key: SortKey, dir: SortDir): Leaderboa
     if (aVal === null) return 1;
     if (bVal === null) return -1;
     const cmp = bVal - aVal;
-    return dir === "desc" ? cmp : -cmp;
+    const primary = dir === "desc" ? cmp : -cmp;
+    if (primary !== 0) return primary;
+    // Tiebreaker: win rate (always descending)
+    if (key === "wins") {
+      const aRate = a.matchesPlayed > 0 ? a.wins / a.matchesPlayed : null;
+      const bRate = b.matchesPlayed > 0 ? b.wins / b.matchesPlayed : null;
+      if (aRate !== null && bRate !== null && aRate !== bRate) return bRate - aRate;
+      if (aRate === null && bRate !== null) return 1;
+      if (aRate !== null && bRate === null) return -1;
+    }
+    return a.name.localeCompare(b.name);
   });
 }
 
@@ -98,11 +109,12 @@ type Props = {
   rows: LeaderboardRow[];
   selectedEventId: number | "all";
   selectedEventStatus: "upcoming" | "ongoing" | "completed" | undefined;
+  selectedMatchType: string;
 };
 
-export default function LeaderboardView({ events, rows, selectedEventId, selectedEventStatus }: Props) {
+export default function LeaderboardView({ events, rows, selectedEventId, selectedEventStatus, selectedMatchType }: Props) {
   const router = useRouter();
-  const [sortKey, setSortKey] = useState<SortKey>("rating");
+  const [sortKey, setSortKey] = useState<SortKey>("wins");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const displayRows = useMemo(() => sortRows(rows, sortKey, sortDir), [rows, sortKey, sortDir]);
@@ -117,8 +129,17 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
   }
 
   function handleEventChange(value: string) {
-    const params = value === "all" ? "" : `?event=${value}`;
-    router.push(`/leaderboard${params}`);
+    const params = new URLSearchParams();
+    if (value !== "all") params.set("event", value);
+    if (selectedMatchType !== ALL_MATCH_FILTER) params.set("type", selectedMatchType);
+    router.push(`/leaderboard${params.toString() ? `?${params.toString()}` : ""}`);
+  }
+
+  function handleTypeChange(value: string) {
+    const params = new URLSearchParams();
+    if (selectedEventId !== "all") params.set("event", String(selectedEventId));
+    if (value !== ALL_MATCH_FILTER) params.set("type", value);
+    router.push(`/leaderboard${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
   const isCompleted = selectedEventStatus === "completed";
@@ -135,28 +156,47 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
             <h1 className="text-2xl font-bold text-white">Leaderboard</h1>
             <p className="mt-1 text-xs text-[#687FA3]">
               {isCompleted
-                ? "Final standings — season complete"
-                : "Season standings — click any column header to sort"}
+                ? "Final standings — event complete"
+                : "Event standings — click any column header to sort"}
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3]">
-              Season
-            </label>
-            <select
-              value={selectedEventId}
-              onChange={(e) => handleEventChange(e.target.value)}
-              className="text-sm bg-[#162032] border border-[#22304a] text-white rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00C8DC] cursor-pointer"
-            >
-              <option value="all">All Time</option>
-              {events.map((ev) => (
-                <option key={ev.event_id} value={ev.event_id}>
-                  {ev.name ?? `Event ${ev.event_id}`}
-                  {ev.status === "completed" ? " ✓" : ev.status === "ongoing" ? " ●" : ""}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3]">
+                Event
+              </label>
+              <select
+                value={selectedEventId}
+                onChange={(e) => handleEventChange(e.target.value)}
+                className="text-sm bg-[#162032] border border-[#22304a] text-white rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00C8DC] cursor-pointer"
+              >
+                <option value="all">All Time</option>
+                {events.map((ev) => (
+                  <option key={ev.event_id} value={ev.event_id}>
+                    {ev.name ?? `Event ${ev.event_id}`}
+                    {ev.status === "completed" ? " ✓" : ev.status === "ongoing" ? " ●" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3]">
+                Type
+              </label>
+              <select
+                value={selectedMatchType}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                className="text-sm bg-[#162032] border border-[#22304a] text-white rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00C8DC] cursor-pointer"
+              >
+                {MATCH_TYPE_FILTER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -202,7 +242,7 @@ export default function LeaderboardView({ events, rows, selectedEventId, selecte
               {displayRows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-sm text-[#687FA3]">
-                    No completed matches found for this season.
+                    No completed matches found for this event.
                   </td>
                 </tr>
               ) : (

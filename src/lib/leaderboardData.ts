@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { getIncludedMatchTypes } from "@/lib/matches";
 
 export type LeaderboardRow = {
   playerId: string;
@@ -19,7 +20,7 @@ export type LeaderboardEvent = {
   status: "upcoming" | "ongoing" | "completed";
 };
 
-type MatchRow = { match_id: number; winner_team: number | null; date_local: string | null };
+type MatchRow = { match_id: number; winner_team: number | null; date_local: string | null; type: string | null };
 type TeamRow = { match_id: number; team_number: number | null; player_1_id: number | null; player_2_id: number | null };
 type RatingRow = { match_id: number; player_id: number | string; rating_pre: number | null; rating_post: number | null; formula_name: string | null };
 type PlayerRow = { player_id: number | string; name: string | null; nickname: string | null; image_link: string | null };
@@ -49,17 +50,22 @@ export async function fetchLeaderboardEvents(): Promise<LeaderboardEvent[]> {
   return (data ?? []) as LeaderboardEvent[];
 }
 
-async function fetchLeaderboardData(eventId: number | "all"): Promise<LeaderboardRow[]> {
+async function fetchLeaderboardData(eventId: number | "all", matchType: string): Promise<LeaderboardRow[]> {
   const db = makeServerClient();
 
   let matchQuery = db
     .from("matches")
-    .select("match_id, winner_team, date_local")
+    .select("match_id, winner_team, date_local, type")
     .eq("status", "completed")
     .order("date_local", { ascending: true });
 
   if (eventId !== "all") {
     matchQuery = matchQuery.eq("event_id", eventId);
+  }
+
+  const includeTypes = getIncludedMatchTypes(matchType);
+  if (includeTypes !== null && includeTypes.length > 0) {
+    matchQuery = matchQuery.in("type", includeTypes);
   }
 
   const { data: matchesData, error: matchesError } = await matchQuery;
@@ -183,23 +189,23 @@ async function fetchLeaderboardData(eventId: number | "all"): Promise<Leaderboar
   return rows;
 }
 
-// Completed seasons: cache forever — data will never change
+// Completed events: cache forever — data will never change
 const getCompletedLeaderboard = unstable_cache(
-  (eventId: number) => fetchLeaderboardData(eventId),
+  (eventId: number, matchType: string) => fetchLeaderboardData(eventId, matchType),
   ["leaderboard-completed"],
   { revalidate: false },
 );
 
-// Ongoing seasons: refresh every 2 minutes
+// Ongoing events: refresh every 2 minutes
 const getOngoingLeaderboard = unstable_cache(
-  (eventId: number) => fetchLeaderboardData(eventId),
+  (eventId: number, matchType: string) => fetchLeaderboardData(eventId, matchType),
   ["leaderboard-ongoing"],
   { revalidate: 120 },
 );
 
 // All-time: refresh every 2 minutes
 const getAllTimeLeaderboard = unstable_cache(
-  () => fetchLeaderboardData("all"),
+  (matchType: string) => fetchLeaderboardData("all", matchType),
   ["leaderboard-all"],
   { revalidate: 120 },
 );
@@ -207,8 +213,9 @@ const getAllTimeLeaderboard = unstable_cache(
 export async function getLeaderboard(
   eventId: number | "all",
   eventStatus: "upcoming" | "ongoing" | "completed" | undefined,
+  matchType: string,
 ): Promise<LeaderboardRow[]> {
-  if (eventId === "all") return getAllTimeLeaderboard();
-  if (eventStatus === "completed") return getCompletedLeaderboard(eventId);
-  return getOngoingLeaderboard(eventId);
+  if (eventId === "all") return getAllTimeLeaderboard(matchType);
+  if (eventStatus === "completed") return getCompletedLeaderboard(eventId, matchType);
+  return getOngoingLeaderboard(eventId, matchType);
 }

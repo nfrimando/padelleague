@@ -1,13 +1,14 @@
 import { Suspense } from "react";
 import LeaderboardView from "@/components/LeaderboardView";
-import { fetchLeaderboardEvents, getLeaderboard } from "@/lib/leaderboard-data";
+import { fetchLeaderboardEvents, getLeaderboard } from "@/lib/leaderboardData";
+import { ALL_MATCH_FILTER, MATCH_TYPE_FILTER_OPTIONS } from "@/lib/matches";
 
 type PageProps = {
-  searchParams: Promise<{ event?: string }>;
+  searchParams: Promise<{ event?: string; type?: string }>;
 };
 
 async function LeaderboardContent({ searchParams }: PageProps) {
-  const { event } = await searchParams;
+  const { event, type } = await searchParams;
 
   const events = await fetchLeaderboardEvents();
 
@@ -20,7 +21,11 @@ async function LeaderboardContent({ searchParams }: PageProps) {
     ? events.find((e) => e.event_id === selectedEventId)
     : undefined;
 
-  const rows = await getLeaderboard(selectedEventId, selectedEvent?.status);
+  const validTypeValues = MATCH_TYPE_FILTER_OPTIONS.map((o) => o.value as string);
+  const selectedMatchType =
+    type && validTypeValues.includes(type) ? type : ALL_MATCH_FILTER;
+
+  const rows = await getLeaderboard(selectedEventId, selectedEvent?.status, selectedMatchType);
 
   return (
     <LeaderboardView
@@ -28,6 +33,7 @@ async function LeaderboardContent({ searchParams }: PageProps) {
       rows={rows}
       selectedEventId={selectedEventId}
       selectedEventStatus={selectedEvent?.status}
+      selectedMatchType={selectedMatchType}
     />
   );
 }
