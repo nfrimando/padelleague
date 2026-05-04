@@ -19,7 +19,10 @@ function PlayersPageContent() {
     return `/players/${encodeURIComponent(playerId)}`;
   }, []);
 
-  const { players, loading } = usePlayers({ onlyActivePlayers: true });
+  const { players, loading } = usePlayers({
+    onlyActivePlayers: true,
+    select: "player_id,name,nickname,image_link",
+  });
   const filteredPlayers = usePlayerSearch(players, search);
   const filteredPlayersForGrid = usePlayerSearch(players, committedSearch);
 

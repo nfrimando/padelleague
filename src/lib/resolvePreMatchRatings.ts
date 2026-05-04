@@ -29,6 +29,11 @@ type PlayerInitialRatingRow = {
   initial_rating: number | string | null;
 };
 
+type ResolvedPreMatchRatingRow = {
+  player_id: number | string | null;
+  pre_match_rating: number | string | null;
+};
+
 type PreferredMatchRating = {
   ratingPost: number;
   priority: number;
@@ -100,24 +105,13 @@ function findLatestRating(
   return sorted.length > 0 ? sorted[0][1].ratingPost : null;
 }
 
-export async function resolvePreMatchRatings(
+async function resolvePreMatchRatingsSequentialFallback(
   supabase: SupabaseClient,
   matchId: number,
-  playerIds: number[],
+  requestedPlayerIds: number[],
   initialRatingFallback?: InitialRatingFallback,
 ): Promise<Map<number, number | null>> {
-  const requestedPlayerIds = Array.from(
-    new Set(
-      playerIds.filter(
-        (playerId) => Number.isInteger(playerId) && playerId > 0,
-      ),
-    ),
-  );
-
   const resolved = new Map<number, number | null>();
-  if (requestedPlayerIds.length === 0) {
-    return resolved;
-  }
 
   const { data: historyRows, error: historyError } = await supabase
     .from("match_player_ratings")
@@ -236,6 +230,68 @@ export async function resolvePreMatchRatings(
   }
 
   for (const playerId of remainingPlayerIds) {
+    resolved.set(playerId, null);
+  }
+
+  return resolved;
+}
+
+export async function resolvePreMatchRatings(
+  supabase: SupabaseClient,
+  matchId: number,
+  playerIds: number[],
+  initialRatingFallback?: InitialRatingFallback,
+): Promise<Map<number, number | null>> {
+  const requestedPlayerIds = Array.from(
+    new Set(
+      playerIds.filter(
+        (playerId) => Number.isInteger(playerId) && playerId > 0,
+      ),
+    ),
+  );
+
+  const resolved = new Map<number, number | null>();
+  if (requestedPlayerIds.length === 0) {
+    return resolved;
+  }
+
+  const { data, error } = await supabase.rpc("get_pre_match_ratings", {
+    p_match_id: matchId,
+    p_player_ids: requestedPlayerIds,
+  });
+
+  if (error) {
+    return resolvePreMatchRatingsSequentialFallback(
+      supabase,
+      matchId,
+      requestedPlayerIds,
+      initialRatingFallback,
+    );
+  }
+
+  for (const row of (data ?? []) as ResolvedPreMatchRatingRow[]) {
+    const playerId = toFiniteNumber(row.player_id);
+    const preMatchRating = toFiniteNumber(row.pre_match_rating);
+
+    if (playerId === null || !requestedPlayerIds.includes(playerId)) {
+      continue;
+    }
+
+    if (preMatchRating !== null) {
+      resolved.set(playerId, preMatchRating);
+    }
+  }
+
+  for (const playerId of requestedPlayerIds) {
+    if (resolved.has(playerId)) {
+      continue;
+    }
+
+    if (initialRatingFallback?.has(playerId)) {
+      resolved.set(playerId, initialRatingFallback.get(playerId) ?? null);
+      continue;
+    }
+
     resolved.set(playerId, null);
   }
 
