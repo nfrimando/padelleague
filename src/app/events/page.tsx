@@ -52,7 +52,13 @@ export default function EventsPage() {
           if (!res.ok) {
             setError(json.error ?? "Failed to load events.");
           } else {
-            setEvents(json.events ?? []);
+            // Defensive: sort by start_date descending in case API changes or SSR mismatch
+            const sorted = (json.events ?? []).slice().sort((a, b) => {
+              const aDate = a.start_date ? new Date(a.start_date).getTime() : 0;
+              const bDate = b.start_date ? new Date(b.start_date).getTime() : 0;
+              return bDate - aDate;
+            });
+            setEvents(sorted);
           }
           setLoading(false);
         }
