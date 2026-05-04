@@ -95,6 +95,9 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
           <a href="/players" className={desktopLinkClass("/players")}>
             Players
           </a>
+          <a href="/leaderboard" className={desktopLinkClass("/leaderboard")}>
+            Leaderboard
+          </a>
         </div>
 
         <div className="flex items-center gap-4">
@@ -164,6 +167,12 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                 className="hover:text-[#00C8DC] transition-colors"
               >
                 Players
+              </a>
+              <a
+                href="/leaderboard"
+                className="hover:text-[#00C8DC] transition-colors"
+              >
+                Standings
               </a>
               {loading ? (
                 <div className="h-6 w-12 rounded-full bg-[#22304a] animate-pulse" />
