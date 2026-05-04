@@ -56,11 +56,11 @@ function PlayerProfilePageContent() {
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
-    const seasonParam = params.get("season");
-    const parsedEvent = seasonParam ? Number(seasonParam) : Number.NaN;
+    const eventParam = params.get("event") ?? params.get("season");
+    const parsedEvent = eventParam ? Number(eventParam) : Number.NaN;
 
     const nextEvent: number | typeof ALL_MATCH_FILTER =
-      seasonParam === ALL_MATCH_FILTER
+      eventParam === ALL_MATCH_FILTER
         ? ALL_MATCH_FILTER
         : !Number.isNaN(parsedEvent)
           ? parsedEvent
@@ -80,7 +80,8 @@ function PlayerProfilePageContent() {
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
-    params.set("season", String(eventFilter));
+    params.set("event", String(eventFilter));
+    params.delete("season");
     params.set("type", selectedTypeFilter);
 
     const nextQuery = params.toString();
