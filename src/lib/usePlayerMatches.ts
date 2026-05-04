@@ -82,7 +82,6 @@ export function usePlayerMatches(playerId: string | null) {
           .from("matches")
           .select("*")
           .in("match_id", matchIds)
-          .order("event_id", { ascending: false, nullsFirst: false })
           .order("date_local", { ascending: false, nullsFirst: false })
           .order("time_local", { ascending: false });
 
