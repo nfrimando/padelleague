@@ -7,6 +7,8 @@ export type EventRow = {
   event_id: number | string | bigint;
   name: string | null;
   created_at: string | null;
+  start_date: string | null;
+  end_date: string | null;
 };
 
 type EventSnapshot = {
@@ -52,7 +54,7 @@ async function loadEventSnapshot(): Promise<EventSnapshot> {
     inFlightEventSnapshotPromise = (async () => {
       const primary = await supabase
         .from("events")
-        .select("event_id, name, created_at")
+        .select("event_id, name, created_at, start_date, end_date")
         .order("event_id", { ascending: true });
 
       if (!primary.error) {
@@ -65,7 +67,12 @@ async function loadEventSnapshot(): Promise<EventSnapshot> {
         .order("event_id", { ascending: true });
 
       const rows = ((fallback.data ?? []) as Array<Omit<EventRow, "created_at">>)
-        .map((row) => ({ ...row, created_at: null }));
+        .map((row) => ({
+          ...row,
+          created_at: null,
+          start_date: null,
+          end_date: null,
+        }));
 
       return buildEventSnapshot(rows);
     })()

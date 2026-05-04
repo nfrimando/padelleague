@@ -1,6 +1,5 @@
 import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
-import { getIncludedMatchTypes } from "@/lib/matches";
 
 export type LeaderboardRow = {
   playerId: string;
@@ -12,16 +11,20 @@ export type LeaderboardRow = {
   matchesPlayed: number;
   wins: number;
   losses: number;
+  setsWon: number;
+  setsLost: number;
 };
 
 export type LeaderboardEvent = {
   event_id: number;
   name: string | null;
   status: "upcoming" | "ongoing" | "completed";
+  start_date: string | null;
+  end_date: string | null;
 };
 
-type MatchRow = { match_id: number; winner_team: number | null; date_local: string | null; match_type: string | null };
-type TeamRow = { match_id: number; team_number: number | null; player_1_id: number | null; player_2_id: number | null };
+type MatchRow = { match_id: number; winner_team: number | null; date_local: string | null; type: string | null };
+type TeamRow = { match_id: number; team_number: number | null; player_1_id: number | null; player_2_id: number | null; sets_won: number | null };
 type RatingRow = { match_id: number; player_id: number | string; rating_pre: number | null; rating_post: number | null; formula_name: string | null };
 type PlayerRow = { player_id: number | string; name: string | null; nickname: string | null; image_link: string | null };
 
@@ -43,14 +46,14 @@ export async function fetchLeaderboardEvents(): Promise<LeaderboardEvent[]> {
   const db = makeServerClient();
   const { data, error } = await db
     .from("events")
-    .select("event_id, name, status")
+    .select("event_id, name, status, start_date, end_date")
     .order("event_id", { ascending: false });
 
   if (error) throw new Error(error.message);
   return (data ?? []) as LeaderboardEvent[];
 }
 
-async function fetchLeaderboardData(eventId: number | "all", matchType: string): Promise<LeaderboardRow[]> {
+async function fetchLeaderboardData(eventId: number | "ALL", matchType: string): Promise<LeaderboardRow[]> {
   const db = makeServerClient();
 
   let matchQuery = db
@@ -59,13 +62,12 @@ async function fetchLeaderboardData(eventId: number | "all", matchType: string):
     .eq("status", "completed")
     .order("date_local", { ascending: true });
 
-  if (eventId !== "all") {
+  if (eventId !== "ALL") {
     matchQuery = matchQuery.eq("event_id", eventId);
   }
 
-  const includeTypes = getIncludedMatchTypes(matchType);
-  if (includeTypes !== null && includeTypes.length > 0) {
-    matchQuery = matchQuery.in("type", includeTypes);
+  if (matchType !== "ALL") {
+    matchQuery = matchQuery.eq("type", matchType);
   }
 
   const { data: matchesData, error: matchesError } = await matchQuery;
@@ -78,7 +80,7 @@ async function fetchLeaderboardData(eventId: number | "all", matchType: string):
 
   const [{ data: teamsData, error: teamsError }, { data: ratingsData, error: ratingsError }] =
     await Promise.all([
-      db.from("match_teams").select("match_id, team_number, player_1_id, player_2_id").in("match_id", matchIds),
+      db.from("match_teams").select("match_id, team_number, player_1_id, player_2_id, sets_won").in("match_id", matchIds),
       db.from("match_player_ratings").select("match_id, player_id, rating_pre, rating_post, formula_name").in("match_id", matchIds),
     ]);
 
@@ -87,6 +89,15 @@ async function fetchLeaderboardData(eventId: number | "all", matchType: string):
 
   const teams = (teamsData ?? []) as TeamRow[];
   const ratings = (ratingsData ?? []) as RatingRow[];
+
+  const teamSetsByMatch: Record<number, Partial<Record<number, number | null>>> = {};
+  for (const team of teams) {
+    if (team.team_number == null) continue;
+    if (!teamSetsByMatch[team.match_id]) {
+      teamSetsByMatch[team.match_id] = {};
+    }
+    teamSetsByMatch[team.match_id][team.team_number] = team.sets_won;
+  }
 
   const matchMeta: Record<number, { winner: number | null; date: string | null }> = {};
   for (const m of matches) {
@@ -154,24 +165,43 @@ async function fetchLeaderboardData(eventId: number | "all", matchType: string):
     const matchEntries = playerMatchMap[pid] ?? [];
     let wins = 0;
     let losses = 0;
+    let setsWon = 0;
+    let setsLost = 0;
     for (const entry of matchEntries) {
       const winner = matchMeta[entry.matchId]?.winner ?? null;
       if (winner == null) continue;
       if (entry.teamNumber === winner) wins++;
       else losses++;
+
+      const ownTeamNumber = entry.teamNumber;
+      if (ownTeamNumber == null) continue;
+      const ownSets = teamSetsByMatch[entry.matchId]?.[ownTeamNumber] ?? null;
+      const opponentTeamNumber = ownTeamNumber === 1 ? 2 : ownTeamNumber === 2 ? 1 : null;
+      const opponentSets =
+        opponentTeamNumber == null
+          ? null
+          : (teamSetsByMatch[entry.matchId]?.[opponentTeamNumber] ?? null);
+
+      if (ownSets != null) setsWon += ownSets;
+      if (opponentSets != null) setsLost += opponentSets;
     }
 
-    // Sort per-match rating entries by date ascending → first = season start, last = current
+    // Sort filtered rating entries by date ascending so currentRating reflects the latest category match.
     const ratingEntries = Object.entries(playerRatingMap[pid] ?? {})
       .map(([, v]) => v)
       .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
 
-    const first = ratingEntries[0];
     const last = ratingEntries[ratingEntries.length - 1];
     const currentRating = last?.ratingPost ?? null;
-    const seasonStartRating = first?.ratingPre ?? null;
-    const ratingChange =
-      currentRating != null && seasonStartRating != null ? currentRating - seasonStartRating : null;
+    const hasIncompleteRatingEntry = ratingEntries.some(
+      (entry) => entry.ratingPre == null || entry.ratingPost == null,
+    );
+    const ratingChange = hasIncompleteRatingEntry
+      ? null
+      : ratingEntries.reduce(
+          (total, entry) => total + (entry.ratingPost ?? 0) - (entry.ratingPre ?? 0),
+          0,
+        );
 
     rows.push({
       playerId: pid,
@@ -183,6 +213,8 @@ async function fetchLeaderboardData(eventId: number | "all", matchType: string):
       matchesPlayed: matchEntries.length,
       wins,
       losses,
+      setsWon,
+      setsLost,
     });
   }
 
@@ -205,17 +237,17 @@ const getOngoingLeaderboard = unstable_cache(
 
 // All-time: refresh every 2 minutes
 const getAllTimeLeaderboard = unstable_cache(
-  (matchType: string) => fetchLeaderboardData("all", matchType),
+  (matchType: string) => fetchLeaderboardData("ALL", matchType),
   ["leaderboard-all"],
   { revalidate: 120 },
 );
 
 export async function getLeaderboard(
-  eventId: number | "all",
+  eventId: number | "ALL",
   eventStatus: "upcoming" | "ongoing" | "completed" | undefined,
   matchType: string,
 ): Promise<LeaderboardRow[]> {
-  if (eventId === "all") return getAllTimeLeaderboard(matchType);
+  if (eventId === "ALL") return getAllTimeLeaderboard(matchType);
   if (eventStatus === "completed") return getCompletedLeaderboard(eventId, matchType);
   return getOngoingLeaderboard(eventId, matchType);
 }

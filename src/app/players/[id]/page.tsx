@@ -12,12 +12,11 @@ import BackToHome from "@/components/BackToHome";
 import MatchCard from "@/components/MatchCard";
 import MatchFiltersCard from "@/components/MatchFiltersCard";
 import PlayerCard from "@/components/PlayerCard";
+import { formatEventOptionLabel } from "@/lib/eventLabels";
 import {
   ALL_MATCH_FILTER,
   filterMatchesByEventAndType,
   getEventsFromMatches,
-  isValidMatchTypeFilter,
-  MATCH_TYPE_FILTER_OPTIONS,
 } from "@/lib/matches";
 import { useEventMap } from "@/lib/useEventMap";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
@@ -53,7 +52,7 @@ function PlayerProfilePageContent() {
     ratingHistory: playerRatingHistory,
     loading: loadingMatches,
   } = usePlayerMatches(selectedPlayerId || null);
-  const { eventMap } = useEventMap();
+  const { eventMap, events } = useEventMap();
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
@@ -68,9 +67,10 @@ function PlayerProfilePageContent() {
           : ALL_MATCH_FILTER;
 
     const typeParam = params.get("type");
-    const nextType = isValidMatchTypeFilter(typeParam)
-      ? (typeParam as string)
-      : ALL_MATCH_FILTER;
+    const nextType =
+      typeParam && typeParam !== ALL_MATCH_FILTER
+        ? typeParam
+        : ALL_MATCH_FILTER;
 
     setEventFilter((current) => (current === nextEvent ? current : nextEvent));
     setSelectedTypeFilter((current) =>
@@ -93,11 +93,22 @@ function PlayerProfilePageContent() {
   }, [pathname, router, searchParamsString, eventFilter, selectedTypeFilter]);
 
   const eventOptions = useMemo(() => {
+    const eventRowsById = new Map(
+      events.map((event) => [Number(event.event_id), event] as const),
+    );
+
     return getEventsFromMatches(playerMatches).map((id) => ({
       id,
-      label: eventMap[id] ?? `Event ${id}`,
+      label: formatEventOptionLabel(
+        eventRowsById.get(id) ?? {
+          event_id: id,
+          name: eventMap[id] ?? null,
+          start_date: null,
+          end_date: null,
+        },
+      ),
     }));
-  }, [playerMatches, eventMap]);
+  }, [playerMatches, eventMap, events]);
 
   const filteredMatches = useMemo(() => {
     return filterMatchesByEventAndType(
@@ -399,7 +410,6 @@ function PlayerProfilePageContent() {
               eventFilter={eventFilter}
               events={eventOptions}
               selectedTypeFilter={selectedTypeFilter}
-              typeFilterOptions={MATCH_TYPE_FILTER_OPTIONS}
               onEventChange={(value) => setEventFilter(value)}
               onTypeChange={(value) => setSelectedTypeFilter(value)}
             />
