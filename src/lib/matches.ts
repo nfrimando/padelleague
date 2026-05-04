@@ -25,8 +25,16 @@ export function filterMatchesByEventAndType(
   eventFilter: number | typeof ALL_MATCH_FILTER,
   selectedTypeFilter: string,
 ) {
+  const shouldFilterByEventId =
+    eventFilter !== ALL_MATCH_FILTER && Number.isFinite(eventFilter);
+
   return matches.filter((match) => {
-    if (eventFilter !== ALL_MATCH_FILTER && match.event_id !== eventFilter) {
+    // Treat null event_id as unassigned so it remains visible across seasons.
+    if (
+      shouldFilterByEventId &&
+      match.event_id != null &&
+      match.event_id !== eventFilter
+    ) {
       return false;
     }
     if (selectedTypeFilter === ALL_MATCH_FILTER) return true;
