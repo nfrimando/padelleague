@@ -120,8 +120,8 @@ export default function HomePage() {
           .eq("status", "completed"),
         supabase
           .from("events")
-          .select("event_id,name")
-          .order("event_id", { ascending: false })
+          .select("event_id,name,start_date")
+          .order("start_date", { ascending: false })
           .limit(1),
         supabase.from("match_sets").select("*", { count: "exact", head: true }),
       ]);
