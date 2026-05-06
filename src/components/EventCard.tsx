@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { Event } from "@/lib/types";
+import { SEASON_11 } from "@/lib/data/season-11";
+
+const EVENTS_WITH_STANDINGS = new Set<number>([SEASON_11.event_id]);
 
 type Props = {
   event: Event;
@@ -118,7 +121,7 @@ export default function EventCard({ event }: Props) {
         </div>
 
         {/* CTA */}
-        <div className="mt-auto pt-1">
+        <div className="mt-auto pt-1 flex flex-wrap items-center gap-2">
           {isOpen ? (
             <Link
               href={`/events/register?eventId=${event.event_id}`}
@@ -126,14 +129,23 @@ export default function EventCard({ event }: Props) {
             >
               Register Now
             </Link>
-          ) : event.status === "completed" ? (
+          ) : event.status === "completed" && !EVENTS_WITH_STANDINGS.has(event.event_id) ? (
             <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
               Event completed
             </span>
-          ) : (
+          ) : !EVENTS_WITH_STANDINGS.has(event.event_id) ? (
             <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
               Registration closed
             </span>
+          ) : null}
+          {EVENTS_WITH_STANDINGS.has(event.event_id) && (
+            <Link
+              href={`/events/${event.event_id}/results`}
+              className="inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-bold transition-colors"
+              style={{ background: "#00C8DC", color: "#0E1523" }}
+            >
+              Season Standings
+            </Link>
           )}
         </div>
       </div>
