@@ -185,8 +185,12 @@ function PlayerProfilePageContent() {
     );
   }
 
-  const matchCount = filteredMatches.length;
-  const winCount = filteredMatches.filter((m) => {
+  // Exclude cancelled matches
+  const nonCancelledMatches = filteredMatches.filter(
+    (m) => m.status !== "cancelled",
+  );
+  const matchCount = nonCancelledMatches.length;
+  const winCount = nonCancelledMatches.filter((m) => {
     const playerTeam = m.teams.find(
       (t) =>
         String(t.player_1?.player_id) === selectedPlayerId ||
