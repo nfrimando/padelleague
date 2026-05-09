@@ -73,6 +73,10 @@ export function MatchPreviewFull({ match }: { match: MatchWithTeams }) {
         <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
           Venue: {match.venue || "No venue"}
         </div>
+      ) : match.status === "cancelled" ? (
+        <div className="mt-0.5 text-[11px] text-red-600 dark:text-red-400 font-semibold">
+          Match Cancelled
+        </div>
       ) : (
         <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
           Sets: {setScores}
