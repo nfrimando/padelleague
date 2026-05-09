@@ -12,7 +12,11 @@ type UsePlayerMatchCountsResult = {
 
 type PlayerSummaryRow = {
   player_id: number | string;
-  match_count: number | string | null;
+  match_count_all: number | string | null;
+  match_count_scheduled: number | string | null;
+  match_count_completed: number | string | null;
+  match_count_cancelled: number | string | null;
+  match_count_forfeit: number | string | null;
   latest_match_date: string | null;
   latest_rating: number | string | null;
   latest_rating_formula: string | null;
@@ -86,7 +90,7 @@ export function usePlayerMatchCounts(
             return;
           }
 
-          const matchCount = Number(row.match_count);
+          const matchCount = Number(row.match_count_completed) + Number(row.match_count_scheduled) + Number(row.match_count_forfeit);
           counts[playerId] = Number.isFinite(matchCount) ? matchCount : 0;
 
           latestDates[playerId] = row.latest_match_date || null;
