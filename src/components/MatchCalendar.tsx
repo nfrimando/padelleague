@@ -463,7 +463,13 @@ export default function MatchCalendar({
                   >
                     <div className="flex items-center justify-center gap-1">
                       <div className="text-[9px] font-semibold leading-tight text-slate-500 dark:text-slate-400 truncate uppercase tracking-wide">
-                        {matchTopLine(m)}
+                        {m.status === "cancelled" ? (
+                          <span className="text-red-600 dark:text-red-400 font-semibold">
+                            Cancelled
+                          </span>
+                        ) : (
+                          matchTopLine(m)
+                        )}
                       </div>
                     </div>
                     <TeamPlayerLine
