@@ -22,23 +22,6 @@ export type Player = {
   updated_at?: string;
 };
 
-// season_id is a bigint integer PK.
-// name and registration_fee are added via migration 20260414000001.
-// Seasons have been migrated to events (migration 20260502000004-006).
-// The Season type is kept only for legacy code that may still reference it.
-// @deprecated Use Event instead.
-export type Season = {
-  season_id: number;
-  name?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-  registration_fee?: number | null;
-  registration_status: "open" | "closed";
-  status: "upcoming" | "ongoing" | "completed";
-  created_at: string;
-  updated_at: string;
-};
-
 export type Event = {
   event_id: number;
   name?: string | null;
