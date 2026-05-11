@@ -286,7 +286,14 @@ export default function MatchCalendar({
       <div className="sm:hidden border-t border-slate-200 dark:border-slate-700">
         <div ref={mobileAgendaRef} className="max-h-[65vh] overflow-y-auto">
           {mobileDates.map((dateStr) => {
-            const dayMatches = matchesByDate(dateStr);
+            const dayMatches = matchesByDate(dateStr)
+              .slice()
+              .sort((a, b) => {
+                if (!a.time_local && !b.time_local) return 0;
+                if (!a.time_local) return 1;
+                if (!b.time_local) return -1;
+                return a.time_local.localeCompare(b.time_local);
+              });
             const [y, m, d] = dateStr.split("-").map(Number);
             const isCurrentToday =
               y === now.getFullYear() &&
@@ -418,7 +425,16 @@ export default function MatchCalendar({
           const isCurrent = cell.type === "current";
           const isLastRow = idx >= allCells.length - 7;
           const isLastCol = (idx + 1) % 7 === 0;
-          const dayMatches = isCurrent ? matchesByDate(cell.dateStr) : [];
+          const dayMatches = isCurrent
+            ? matchesByDate(cell.dateStr)
+                .slice()
+                .sort((a, b) => {
+                  if (!a.time_local && !b.time_local) return 0;
+                  if (!a.time_local) return 1;
+                  if (!b.time_local) return -1;
+                  return a.time_local.localeCompare(b.time_local);
+                })
+            : [];
 
           return (
             <div
