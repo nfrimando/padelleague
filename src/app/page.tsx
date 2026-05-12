@@ -50,16 +50,6 @@ export default function HomePage() {
   const [authResolved, setAuthResolved] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
 
-  const handleGoogleSignIn = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/`,
-        queryParams: { prompt: "select_account" },
-      },
-    });
-  };
-
   // Sticky nav shadow
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -95,7 +85,6 @@ export default function HomePage() {
   }, []);
 
   const isAuthenticated = hasMounted && authResolved && authUser !== null;
-  const showGuestUi = hasMounted && !isAuthenticated;
 
   // Fetch all homepage data
   useEffect(() => {
@@ -230,20 +219,7 @@ export default function HomePage() {
           scrolled ? "opacity-100" : "opacity-100"
         }`}
       >
-        <SiteHeader
-          activePath="/"
-          rightSlot={
-            showGuestUi ? (
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                className="bg-[#00C8DC] text-[#0E1523] px-4 py-2 rounded-full hover:bg-white transition-all text-sm"
-              >
-                Sign In
-              </button>
-            ) : undefined
-          }
-        />
+        <SiteHeader activePath="/" />
       </div>
 
       {/* ── Hero + Stats (single flex-col section) ───────────────────────── */}

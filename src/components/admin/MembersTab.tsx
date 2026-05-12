@@ -68,9 +68,9 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
           Profile Claims
         </div>
         <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
-          Players who signed in with Google and want to link their account to an
-          existing player profile. Approving updates the players table row with
-          their email.
+          Players who signed in and want to link their account to an existing
+          player profile. Approving updates the players table row with their
+          email.
         </p>
       </div>
 
