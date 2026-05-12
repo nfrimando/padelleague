@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
+import EmailAuthForm from "@/components/EmailAuthForm";
 import {
   fetchPlayerByEmail,
   PLAYER_LOOKUP_REGISTER_SELECT,
@@ -403,6 +404,7 @@ export default function RegisterPage() {
                 <GoogleIcon />
                 Continue with Google
               </button>
+              <EmailAuthForm redirectTo="/events/register" />
               <div className="mt-6 border-t border-white/10 pt-6">
                 <button
                   type="button"
