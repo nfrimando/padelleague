@@ -7,6 +7,11 @@ import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 
+const labelCls =
+  "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
+const inputCls =
+  "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
+
 export function EditPlayerTab() {
   const {
     players,
@@ -29,7 +34,6 @@ export function EditPlayerTab() {
 
   const filtered = usePlayerSearch(players, search);
 
-  // When the page hands us a freshly created player, adopt it.
   useEffect(() => {
     if (!pendingEditPlayer) return;
     setSelectedPlayer(pendingEditPlayer);
@@ -42,7 +46,6 @@ export function EditPlayerTab() {
     consumePendingEditPlayer();
   }, [pendingEditPlayer, consumePendingEditPlayer]);
 
-  // Sync edit fields when selected player changes.
   useEffect(() => {
     setEditName(selectedPlayer?.name || "");
     setEditNickname(selectedPlayer?.nickname || "");
@@ -107,9 +110,10 @@ export function EditPlayerTab() {
       };
 
       if (!response.ok) {
-        const details = result.details?.join(" ");
         setSavePlayerError(
-          details || result.error || "Failed to update player.",
+          result.details?.join(" ") ||
+            result.error ||
+            "Failed to update player.",
         );
         return;
       }
@@ -135,10 +139,15 @@ export function EditPlayerTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-        Player Lookup
-      </h3>
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Edit Player
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Search for a player to update their name, nickname, or profile image.
+        </p>
+      </div>
 
       <PlayerSearchBox
         value={search}
@@ -156,104 +165,117 @@ export function EditPlayerTab() {
       />
 
       {playersLoading && (
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          Loading players...
-        </div>
+        <p className="text-sm text-slate-400 dark:text-slate-500">
+          Loading players…
+        </p>
       )}
-
       {playersError && (
-        <div className="text-sm text-rose-600 dark:text-rose-400">
+        <p className="text-sm text-rose-500">
           Error loading players: {playersError}
-        </div>
+        </p>
       )}
 
       {selectedPlayer && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
-          <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            Player Details
-          </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div>
-              <label className="text-slate-500 dark:text-slate-400">
-                name:
-              </label>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-              />
+        <div className="space-y-4">
+          <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Edit Fields
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls} htmlFor="edit-player-name">
+                  Name
+                </label>
+                <input
+                  id="edit-player-name"
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls} htmlFor="edit-player-nickname">
+                  Nickname
+                </label>
+                <input
+                  id="edit-player-nickname"
+                  type="text"
+                  value={editNickname}
+                  onChange={(e) => setEditNickname(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls} htmlFor="edit-player-image-link">
+                  Image URL{" "}
+                  <span className="normal-case tracking-normal font-normal text-slate-400">
+                    (optional)
+                  </span>
+                </label>
+                <input
+                  id="edit-player-image-link"
+                  type="text"
+                  value={editImageLink}
+                  onChange={(e) => setEditImageLink(e.target.value)}
+                  className={inputCls}
+                  placeholder="https://…"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-slate-500 dark:text-slate-400">
-                nickname:
-              </label>
-              <input
-                type="text"
-                value={editNickname}
-                onChange={(e) => setEditNickname(e.target.value)}
-                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-              />
-            </div>
-            <div className="xl:col-span-2">
-              <label className="text-slate-500 dark:text-slate-400">
-                image_link:
-              </label>
-              <input
-                type="text"
-                value={editImageLink}
-                onChange={(e) => setEditImageLink(e.target.value)}
-                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-                placeholder="https://..."
-              />
-            </div>
-          </div>
+          </section>
 
-          <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 grid gap-3 xl:grid-cols-4">
-            <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                player_id:
-              </span>{" "}
-              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                {selectedPlayer.player_id}
-              </span>
+          <section className="rounded-md bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 p-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
+              Record Info
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+              <div>
+                <span className={labelCls}>Player ID</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
+                  {selectedPlayer.player_id}
+                </span>
+              </div>
+              <div>
+                <span className={labelCls}>Initial Rating</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
+                  {typeof selectedPlayer.initial_rating === "number"
+                    ? selectedPlayer.initial_rating
+                    : "N/A"}
+                </span>
+              </div>
+              <div>
+                <span className={labelCls}>Created</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
+                  {selectedPlayer.created_at
+                    ? new Date(selectedPlayer.created_at).toLocaleDateString(
+                        "en-PH",
+                        { month: "short", day: "numeric", year: "numeric" },
+                      )
+                    : "N/A"}
+                </span>
+              </div>
+              <div>
+                <span className={labelCls}>Updated</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
+                  {selectedPlayer.updated_at
+                    ? new Date(selectedPlayer.updated_at).toLocaleDateString(
+                        "en-PH",
+                        { month: "short", day: "numeric", year: "numeric" },
+                      )
+                    : "N/A"}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                initial_rating:
-              </span>{" "}
-              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                {typeof selectedPlayer.initial_rating === "number"
-                  ? selectedPlayer.initial_rating
-                  : "N/A"}
-              </span>
-            </div>
-            <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                created_at:
-              </span>{" "}
-              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                {selectedPlayer.created_at || "N/A"}
-              </span>
-            </div>
-            <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                updated_at:
-              </span>{" "}
-              <span className="font-medium text-slate-900 dark:text-slate-100 break-all">
-                {selectedPlayer.updated_at || "N/A"}
-              </span>
-            </div>
-          </div>
+          </section>
 
           {savePlayerError && (
-            <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
+            <div className="rounded-md border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
               {savePlayerError}
             </div>
           )}
-
           {savePlayerSuccess && (
-            <div className="rounded bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-2 text-emerald-700 dark:text-emerald-300">
+            <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
               {savePlayerSuccess}
             </div>
           )}
@@ -263,9 +285,9 @@ export function EditPlayerTab() {
               type="button"
               onClick={() => void handleSavePlayer()}
               disabled={savingPlayer}
-              className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
-              {savingPlayer ? "Saving..." : "Save Player"}
+              {savingPlayer ? "Saving…" : "Save Player"}
             </button>
           </div>
         </div>

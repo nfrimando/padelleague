@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import BackToHome from "@/components/BackToHome";
+import SiteHeader from "@/components/SiteHeader";
 import { AdminDataProvider } from "@/components/admin/AdminDataContext";
 import { CompleteMatchTab } from "@/components/admin/CompleteMatchTab";
 import { CreatePlayerTab } from "@/components/admin/CreatePlayerTab";
@@ -11,39 +11,66 @@ import { EventsTab } from "@/components/admin/EventsTab";
 import { MembersTab } from "@/components/admin/MembersTab";
 import { ScheduleMatchTab } from "@/components/admin/ScheduleMatchTab";
 import { UpdateMatchTab } from "@/components/admin/UpdateMatchTab";
+import { CreateEventTab } from "@/components/admin/CreateEventTab";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 import { useMatchEvents } from "@/lib/useMatchEvents";
 import { useScheduledMatches } from "@/lib/useScheduledMatches";
 import { usePlayers } from "@/lib/usePlayers";
-import { CreateEventTab } from "@/components/admin/CreateEventTab";
 
-const ADMIN_PLAYER_TABS = [
-  { value: "MEMBERS", label: "Members" },
-  { value: "CREATE_EVENT", label: "Create Event" },
-  { value: "EVENTS", label: "Manage Events" },
-  { value: "CREATE", label: "Create Player" },
-  { value: "EDIT", label: "Edit Player" },
-  { value: "SCHEDULE_MATCH", label: "Schedule Match" },
-  { value: "COMPLETE_MATCH", label: "Complete Match" },
-  { value: "UPDATE_MATCH", label: "Update Match" },
-] as const;
-const AUTH_BOX_CLASS =
-  "w-full md:w-[24rem] md:max-w-[24rem] min-h-[188px] mx-auto rounded-lg border border-slate-200 dark:border-slate-700 p-4";
+type TabValue =
+  | "MEMBERS"
+  | "CREATE_EVENT"
+  | "EVENTS"
+  | "CREATE"
+  | "EDIT"
+  | "SCHEDULE_MATCH"
+  | "COMPLETE_MATCH"
+  | "UPDATE_MATCH";
+
+const NAV_GROUPS: {
+  label: string;
+  items: { value: TabValue; label: string }[];
+}[] = [
+  {
+    label: "Matches",
+    items: [
+      { value: "SCHEDULE_MATCH", label: "Schedule Match" },
+      { value: "COMPLETE_MATCH", label: "Complete Match" },
+      { value: "UPDATE_MATCH", label: "Update Match" },
+    ],
+  },
+  {
+    label: "Players",
+    items: [
+      { value: "CREATE", label: "Create Player" },
+      { value: "EDIT", label: "Edit Player" },
+      { value: "MEMBERS", label: "Members" },
+    ],
+  },
+  {
+    label: "Events",
+    items: [
+      { value: "CREATE_EVENT", label: "Create Event" },
+      { value: "EVENTS", label: "Manage Events" },
+    ],
+  },
+];
+
+const ALL_TABS = NAV_GROUPS.flatMap((g) => g.items);
+const ALL_TAB_VALUES = ALL_TABS.map((t) => t.value);
 
 function AdminPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const TAB_VALUES = useMemo(() => ADMIN_PLAYER_TABS.map((t) => t.value), []);
   const rawTab = searchParams.get("tab");
-  const activePlayerTab: (typeof ADMIN_PLAYER_TABS)[number]["value"] =
-    TAB_VALUES.includes(rawTab as (typeof ADMIN_PLAYER_TABS)[number]["value"])
-      ? (rawTab as (typeof ADMIN_PLAYER_TABS)[number]["value"])
-      : "SCHEDULE_MATCH";
+  const activeTab: TabValue = ALL_TAB_VALUES.includes(rawTab as TabValue)
+    ? (rawTab as TabValue)
+    : "SCHEDULE_MATCH";
 
-  const setActivePlayerTab = useCallback(
-    (tab: (typeof ADMIN_PLAYER_TABS)[number]["value"]) => {
+  const setActiveTab = useCallback(
+    (tab: TabValue) => {
       const params = new URLSearchParams(searchParams.toString());
       params.set("tab", tab);
       router.push(`/admin?${params.toString()}`);
@@ -51,13 +78,13 @@ function AdminPageContent() {
     [router, searchParams],
   );
 
-  // ── Auth state ──────────────────────────────────────────────────────────
+  // Auth state
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // ── Cross-tab state ─────────────────────────────────────────────────────
+  // Cross-tab state
   const [matchRefreshKey, setMatchRefreshKey] = useState(0);
   const [pendingEditPlayer, setPendingEditPlayer] = useState<Player | null>(
     null,
@@ -69,43 +96,50 @@ function AdminPageContent() {
     loading: playersLoading,
     error: playersError,
   } = usePlayers({ enabled: isAdmin, orderByName: true });
+
   const {
     events: matchSeasons,
     loading: matchSeasonsLoading,
     error: matchSeasonsError,
   } = useMatchEvents(isAdmin);
+
   const {
     scheduledMatches,
     loading: scheduledMatchesLoading,
     error: scheduledMatchesError,
   } = useScheduledMatches({
-    enabled: isAdmin && activePlayerTab === "COMPLETE_MATCH",
+    enabled: isAdmin && activeTab === "COMPLETE_MATCH",
     refreshKey: String(matchRefreshKey),
   });
+
   const playerNameById = useMemo(
     () =>
       new Map(
-        players.map((player) => [
-          String(player.player_id),
-          player.nickname || player.name || `#${player.player_id}`,
+        players.map((p) => [
+          String(p.player_id),
+          p.nickname || p.name || `#${p.player_id}`,
         ]),
       ),
     [players],
   );
+
   const refreshScheduledMatches = useCallback(() => {
     setMatchRefreshKey((k) => k + 1);
   }, []);
+
   const consumePendingEditPlayer = useCallback(() => {
     setPendingEditPlayer(null);
   }, []);
+
   const handlePlayerCreated = useCallback(
     (created: Player) => {
       setPlayers((prev) => [created, ...prev]);
       setPendingEditPlayer(created);
-      setActivePlayerTab("EDIT");
+      setActiveTab("EDIT");
     },
-    [setPlayers, setActivePlayerTab],
+    [setPlayers, setActiveTab],
   );
+
   const adminDataContextValue = useMemo(
     () => ({
       players,
@@ -147,41 +181,26 @@ function AdminPageContent() {
     let isMounted = true;
 
     async function resolveAdminStatus(userId: string | undefined) {
-      if (!userId) {
-        return false;
-      }
-
+      if (!userId) return false;
       const { data, error } = await supabase
         .from("admin_users")
         .select("user_id")
         .eq("user_id", userId)
         .maybeSingle();
-
-      if (error) {
-        return false;
-      }
-
+      if (error) return false;
       return !!data;
     }
 
     async function initSession() {
       const { data } = await supabase.auth.getUser();
-
-      if (!isMounted) {
-        return;
-      }
-
+      if (!isMounted) return;
       const nextEmail = data.user?.email ?? null;
       const nextAvatarUrl =
         (data.user?.user_metadata?.picture as string | undefined) ||
         (data.user?.user_metadata?.avatar_url as string | undefined) ||
         null;
       const nextIsAdmin = await resolveAdminStatus(data.user?.id);
-
-      if (!isMounted) {
-        return;
-      }
-
+      if (!isMounted) return;
       setEmail(nextEmail);
       setAvatarUrl(nextAvatarUrl);
       setIsAdmin(nextIsAdmin);
@@ -194,20 +213,14 @@ function AdminPageContent() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       void (async () => {
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         const nextEmail = session?.user?.email ?? null;
         const nextAvatarUrl =
           (session?.user?.user_metadata?.picture as string | undefined) ||
           (session?.user?.user_metadata?.avatar_url as string | undefined) ||
           null;
         const nextIsAdmin = await resolveAdminStatus(session?.user?.id);
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         setEmail(nextEmail);
         setAvatarUrl(nextAvatarUrl);
         setIsAdmin(nextIsAdmin);
@@ -226,18 +239,15 @@ function AdminPageContent() {
       const params = new URLSearchParams(searchParams.toString());
       params.delete("tab");
       router.replace(`/admin?${params.toString()}`);
-      return;
     }
-  }, [isAdmin]);
+  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/admin`,
-        queryParams: {
-          prompt: "select_account",
-        },
+        queryParams: { prompt: "select_account" },
       },
     });
   };
@@ -254,145 +264,189 @@ function AdminPageContent() {
   };
 
   return (
-    <>
-      <BackToHome />
-      <div className="w-full p-6 max-w-[96rem] mx-auto">
-        <div className="w-full md:w-[24rem] md:max-w-[24rem] mx-auto mb-6">
-          <h1 className="text-2xl font-bold mb-2">Admin</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Google sign-in is required to access this page.
-          </p>
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A101C]">
+      <SiteHeader />
+
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+          Checking authentication…
         </div>
-
-        {loading ? (
-          <div
-            className={`${AUTH_BOX_CLASS} flex items-center text-sm text-slate-600 dark:text-slate-300`}
-          >
-            Checking authentication...
-          </div>
-        ) : email ? (
-          <div className="space-y-4">
-            <div className={`${AUTH_BOX_CLASS} flex flex-col justify-between`}>
-              <div className="flex items-center gap-3">
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt="Google profile"
-                    className="h-10 w-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-                  />
-                ) : (
-                  <div className="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800" />
-                )}
-                <div className="text-sm text-slate-500 dark:text-slate-400">
-                  Signed in as
-                </div>
-                <div className="font-medium text-slate-900 dark:text-slate-100">
-                  {email}
-                </div>
-              </div>
-
-              <div
-                className={`rounded-md px-3 py-2 text-sm font-medium ${
-                  isAdmin
-                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
-                    : "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
-                }`}
-              >
-                Admin: {isAdmin ? "Yes" : "No"}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
-              >
-                Sign out
-              </button>
-            </div>
-
-            {isAdmin ? (
-              <div className="w-full md:w-3/4 mx-auto rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 xl:p-6">
-                <div className="space-y-4">
-                  <div className="mx-auto w-full max-w-md text-center">
-                    <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                      Admin Tools
-                    </h2>
-                  </div>
-
-                  <div className="w-full overflow-x-auto">
-                    <div className="flex justify-center min-w-[420px] sm:min-w-0">
-                      <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/60">
-                        {ADMIN_PLAYER_TABS.map((tab) => {
-                          const active = activePlayerTab === tab.value;
-                          return (
-                            <button
-                              key={tab.value}
-                              type="button"
-                              onClick={() => setActivePlayerTab(tab.value)}
-                              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                                active
-                                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                                  : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
-                              }`}
-                            >
-                              {tab.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <AdminDataProvider value={adminDataContextValue}>
-                    {/* TAB CONTENT */}
-                    {activePlayerTab === "EDIT" ? (
-                      <EditPlayerTab />
-                    ) : activePlayerTab === "SCHEDULE_MATCH" ? (
-                      <ScheduleMatchTab />
-                    ) : activePlayerTab === "COMPLETE_MATCH" ? (
-                      <CompleteMatchTab />
-                    ) : activePlayerTab === "UPDATE_MATCH" ? (
-                      <UpdateMatchTab />
-                    ) : activePlayerTab === "CREATE_EVENT" ? (
-                      <CreateEventTab />
-                    ) : activePlayerTab === "CREATE" ? (
-                      <CreatePlayerTab />
-                    ) : activePlayerTab === "MEMBERS" ? (
-                      <MembersTab
-                        enabled={activePlayerTab === "MEMBERS" && isAdmin}
-                      />
-                    ) : activePlayerTab === "EVENTS" ? (
-                      <EventsTab
-                        enabled={activePlayerTab === "EVENTS" && isAdmin}
-                      />
-                    ) : null}
-                  </AdminDataProvider>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-rose-200 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-900/10 p-4 text-sm text-rose-700 dark:text-rose-300">
-                You are authenticated but not authorized to use admin tools.
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className={`${AUTH_BOX_CLASS} flex flex-col justify-between`}>
-            <div className="text-sm text-slate-600 dark:text-slate-300">
-              You are not signed in.
+      ) : !email ? (
+        /* ── Not signed in ── */
+        <div className="flex flex-1 items-center justify-center p-8">
+          <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 space-y-5 shadow-sm">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                Admin
+              </h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Sign in with Google to access admin tools.
+              </p>
             </div>
             <button
               type="button"
-              onClick={handleGoogleSignIn}
-              className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              onClick={() => void handleGoogleSignIn()}
+              className="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
             >
               Continue with Google
             </button>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      ) : !isAdmin ? (
+        /* ── Authenticated but not admin ── */
+        <div className="flex flex-1 items-center justify-center p-8">
+          <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 space-y-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  className="h-9 w-9 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                />
+              ) : (
+                <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-slate-700" />
+              )}
+              <div>
+                <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  {email}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  Not an admin
+                </div>
+              </div>
+            </div>
+            <div className="rounded-md bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/40 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
+              You are not authorised to use admin tools.
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ── Admin dashboard ── */
+        <div className="flex flex-col md:flex-row flex-1">
+          {/* ── Desktop sidebar ── */}
+          <aside className="hidden md:flex flex-col w-52 shrink-0 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            {/* User identity */}
+            <div className="flex items-center gap-2.5 px-4 py-4 border-b border-slate-200 dark:border-slate-700">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  className="h-7 w-7 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                />
+              ) : (
+                <div className="h-7 w-7 rounded-full bg-slate-200 dark:bg-slate-700 shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+                  {email}
+                </div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                  Admin
+                </div>
+              </div>
+            </div>
+
+            {/* Nav groups */}
+            <nav className="flex-1 py-2 overflow-y-auto">
+              {NAV_GROUPS.map((group, gi) => (
+                <div key={group.label} className={gi > 0 ? "mt-1" : ""}>
+                  <div className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    {group.label}
+                  </div>
+                  {group.items.map((item) => {
+                    const active = activeTab === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setActiveTab(item.value)}
+                        className={`w-full text-left text-sm px-4 py-2 transition-colors border-l-2 ${
+                          active
+                            ? "border-[#00C8DC] bg-[#00C8DC]/10 text-[#00C8DC] font-medium"
+                            : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
+
+            {/* Sign out */}
+            <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => void handleSignOut()}
+                className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+          </aside>
+
+          {/* ── Right column (mobile tabs + content) ── */}
+          <div className="flex flex-col flex-1 min-w-0">
+            {/* Mobile tab bar */}
+            <div className="md:hidden border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-x-auto">
+              <div className="flex items-center gap-0.5 px-3 py-2 min-w-max">
+                {ALL_TABS.map((tab) => {
+                  const active = activeTab === tab.value;
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => setActiveTab(tab.value)}
+                      className={`px-3 py-1.5 text-sm rounded-md whitespace-nowrap transition-colors ${
+                        active
+                          ? "bg-[#00C8DC]/10 text-[#00C8DC] font-medium"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tab content */}
+            <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+              <AdminDataProvider value={adminDataContextValue}>
+                {activeTab === "SCHEDULE_MATCH" ? (
+                  <ScheduleMatchTab />
+                ) : activeTab === "COMPLETE_MATCH" ? (
+                  <CompleteMatchTab />
+                ) : activeTab === "UPDATE_MATCH" ? (
+                  <UpdateMatchTab />
+                ) : activeTab === "CREATE" ? (
+                  <CreatePlayerTab />
+                ) : activeTab === "EDIT" ? (
+                  <EditPlayerTab />
+                ) : activeTab === "MEMBERS" ? (
+                  <MembersTab enabled={activeTab === "MEMBERS" && isAdmin} />
+                ) : activeTab === "CREATE_EVENT" ? (
+                  <CreateEventTab />
+                ) : activeTab === "EVENTS" ? (
+                  <EventsTab enabled={activeTab === "EVENTS" && isAdmin} />
+                ) : null}
+              </AdminDataProvider>
+            </main>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
+
 export default function AdminPage() {
   return (
     <Suspense>

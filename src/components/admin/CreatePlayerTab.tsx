@@ -5,6 +5,11 @@ import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 
+const labelCls =
+  "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
+const inputCls =
+  "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
+
 export function CreatePlayerTab() {
   const { handlePlayerCreated } = useAdminDataContext();
   const [createName, setCreateName] = useState("");
@@ -43,7 +48,7 @@ export function CreatePlayerTab() {
         payload.initial_rating !== null &&
         (!Number.isFinite(payload.initial_rating) || payload.initial_rating < 0)
       ) {
-        setCreatePlayerError("initial_rating must be a non-negative number.");
+        setCreatePlayerError("Initial rating must be a non-negative number.");
         return;
       }
 
@@ -78,9 +83,10 @@ export function CreatePlayerTab() {
       };
 
       if (!response.ok) {
-        const details = result.details?.join(" ");
         setCreatePlayerError(
-          details || result.error || "Failed to create player.",
+          result.details?.join(" ") ||
+            result.error ||
+            "Failed to create player.",
         );
         return;
       }
@@ -105,85 +111,92 @@ export function CreatePlayerTab() {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
-      <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-        Create New Player
-      </div>
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-player-name"
-          >
-            name:
-          </label>
-          <input
-            id="create-player-name"
-            type="text"
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-          />
-        </div>
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-player-nickname"
-          >
-            nickname:
-          </label>
-          <input
-            id="create-player-nickname"
-            type="text"
-            value={createNickname}
-            onChange={(e) => setCreateNickname(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-          />
-        </div>
-        <div className="xl:col-span-2">
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-player-image-link"
-          >
-            image_link:
-          </label>
-          <input
-            id="create-player-image-link"
-            type="text"
-            value={createImageLink}
-            onChange={(e) => setCreateImageLink(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="https://..."
-          />
-        </div>
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-player-initial-rating"
-          >
-            initial_rating:
-          </label>
-          <input
-            id="create-player-initial-rating"
-            type="number"
-            step="0.0001"
-            min="0"
-            value={createInitialRating}
-            onChange={(e) => setCreateInitialRating(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="e.g. 3.5"
-          />
-        </div>
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Create Player
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Add a new player to the league. You'll be taken to Edit Player to
+          review the record after creation.
+        </p>
       </div>
 
+      <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          Player Details
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelCls} htmlFor="create-player-name">
+              Name
+            </label>
+            <input
+              id="create-player-name"
+              type="text"
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              className={inputCls}
+              placeholder="Full name"
+            />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="create-player-nickname">
+              Nickname
+            </label>
+            <input
+              id="create-player-nickname"
+              type="text"
+              value={createNickname}
+              onChange={(e) => setCreateNickname(e.target.value)}
+              className={inputCls}
+              placeholder="Display name"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={labelCls} htmlFor="create-player-image-link">
+              Image URL{" "}
+              <span className="normal-case tracking-normal font-normal text-slate-400">
+                (optional)
+              </span>
+            </label>
+            <input
+              id="create-player-image-link"
+              type="text"
+              value={createImageLink}
+              onChange={(e) => setCreateImageLink(e.target.value)}
+              className={inputCls}
+              placeholder="https://…"
+            />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="create-player-initial-rating">
+              Initial Rating{" "}
+              <span className="normal-case tracking-normal font-normal text-slate-400">
+                (optional)
+              </span>
+            </label>
+            <input
+              id="create-player-initial-rating"
+              type="number"
+              step="0.0001"
+              min="0"
+              value={createInitialRating}
+              onChange={(e) => setCreateInitialRating(e.target.value)}
+              className={inputCls}
+              placeholder="e.g. 3.5"
+            />
+          </div>
+        </div>
+      </section>
+
       {createPlayerError && (
-        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
+        <div className="rounded-md border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
           {createPlayerError}
         </div>
       )}
-
       {createPlayerSuccess && (
-        <div className="rounded bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-2 text-emerald-700 dark:text-emerald-300">
+        <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
           {createPlayerSuccess}
         </div>
       )}
@@ -193,9 +206,9 @@ export function CreatePlayerTab() {
           type="button"
           onClick={() => void handleCreatePlayer()}
           disabled={creatingPlayer}
-          className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          {creatingPlayer ? "Creating..." : "Create Player"}
+          {creatingPlayer ? "Creating…" : "Create Player"}
         </button>
       </div>
     </div>
