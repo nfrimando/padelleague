@@ -61,18 +61,28 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
+    <div className="space-y-8 max-w-3xl">
       {/* ── Profile Claims ─────────────────────────────────────────── */}
-      <div className="mt-6">
-        <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-          Profile Claims
-        </div>
-        <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
-          Players who signed in and want to link their account to an existing
-          player profile. Approving updates the players table row with their
-          email.
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Members
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Review pending profile claims and new membership applications.
         </p>
       </div>
+
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            Profile Claims
+          </h3>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
+            Players who signed in and want to link their account to an existing
+            player profile. Approving updates the players table row with their
+            email.
+          </p>
+        </div>
 
       {claimsLoading ? (
         <div className="text-slate-500 dark:text-slate-400 animate-pulse">
@@ -138,16 +148,19 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
         </div>
       )}
 
+      </section>
+
       {/* ── Pending Membership Applications ──────────────────────────────── */}
-      <div className="mt-6">
-        <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-          Membership Applications
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            Membership Applications
+          </h3>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
+            New player applications submitted via the Join page. Approving
+            creates a new row in players table.
+          </p>
         </div>
-        <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
-          New player applications submitted via the Join page. Approving creates
-          a new row in players table.
-        </p>
-      </div>
 
       {applicationsLoading ? (
         <div className="text-slate-500 dark:text-slate-400 animate-pulse">
@@ -211,6 +224,7 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
           ))}
         </div>
       )}
+      </section>
     </div>
   );
 }

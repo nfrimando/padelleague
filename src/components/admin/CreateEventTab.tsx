@@ -8,9 +8,9 @@ type AdminEventRow = {
 };
 
 const inputCls =
-  "mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-slate-900 dark:text-slate-100 text-sm";
+  "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
 const labelCls =
-  "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide";
+  "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
 
 export function CreateEventTab() {
   const [newEventName, setNewEventName] = useState("");
@@ -96,11 +96,20 @@ export function CreateEventTab() {
   };
 
   return (
-    <div className="w-full min-w-0 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-6 text-sm">
+    <div className="space-y-6 max-w-3xl">
       <div>
-        <div className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           Create Event
-        </div>
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Add a new league season, tournament, or event.
+        </p>
+      </div>
+
+      <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          Event Details
+        </h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={labelCls}>Name (optional)</label>
@@ -199,23 +208,25 @@ export function CreateEventTab() {
             />
           </div>
         </div>
+      </section>
 
-        {error && (
-          <div className="mt-3 rounded bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-rose-700 dark:text-rose-300 text-xs">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="mt-3 rounded bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-emerald-700 dark:text-emerald-300 text-xs">
-            ✓ {success}
-          </div>
-        )}
+      {error && (
+        <div className="rounded-md border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+          {success}
+        </div>
+      )}
 
+      <div>
         <button
           type="button"
           onClick={() => void handleCreate()}
           disabled={creating || !newEventStart || !newEventEnd}
-          className="mt-4 inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {creating ? "Creating…" : "Create Event"}
         </button>

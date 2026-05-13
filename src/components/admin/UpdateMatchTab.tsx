@@ -11,6 +11,11 @@ import {
   MatchStatusValue,
 } from "./constants";
 
+const labelCls =
+  "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
+const inputCls =
+  "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
+
 export function UpdateMatchTab() {
   const { players, matchSeasons, matchSeasonsLoading, matchSeasonsError } =
     useAdminDataContext();
@@ -38,7 +43,6 @@ export function UpdateMatchTab() {
     error: detailsError,
   } = useLoadedMatchDetails({ matchId, enabled: true });
 
-  // Reset team player fields when matchId is cleared/invalid.
   useEffect(() => {
     const parsedId = Number.parseInt(matchId, 10);
     if (!Number.isInteger(parsedId) || parsedId <= 0) {
@@ -49,7 +53,6 @@ export function UpdateMatchTab() {
     }
   }, [matchId]);
 
-  // Populate form fields when loaded match details arrive.
   useEffect(() => {
     if (!loadedMatchDetails) return;
     const { team1, team2, sets } = loadedMatchDetails;
@@ -73,10 +76,9 @@ export function UpdateMatchTab() {
     setUpdateMatchTeam2Player2(
       team2.player2 ? String(team2.player2.player_id) : "",
     );
-    void sets; // sets are populated but not editable in UpdateMatchTab
+    void sets;
   }, [loadedMatchDetails]);
 
-  // Derived: resolved player selections fall back to loaded match details.
   const resolvedTeam1P1 =
     updateMatchTeam1Player1 ||
     (loadedMatchDetails?.team1.player1
@@ -106,7 +108,7 @@ export function UpdateMatchTab() {
     try {
       const parsedId = Number.parseInt(matchId, 10);
       if (!Number.isInteger(parsedId) || parsedId <= 0) {
-        setUpdateMatchError("match_id must be a positive integer.");
+        setUpdateMatchError("Invalid match ID.");
         return;
       }
 
@@ -186,9 +188,8 @@ export function UpdateMatchTab() {
         };
 
         if (!teamsResponse.ok) {
-          const details = teamsResult.details?.join(" ");
           setUpdateMatchError(
-            details ||
+            teamsResult.details?.join(" ") ||
               teamsResult.error ||
               "Failed to update match participants.",
           );
@@ -199,7 +200,7 @@ export function UpdateMatchTab() {
       if (updateMatchSeasonId.trim()) {
         const seasonId = Number.parseInt(updateMatchSeasonId.trim(), 10);
         if (!Number.isInteger(seasonId) || seasonId <= 0) {
-          setUpdateMatchError("event_id must be a positive integer.");
+          setUpdateMatchError("Invalid event ID.");
           return;
         }
         payload.eventId = seasonId;
@@ -226,9 +227,10 @@ export function UpdateMatchTab() {
       };
 
       if (!response.ok) {
-        const details = result.details?.join(" ");
         setUpdateMatchError(
-          details || result.error || "Failed to update match.",
+          result.details?.join(" ") ||
+            result.error ||
+            "Failed to update match.",
         );
         return;
       }
@@ -242,160 +244,141 @@ export function UpdateMatchTab() {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
-      <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-        Update Match
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Update Match
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Edit status, details, or reassign players for a match by ID.
+        </p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="update-match-id"
-          >
-            match_id:
-          </label>
-          <input
-            id="update-match-id"
-            type="number"
-            value={matchId}
-            onChange={(e) => setMatchId(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="e.g. 15"
-          />
-        </div>
-
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="update-match-status"
-          >
-            status:
-          </label>
-          <select
-            id="update-match-status"
-            value={updateMatchStatus}
-            onChange={(e) =>
-              setUpdateMatchStatus(e.target.value as MatchStatusValue)
-            }
-            disabled={loadingDetails}
-            className={`mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-slate-900 dark:text-slate-100 ${
-              loadingDetails
-                ? "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                : "bg-white dark:bg-slate-900"
-            }`}
-          >
-            {updateMatchStatus === "completed" && (
-              <option value="completed" disabled>
-                completed (set via Complete Match tab)
-              </option>
-            )}
-            {UPDATE_MATCH_STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {loadingDetails && (
-        <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
-          Loading match details...
-        </div>
-      )}
-
-      {loadingDetails && (
-        <div className="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/60 px-3 py-2 text-slate-600 dark:text-slate-300">
-          Fields below are temporarily locked while match details load.
-        </div>
-      )}
-
-      {detailsError && (
-        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-rose-700 dark:text-rose-300">
-          {detailsError}
-        </div>
-      )}
-
-      {loadedMatchDetails && (
-        <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
-          <div className="font-medium text-slate-900 dark:text-slate-100">
-            Match Details
+      {/* Match ID + Status */}
+      <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          Match
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelCls} htmlFor="update-match-id">
+              Match ID
+            </label>
+            <input
+              id="update-match-id"
+              type="number"
+              value={matchId}
+              onChange={(e) => setMatchId(e.target.value)}
+              className={inputCls}
+              placeholder="e.g. 15"
+            />
           </div>
-          <div className="grid gap-3 xl:grid-cols-4 text-sm">
+
+          <div>
+            <label className={labelCls} htmlFor="update-match-status">
+              Status
+            </label>
+            <select
+              id="update-match-status"
+              value={updateMatchStatus}
+              onChange={(e) =>
+                setUpdateMatchStatus(e.target.value as MatchStatusValue)
+              }
+              disabled={loadingDetails}
+              className={`${inputCls} ${
+                loadingDetails
+                  ? "opacity-60 cursor-not-allowed"
+                  : ""
+              }`}
+            >
+              {updateMatchStatus === "completed" && (
+                <option value="completed" disabled>
+                  completed (set via Complete Match tab)
+                </option>
+              )}
+              {UPDATE_MATCH_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {loadingDetails && (
+          <p className="text-sm text-slate-400 dark:text-slate-500">
+            Loading match details…
+          </p>
+        )}
+        {detailsError && (
+          <p className="text-sm text-rose-500">{detailsError}</p>
+        )}
+
+        {loadedMatchDetails && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 text-sm">
             <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                current status:
-              </span>{" "}
+              <span className={labelCls}>Status</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {loadedMatchDetails.status}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                winner_team:
-              </span>{" "}
+              <span className={labelCls}>Winner</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
-                {loadedMatchDetails.winnerTeam ?? "N/A"}
+                {loadedMatchDetails.winnerTeam != null
+                  ? `Team ${loadedMatchDetails.winnerTeam}`
+                  : "N/A"}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                team 1:
-              </span>{" "}
+              <span className={labelCls}>Team 1</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {loadedMatchDetails.team1.player1?.nickname ||
                   loadedMatchDetails.team1.player1?.name ||
-                  "?"}
-                {" / "}
+                  "?"}{" "}
+                /{" "}
                 {loadedMatchDetails.team1.player2?.nickname ||
                   loadedMatchDetails.team1.player2?.name ||
                   "?"}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                team 2:
-              </span>{" "}
+              <span className={labelCls}>Team 2</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {loadedMatchDetails.team2.player1?.nickname ||
                   loadedMatchDetails.team2.player1?.name ||
-                  "?"}
-                {" / "}
+                  "?"}{" "}
+                /{" "}
                 {loadedMatchDetails.team2.player2?.nickname ||
                   loadedMatchDetails.team2.player2?.name ||
                   "?"}
               </span>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </section>
 
+      {/* Editable fields */}
       <fieldset
         disabled={loadingDetails}
-        className={`rounded-md p-3 space-y-3 transition-opacity ${
-          loadingDetails
-            ? "bg-slate-100 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-600 opacity-60"
-            : "bg-slate-50 dark:bg-slate-800/40"
+        className={`rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 transition-opacity ${
+          loadingDetails ? "opacity-60" : ""
         }`}
       >
-        <div className="font-medium text-slate-900 dark:text-slate-100">
-          Update-able Match Details
-        </div>
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          Edit Fields
+        </h3>
 
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="update-match-season-id"
-            >
-              event_id:
+            <label className={labelCls} htmlFor="update-match-season-id">
+              Event
             </label>
             <select
               id="update-match-season-id"
               value={updateMatchSeasonId}
               onChange={(e) => setUpdateMatchSeasonId(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+              className={inputCls}
             >
               <option value="">Keep existing</option>
               {matchSeasons
@@ -407,52 +390,49 @@ export function UpdateMatchTab() {
                   </option>
                 ))}
             </select>
+            {matchSeasonsLoading && (
+              <p className="mt-1 text-xs text-slate-400">Loading events…</p>
+            )}
+            {matchSeasonsError && (
+              <p className="mt-1 text-xs text-rose-500">{matchSeasonsError}</p>
+            )}
           </div>
 
           <div>
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="update-match-date-local"
-            >
-              date_local:
+            <label className={labelCls} htmlFor="update-match-date-local">
+              Date
             </label>
             <input
               id="update-match-date-local"
               type="date"
               value={updateMatchDateLocal}
               onChange={(e) => setUpdateMatchDateLocal(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+              className={inputCls}
             />
           </div>
 
           <div>
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="update-match-time-local"
-            >
-              time_local:
+            <label className={labelCls} htmlFor="update-match-time-local">
+              Time
             </label>
             <input
               id="update-match-time-local"
               type="time"
               value={updateMatchTimeLocal}
               onChange={(e) => setUpdateMatchTimeLocal(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+              className={inputCls}
             />
           </div>
 
           <div>
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="update-match-type"
-            >
-              type:
+            <label className={labelCls} htmlFor="update-match-type">
+              Match Type
             </label>
             <select
               id="update-match-type"
               value={updateMatchType}
               onChange={(e) => setUpdateMatchType(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+              className={inputCls}
             >
               <option value="">Keep existing</option>
               {SCHEDULE_MATCH_TYPE_OPTIONS.map((type) => (
@@ -463,18 +443,15 @@ export function UpdateMatchTab() {
             </select>
           </div>
 
-          <div className="xl:col-span-2">
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="update-match-venue"
-            >
-              venue:
+          <div className="lg:col-span-2">
+            <label className={labelCls} htmlFor="update-match-venue">
+              Venue
             </label>
             <select
               id="update-match-venue"
               value={updateMatchVenue}
               onChange={(e) => setUpdateMatchVenue(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+              className={inputCls}
             >
               <option value="">Keep existing</option>
               {SCHEDULE_MATCH_VENUE_OPTIONS.map((venue) => (
@@ -486,35 +463,24 @@ export function UpdateMatchTab() {
           </div>
         </div>
 
-        {matchSeasonsLoading && (
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            Loading events...
-          </div>
-        )}
-
-        {matchSeasonsError && (
-          <div className="text-xs text-rose-600 dark:text-rose-400">
-            Error loading events: {matchSeasonsError}
-          </div>
-        )}
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <div className="rounded-md bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 p-3 space-y-3">
-            <div className="font-medium text-slate-900 dark:text-slate-100">
-              Team 1 Participants
-            </div>
+        {/* Players */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Team 1
+            </h4>
             <div>
               <label
-                className="text-slate-500 dark:text-slate-400"
+                className={labelCls}
                 htmlFor="update-match-team1-player1"
               >
-                player_1_id:
+                Player 1
               </label>
               <select
                 id="update-match-team1-player1"
                 value={resolvedTeam1P1}
                 onChange={(e) => setUpdateMatchTeam1Player1(e.target.value)}
-                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                className={inputCls}
               >
                 <option value="">Select player</option>
                 {players.map((player) => (
@@ -526,16 +492,16 @@ export function UpdateMatchTab() {
             </div>
             <div>
               <label
-                className="text-slate-500 dark:text-slate-400"
+                className={labelCls}
                 htmlFor="update-match-team1-player2"
               >
-                player_2_id:
+                Player 2
               </label>
               <select
                 id="update-match-team1-player2"
                 value={resolvedTeam1P2}
                 onChange={(e) => setUpdateMatchTeam1Player2(e.target.value)}
-                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                className={inputCls}
               >
                 <option value="">Select player</option>
                 {players.map((player) => (
@@ -547,22 +513,22 @@ export function UpdateMatchTab() {
             </div>
           </div>
 
-          <div className="rounded-md bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 p-3 space-y-3">
-            <div className="font-medium text-slate-900 dark:text-slate-100">
-              Team 2 Participants
-            </div>
+          <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Team 2
+            </h4>
             <div>
               <label
-                className="text-slate-500 dark:text-slate-400"
+                className={labelCls}
                 htmlFor="update-match-team2-player1"
               >
-                player_1_id:
+                Player 1
               </label>
               <select
                 id="update-match-team2-player1"
                 value={resolvedTeam2P1}
                 onChange={(e) => setUpdateMatchTeam2Player1(e.target.value)}
-                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                className={inputCls}
               >
                 <option value="">Select player</option>
                 {players.map((player) => (
@@ -574,16 +540,16 @@ export function UpdateMatchTab() {
             </div>
             <div>
               <label
-                className="text-slate-500 dark:text-slate-400"
+                className={labelCls}
                 htmlFor="update-match-team2-player2"
               >
-                player_2_id:
+                Player 2
               </label>
               <select
                 id="update-match-team2-player2"
                 value={resolvedTeam2P2}
                 onChange={(e) => setUpdateMatchTeam2Player2(e.target.value)}
-                className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
+                className={inputCls}
               >
                 <option value="">Select player</option>
                 {players.map((player) => (
@@ -597,14 +563,14 @@ export function UpdateMatchTab() {
         </div>
       </fieldset>
 
+      {/* Feedback */}
       {updateMatchError && (
-        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
+        <div className="rounded-md border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
           {updateMatchError}
         </div>
       )}
-
       {updateMatchSuccess && (
-        <div className="rounded bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-2 text-emerald-700 dark:text-emerald-300">
+        <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
           {updateMatchSuccess}
         </div>
       )}
@@ -614,9 +580,9 @@ export function UpdateMatchTab() {
           type="button"
           onClick={() => void handleUpdateMatch()}
           disabled={updatingMatch || loadingDetails}
-          className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          {updatingMatch ? "Updating..." : "Update Match"}
+          {updatingMatch ? "Updating…" : "Update Match"}
         </button>
       </div>
     </div>

@@ -1,12 +1,89 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useAdminDataContext } from "@/components/admin/AdminDataContext";
+import PlayerSearchBox from "@/components/PlayerSearchBox";
+import PlayerCard from "@/components/PlayerCard";
+import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { supabase } from "@/lib/supabase";
+import { Player } from "@/lib/types";
 import {
   SCHEDULE_MATCH_TYPE_OPTIONS,
   SCHEDULE_MATCH_VENUE_OPTIONS,
 } from "./constants";
+
+type SlotKey = "t1p1" | "t1p2" | "t2p1" | "t2p2";
+type SlotState = { search: string; player: Player | null };
+
+const EMPTY_SLOTS: Record<SlotKey, SlotState> = {
+  t1p1: { search: "", player: null },
+  t1p2: { search: "", player: null },
+  t2p1: { search: "", player: null },
+  t2p2: { search: "", player: null },
+};
+
+const labelCls =
+  "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
+const inputCls =
+  "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
+
+type PlayerSlotPickerProps = {
+  label: string;
+  suggestions: Player[];
+  selectedPlayer: Player | null;
+  search: string;
+  onSearchChange: (v: string) => void;
+  onSelect: (player: Player) => void;
+  onClear: () => void;
+};
+
+function PlayerSlotPicker({
+  label,
+  suggestions,
+  selectedPlayer,
+  search,
+  onSearchChange,
+  onSelect,
+  onClear,
+}: PlayerSlotPickerProps) {
+  return (
+    <div className="space-y-1.5">
+      <span className={labelCls}>{label}</span>
+      {selectedPlayer ? (
+        <div className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-2.5 py-2">
+          <div className="flex-1 min-w-0">
+            <PlayerCard
+              player={selectedPlayer}
+              size="sm"
+              disableLink
+              showLatestRating={false}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 text-[11px] font-medium text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors px-1.5 py-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20"
+          >
+            Change
+          </button>
+        </div>
+      ) : (
+        <PlayerSearchBox
+          value={search}
+          suggestions={suggestions}
+          onValueChange={onSearchChange}
+          onSelectPlayer={(p) => {
+            onSelect(p);
+            onSearchChange("");
+          }}
+          onClear={() => onSearchChange("")}
+          placeholder="Search by name or nickname..."
+          maxSuggestions={6}
+        />
+      )}
+    </div>
+  );
+}
 
 export function ScheduleMatchTab() {
   const {
@@ -18,56 +95,79 @@ export function ScheduleMatchTab() {
     matchSeasonsError,
     refreshScheduledMatches,
   } = useAdminDataContext();
-  const [createMatchSeasonId, setCreateMatchSeasonId] = useState("");
-  const [createMatchDateLocal, setCreateMatchDateLocal] = useState("");
-  const [createMatchTimeLocal, setCreateMatchTimeLocal] = useState("");
-  const [createMatchVenue, setCreateMatchVenue] = useState("");
-  const [createMatchType, setCreateMatchType] = useState("");
-  const [createMatchTeam1Player1, setCreateMatchTeam1Player1] = useState("");
-  const [createMatchTeam1Player2, setCreateMatchTeam1Player2] = useState("");
-  const [createMatchTeam2Player1, setCreateMatchTeam2Player1] = useState("");
-  const [createMatchTeam2Player2, setCreateMatchTeam2Player2] = useState("");
-  const [creatingMatch, setCreatingMatch] = useState(false);
-  const [createMatchError, setCreateMatchError] = useState<string | null>(null);
-  const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(
-    null,
+
+  const [eventId, setEventId] = useState("");
+  const [dateLocal, setDateLocal] = useState("");
+  const [timeLocal, setTimeLocal] = useState("");
+  const [venue, setVenue] = useState("");
+  const [matchType, setMatchType] = useState("");
+  const [slots, setSlots] = useState<Record<SlotKey, SlotState>>(EMPTY_SLOTS);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const sortedSeasons = useMemo(
+    () => matchSeasons.slice().sort((a, b) => b.id - a.id),
+    [matchSeasons],
   );
 
-  // Seed event id when events load.
-  useEffect(() => {
-    if (createMatchSeasonId || matchSeasons.length === 0) return;
-    setCreateMatchSeasonId(String(matchSeasons[0].id));
-  }, [createMatchSeasonId, matchSeasons]);
+  const selectedIds = useMemo(
+    () =>
+      new Set(
+        Object.values(slots)
+          .map((s) => (s.player ? String(s.player.player_id) : ""))
+          .filter(Boolean),
+      ),
+    [slots],
+  );
 
-  const handleCreateMatch = async () => {
-    setCreatingMatch(true);
-    setCreateMatchError(null);
-    setCreateMatchSuccess(null);
+  const updateSlot = (key: SlotKey, patch: Partial<SlotState>) =>
+    setSlots((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
 
+  const excludeFor = (key: SlotKey): Set<string> => {
+    const own = slots[key].player
+      ? String(slots[key].player!.player_id)
+      : null;
+    return new Set([...selectedIds].filter((id) => id !== own));
+  };
+
+  // One call per slot — hooks must be called unconditionally at top level.
+  const t1p1Sugg = usePlayerSearch(players, slots.t1p1.search);
+  const t1p2Sugg = usePlayerSearch(players, slots.t1p2.search);
+  const t2p1Sugg = usePlayerSearch(players, slots.t2p1.search);
+  const t2p2Sugg = usePlayerSearch(players, slots.t2p2.search);
+
+  const filterSugg = (sugg: Player[], excludeIds: Set<string>) =>
+    sugg.filter((p) => !excludeIds.has(String(p.player_id)));
+
+  const handleSubmit = async () => {
+    setError(null);
+    setSuccess(null);
+
+    const playerIds = [
+      slots.t1p1.player?.player_id,
+      slots.t1p2.player?.player_id,
+      slots.t2p1.player?.player_id,
+      slots.t2p2.player?.player_id,
+    ];
+
+    if (playerIds.some((id) => !id)) {
+      setError("All four player slots are required.");
+      return;
+    }
+    if (new Set(playerIds.map(String)).size !== 4) {
+      setError("All four players must be unique.");
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      const selectedPlayerIds = [
-        createMatchTeam1Player1,
-        createMatchTeam1Player2,
-        createMatchTeam2Player1,
-        createMatchTeam2Player2,
-      ];
-
-      if (selectedPlayerIds.some((id) => !id)) {
-        setCreateMatchError("All four player slots are required.");
-        return;
-      }
-
-      if (new Set(selectedPlayerIds).size !== 4) {
-        setCreateMatchError("All four players must be unique.");
-        return;
-      }
-
       const {
         data: { session },
       } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
       if (!accessToken) {
-        setCreateMatchError("No active session found. Please sign in again.");
+        setError("No active session found. Please sign in again.");
         return;
       }
 
@@ -78,20 +178,18 @@ export function ScheduleMatchTab() {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          eventId: createMatchSeasonId
-            ? Number.parseInt(createMatchSeasonId, 10)
-            : null,
-          dateLocal: createMatchDateLocal || null,
-          timeLocal: createMatchTimeLocal || null,
-          venue: createMatchVenue.trim() || null,
-          type: createMatchType.trim() || null,
+          eventId: eventId ? Number.parseInt(eventId, 10) : null,
+          dateLocal: dateLocal || null,
+          timeLocal: timeLocal || null,
+          venue: venue.trim() || null,
+          type: matchType.trim() || null,
           team1: {
-            player1Id: createMatchTeam1Player1,
-            player2Id: createMatchTeam1Player2,
+            player1Id: String(slots.t1p1.player!.player_id),
+            player2Id: String(slots.t1p2.player!.player_id),
           },
           team2: {
-            player1Id: createMatchTeam2Player1,
-            player2Id: createMatchTeam2Player2,
+            player1Id: String(slots.t2p1.player!.player_id),
+            player2Id: String(slots.t2p2.player!.player_id),
           },
         }),
       });
@@ -104,281 +202,232 @@ export function ScheduleMatchTab() {
       };
 
       if (!response.ok) {
-        const details = result.details?.join(" ");
-        setCreateMatchError(
-          details || result.error || "Failed to create match.",
+        setError(
+          result.details?.join(" ") ||
+            result.error ||
+            "Failed to create match.",
         );
         return;
       }
 
-      setCreateMatchSeasonId(
-        matchSeasons.length > 0 ? String(matchSeasons[0].id) : "",
-      );
-      setCreateMatchDateLocal("");
-      setCreateMatchTimeLocal("");
-      setCreateMatchVenue("");
-      setCreateMatchType("");
-      setCreateMatchTeam1Player1("");
-      setCreateMatchTeam1Player2("");
-      setCreateMatchTeam2Player1("");
-      setCreateMatchTeam2Player2("");
-      setCreateMatchSuccess(
+      setSlots(EMPTY_SLOTS);
+      setDateLocal("");
+      setTimeLocal("");
+      setVenue("");
+      setMatchType("");
+      setSuccess(
         result.message ||
           `Match #${result.match?.match_id ?? ""} created successfully.`,
       );
       refreshScheduledMatches();
     } catch {
-      setCreateMatchError("Unexpected error while creating match.");
+      setError("Unexpected error while creating match.");
     } finally {
-      setCreatingMatch(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
-      <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-        Schedule a Match
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Schedule a Match
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Assign players to teams and set match details.
+        </p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-match-season-id"
-          >
-            event_id:
-          </label>
-          <input
-            id="create-match-season-id"
-            type="number"
-            onChange={(e) => setCreateMatchSeasonId(e.target.value)}
-            list="create-match-season-options"
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder={
-              matchSeasonsLoading ? "Loading events..." : "Enter event id"
-            }
-          />
-          <datalist id="create-match-season-options">
-            {matchSeasons
-              .slice()
-              .sort((a, b) => b.id - a.id)
-              .map((season) => (
+      {/* Match Details */}
+      <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          Match Details
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label className={labelCls} htmlFor="sched-event">
+              Event
+            </label>
+            <select
+              id="sched-event"
+              value={eventId}
+              onChange={(e) => setEventId(e.target.value)}
+              className={inputCls}
+              disabled={matchSeasonsLoading}
+            >
+              <option value="">
+                {matchSeasonsLoading ? "Loading…" : "No event (optional)"}
+              </option>
+              {sortedSeasons.map((season) => (
                 <option key={season.id} value={String(season.id)}>
                   {season.label}
                 </option>
               ))}
-          </datalist>
-        </div>
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-match-date-local"
-          >
-            date_local:
-          </label>
-          <input
-            id="create-match-date-local"
-            type="date"
-            value={createMatchDateLocal}
-            onChange={(e) => setCreateMatchDateLocal(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-          />
-        </div>
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-match-time-local"
-          >
-            time_local:
-          </label>
-          <input
-            id="create-match-time-local"
-            type="time"
-            value={createMatchTimeLocal}
-            onChange={(e) => setCreateMatchTimeLocal(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-          />
-        </div>
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-match-venue"
-          >
-            venue:
-          </label>
-          <select
-            id="create-match-venue"
-            value={createMatchVenue}
-            onChange={(e) => setCreateMatchVenue(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-          >
-            <option value="">Select venue</option>
-            {SCHEDULE_MATCH_VENUE_OPTIONS.map((venue) => (
-              <option key={venue} value={venue}>
-                {venue}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label
-            className="text-slate-500 dark:text-slate-400"
-            htmlFor="create-match-type"
-          >
-            type:
-          </label>
-          <select
-            id="create-match-type"
-            value={createMatchType}
-            onChange={(e) => setCreateMatchType(e.target.value)}
-            className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-          >
-            <option value="">Select type</option>
-            {SCHEDULE_MATCH_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+            </select>
+            {matchSeasonsError && (
+              <p className="mt-1 text-xs text-rose-500">{matchSeasonsError}</p>
+            )}
+          </div>
 
-      {matchSeasonsError && (
-        <div className="text-sm text-rose-600 dark:text-rose-400">
-          Error loading events: {matchSeasonsError}
-        </div>
-      )}
+          <div>
+            <label className={labelCls} htmlFor="sched-date">
+              Date
+            </label>
+            <input
+              id="sched-date"
+              type="date"
+              value={dateLocal}
+              onChange={(e) => setDateLocal(e.target.value)}
+              className={inputCls}
+            />
+          </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
-          <div className="font-medium text-slate-900 dark:text-slate-100">
+          <div>
+            <label className={labelCls} htmlFor="sched-time">
+              Time{" "}
+              <span className="normal-case tracking-normal font-normal text-slate-400">
+                (optional)
+              </span>
+            </label>
+            <input
+              id="sched-time"
+              type="time"
+              value={timeLocal}
+              onChange={(e) => setTimeLocal(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+
+          <div>
+            <label className={labelCls} htmlFor="sched-venue">
+              Venue
+            </label>
+            <select
+              id="sched-venue"
+              value={venue}
+              onChange={(e) => setVenue(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Select venue</option>
+              {SCHEDULE_MATCH_VENUE_OPTIONS.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className={labelCls} htmlFor="sched-type">
+              Match Type
+            </label>
+            <select
+              id="sched-type"
+              value={matchType}
+              onChange={(e) => setMatchType(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Select type</option>
+              {SCHEDULE_MATCH_TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Team Assignment */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Team 1 */}
+        <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
             Team 1
-          </div>
-          <div>
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="create-match-team1-player1"
-            >
-              player_1_id:
-            </label>
-            <select
-              id="create-match-team1-player1"
-              value={createMatchTeam1Player1}
-              onChange={(e) => setCreateMatchTeam1Player1(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">Select player</option>
-              {players.map((player) => (
-                <option key={player.player_id} value={player.player_id}>
-                  {player.name} ({player.nickname})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="create-match-team1-player2"
-            >
-              player_2_id:
-            </label>
-            <select
-              id="create-match-team1-player2"
-              value={createMatchTeam1Player2}
-              onChange={(e) => setCreateMatchTeam1Player2(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">Select player</option>
-              {players.map((player) => (
-                <option key={player.player_id} value={player.player_id}>
-                  {player.name} ({player.nickname})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+          </h3>
+          {playersLoading ? (
+            <p className="text-sm text-slate-400">Loading players…</p>
+          ) : (
+            <>
+              <PlayerSlotPicker
+                label="Player 1"
+                suggestions={filterSugg(t1p1Sugg, excludeFor("t1p1"))}
+                selectedPlayer={slots.t1p1.player}
+                search={slots.t1p1.search}
+                onSearchChange={(v) => updateSlot("t1p1", { search: v })}
+                onSelect={(p) => updateSlot("t1p1", { player: p, search: "" })}
+                onClear={() => updateSlot("t1p1", { player: null, search: "" })}
+              />
+              <PlayerSlotPicker
+                label="Player 2"
+                suggestions={filterSugg(t1p2Sugg, excludeFor("t1p2"))}
+                selectedPlayer={slots.t1p2.player}
+                search={slots.t1p2.search}
+                onSearchChange={(v) => updateSlot("t1p2", { search: v })}
+                onSelect={(p) => updateSlot("t1p2", { player: p, search: "" })}
+                onClear={() => updateSlot("t1p2", { player: null, search: "" })}
+              />
+            </>
+          )}
+        </section>
 
-        <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
-          <div className="font-medium text-slate-900 dark:text-slate-100">
+        {/* Team 2 */}
+        <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
             Team 2
-          </div>
-          <div>
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="create-match-team2-player1"
-            >
-              player_1_id:
-            </label>
-            <select
-              id="create-match-team2-player1"
-              value={createMatchTeam2Player1}
-              onChange={(e) => setCreateMatchTeam2Player1(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">Select player</option>
-              {players.map((player) => (
-                <option key={player.player_id} value={player.player_id}>
-                  {player.name} ({player.nickname})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              className="text-slate-500 dark:text-slate-400"
-              htmlFor="create-match-team2-player2"
-            >
-              player_2_id:
-            </label>
-            <select
-              id="create-match-team2-player2"
-              value={createMatchTeam2Player2}
-              onChange={(e) => setCreateMatchTeam2Player2(e.target.value)}
-              className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">Select player</option>
-              {players.map((player) => (
-                <option key={player.player_id} value={player.player_id}>
-                  {player.name} ({player.nickname})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+          </h3>
+          {playersLoading ? (
+            <p className="text-sm text-slate-400">Loading players…</p>
+          ) : (
+            <>
+              <PlayerSlotPicker
+                label="Player 1"
+                suggestions={filterSugg(t2p1Sugg, excludeFor("t2p1"))}
+                selectedPlayer={slots.t2p1.player}
+                search={slots.t2p1.search}
+                onSearchChange={(v) => updateSlot("t2p1", { search: v })}
+                onSelect={(p) => updateSlot("t2p1", { player: p, search: "" })}
+                onClear={() => updateSlot("t2p1", { player: null, search: "" })}
+              />
+              <PlayerSlotPicker
+                label="Player 2"
+                suggestions={filterSugg(t2p2Sugg, excludeFor("t2p2"))}
+                selectedPlayer={slots.t2p2.player}
+                search={slots.t2p2.search}
+                onSearchChange={(v) => updateSlot("t2p2", { search: v })}
+                onSelect={(p) => updateSlot("t2p2", { player: p, search: "" })}
+                onClear={() => updateSlot("t2p2", { player: null, search: "" })}
+              />
+            </>
+          )}
+        </section>
       </div>
 
-      {playersLoading && (
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          Loading players...
-        </div>
-      )}
-
+      {/* Feedback */}
       {playersError && (
-        <div className="text-sm text-rose-600 dark:text-rose-400">
+        <p className="text-sm text-rose-500">
           Error loading players: {playersError}
+        </p>
+      )}
+      {error && (
+        <div className="rounded-md border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
+          {error}
         </div>
       )}
-
-      {createMatchError && (
-        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
-          {createMatchError}
-        </div>
-      )}
-
-      {createMatchSuccess && (
-        <div className="rounded bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-2 text-emerald-700 dark:text-emerald-300">
-          {createMatchSuccess}
+      {success && (
+        <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+          {success}
         </div>
       )}
 
       <div>
         <button
           type="button"
-          onClick={() => void handleCreateMatch()}
-          disabled={creatingMatch || playersLoading}
-          className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          onClick={() => void handleSubmit()}
+          disabled={submitting || playersLoading}
+          className="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          {creatingMatch ? "Scheduling..." : "Schedule Match"}
+          {submitting ? "Scheduling…" : "Schedule Match"}
         </button>
       </div>
     </div>

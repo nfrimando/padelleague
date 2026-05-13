@@ -66,9 +66,9 @@ type EventStatusFilter =
   | "all";
 
 const inputCls =
-  "mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-slate-900 dark:text-slate-100 text-sm";
+  "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
 const labelCls =
-  "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide";
+  "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
 
 const SIGNUP_STATUS_OPTIONS: SignupStatus[] = [
   "registered",
@@ -568,12 +568,18 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   });
 
   return (
-    <div className="w-full min-w-0 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-6 text-sm">
+    <div className="w-full min-w-0 space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Manage Events
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Edit event details, manage registrations, and review player signups.
+        </p>
+      </div>
       <div>
         <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            Events
-          </div>
+          <div />
           <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
             <input
               type="checkbox"

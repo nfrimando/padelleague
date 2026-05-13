@@ -6,6 +6,11 @@ import { supabase } from "@/lib/supabase";
 import { useLoadedMatchDetails } from "@/lib/useLoadedMatchDetails";
 import { useMatchRatingPreview } from "@/lib/useMatchRatingPreview";
 
+const labelCls =
+  "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
+const inputCls =
+  "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
+
 export function CompleteMatchTab() {
   const {
     scheduledMatches,
@@ -55,12 +60,10 @@ export function CompleteMatchTab() {
     (completeMatchCalculated ? ratingPreviewWithRows?.winnerTeam : null) ??
     loadedMatchDetails?.winnerTeam;
 
-  // Reset calculated flag when selection changes.
   useEffect(() => {
     setCompleteMatchCalculated(false);
   }, [matchId]);
 
-  // Guard: clear selection if match no longer appears in the scheduled list.
   useEffect(() => {
     if (
       matchId &&
@@ -115,7 +118,7 @@ export function CompleteMatchTab() {
 
       const parsedId = Number.parseInt(matchId, 10);
       if (!Number.isInteger(parsedId) || parsedId <= 0) {
-        setCompleteMatchError("match_id must be a positive integer.");
+        setCompleteMatchError("Invalid match ID.");
         return;
       }
 
@@ -193,9 +196,10 @@ export function CompleteMatchTab() {
       };
 
       if (!response.ok) {
-        const details = result.details?.join(" ");
         setCompleteMatchError(
-          details || result.error || "Failed to update match.",
+          result.details?.join(" ") ||
+            result.error ||
+            "Failed to update match.",
         );
         return;
       }
@@ -219,159 +223,149 @@ export function CompleteMatchTab() {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4 text-sm">
-      <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-        Complete Match
-      </div>
-
-      <div className="rounded bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-amber-800 dark:text-amber-300">
-        Note that rating changes are dependent on when matches are inputted as
-        completed. Make sure to input matches chronologicaly especially when
-        updating matches with similar players.
-      </div>
-
+    <div className="space-y-6 max-w-3xl">
       <div>
-        <label
-          className="text-slate-500 dark:text-slate-400"
-          htmlFor="complete-match-select"
-        >
-          Scheduled match:
-        </label>
-        <select
-          id="complete-match-select"
-          value={matchId}
-          onChange={(e) => {
-            setMatchId(e.target.value);
-            setCompleteMatchCalculated(false);
-          }}
-          className="mt-1 block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-        >
-          <option value="">Select a scheduled match</option>
-          {scheduledMatches.map((match) => {
-            const datePart = match.date_local || "No date";
-            const timePart = match.time_local || "No time";
-            const typePart = match.type || "No type";
-            const venuePart = match.venue || "No venue";
-            const t1 = `${
-              (match.team1Player1Id &&
-                playerNameById.get(String(match.team1Player1Id))) ||
-              (match.team1Player1Id ? `#${match.team1Player1Id}` : "?")
-            } / ${
-              (match.team1Player2Id &&
-                playerNameById.get(String(match.team1Player2Id))) ||
-              (match.team1Player2Id ? `#${match.team1Player2Id}` : "?")
-            }`;
-            const t2 = `${
-              (match.team2Player1Id &&
-                playerNameById.get(String(match.team2Player1Id))) ||
-              (match.team2Player1Id ? `#${match.team2Player1Id}` : "?")
-            } / ${
-              (match.team2Player2Id &&
-                playerNameById.get(String(match.team2Player2Id))) ||
-              (match.team2Player2Id ? `#${match.team2Player2Id}` : "?")
-            }`;
-            return (
-              <option key={match.match_id} value={String(match.match_id)}>
-                #{match.match_id} - {t1} vs {t2} - {datePart} {timePart} -{" "}
-                {typePart} - {venuePart}
-              </option>
-            );
-          })}
-        </select>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Complete Match
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Enter set scores for a scheduled match and finalise ratings.
+        </p>
       </div>
 
-      {scheduledMatchesLoading && (
-        <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
-          Loading scheduled matches...
-        </div>
-      )}
+      <div className="rounded-md border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+        Enter matches in chronological order. Rating changes depend on the order
+        matches are completed, especially for players who share multiple matches.
+      </div>
 
-      {scheduledMatchesError && (
-        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-rose-700 dark:text-rose-300">
-          {scheduledMatchesError}
+      {/* Match selector */}
+      <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          Select Match
+        </h3>
+        <div>
+          <label className={labelCls} htmlFor="complete-match-select">
+            Scheduled Match
+          </label>
+          <select
+            id="complete-match-select"
+            value={matchId}
+            onChange={(e) => {
+              setMatchId(e.target.value);
+              setCompleteMatchCalculated(false);
+            }}
+            className={inputCls}
+          >
+            <option value="">Select a scheduled match</option>
+            {scheduledMatches.map((match) => {
+              const datePart = match.date_local || "No date";
+              const typePart = match.type || "No type";
+              const t1 = `${
+                (match.team1Player1Id &&
+                  playerNameById.get(String(match.team1Player1Id))) ||
+                (match.team1Player1Id ? `#${match.team1Player1Id}` : "?")
+              } / ${
+                (match.team1Player2Id &&
+                  playerNameById.get(String(match.team1Player2Id))) ||
+                (match.team1Player2Id ? `#${match.team1Player2Id}` : "?")
+              }`;
+              const t2 = `${
+                (match.team2Player1Id &&
+                  playerNameById.get(String(match.team2Player1Id))) ||
+                (match.team2Player1Id ? `#${match.team2Player1Id}` : "?")
+              } / ${
+                (match.team2Player2Id &&
+                  playerNameById.get(String(match.team2Player2Id))) ||
+                (match.team2Player2Id ? `#${match.team2Player2Id}` : "?")
+              }`;
+              return (
+                <option key={match.match_id} value={String(match.match_id)}>
+                  #{match.match_id} · {t1} vs {t2} · {datePart} · {typePart}
+                </option>
+              );
+            })}
+          </select>
         </div>
-      )}
 
-      {!scheduledMatchesLoading &&
-        !scheduledMatchesError &&
-        scheduledMatches.length === 0 && (
-          <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
-            No scheduled matches found.
-          </div>
+        {scheduledMatchesLoading && (
+          <p className="text-sm text-slate-400 dark:text-slate-500">
+            Loading scheduled matches…
+          </p>
+        )}
+        {scheduledMatchesError && (
+          <p className="text-sm text-rose-500">{scheduledMatchesError}</p>
+        )}
+        {!scheduledMatchesLoading &&
+          !scheduledMatchesError &&
+          scheduledMatches.length === 0 && (
+            <p className="text-sm text-slate-400 dark:text-slate-500">
+              No scheduled matches found.
+            </p>
+          )}
+        {loadingDetails && (
+          <p className="text-sm text-slate-400 dark:text-slate-500">
+            Loading match details…
+          </p>
+        )}
+        {detailsError && (
+          <p className="text-sm text-rose-500">{detailsError}</p>
         )}
 
-      {loadingDetails && (
-        <div className="rounded bg-slate-50 dark:bg-slate-800/40 px-3 py-2 text-slate-600 dark:text-slate-300">
-          Loading match details...
-        </div>
-      )}
-
-      {detailsError && (
-        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-rose-700 dark:text-rose-300">
-          {detailsError}
-        </div>
-      )}
-
-      {loadedMatchDetails && (
-        <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
-          <div className="font-medium text-slate-900 dark:text-slate-100">
-            Match Details
-          </div>
-          <div className="grid gap-3 xl:grid-cols-4 text-sm">
+        {loadedMatchDetails && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 text-sm">
             <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                current status:
-              </span>{" "}
+              <span className={labelCls}>Status</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {loadedMatchDetails.status}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                winner_team:
-              </span>{" "}
+              <span className={labelCls}>Winner</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
-                {winnerTeamDisplay ?? "N/A"}
+                {winnerTeamDisplay != null
+                  ? `Team ${winnerTeamDisplay}`
+                  : "TBD"}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                team 1:
-              </span>{" "}
+              <span className={labelCls}>Team 1</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {loadedMatchDetails.team1.player1?.nickname ||
                   loadedMatchDetails.team1.player1?.name ||
-                  "?"}
-                {" / "}
+                  "?"}{" "}
+                /{" "}
                 {loadedMatchDetails.team1.player2?.nickname ||
                   loadedMatchDetails.team1.player2?.name ||
                   "?"}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 dark:text-slate-400">
-                team 2:
-              </span>{" "}
+              <span className={labelCls}>Team 2</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
                 {loadedMatchDetails.team2.player1?.nickname ||
                   loadedMatchDetails.team2.player1?.name ||
-                  "?"}
-                {" / "}
+                  "?"}{" "}
+                /{" "}
                 {loadedMatchDetails.team2.player2?.nickname ||
                   loadedMatchDetails.team2.player2?.name ||
                   "?"}
               </span>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </section>
 
-      <div className="rounded-md bg-slate-50 dark:bg-slate-800/40 p-3 space-y-3">
-        <div className="font-medium text-slate-900 dark:text-slate-100">
+      {/* Set Scores */}
+      <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
           Set Scores
-        </div>
-        <div className="grid gap-3 xl:grid-cols-3">
-          <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        </h3>
+        <div className="grid grid-cols-3 gap-3">
+          <div />
+          <div className={labelCls}>Team 1</div>
+          <div className={labelCls}>Team 2</div>
+
+          <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
             Set 1
           </div>
           <input
@@ -381,8 +375,9 @@ export function CompleteMatchTab() {
               setUpdateSet1Team1(e.target.value);
               setCompleteMatchCalculated(false);
             }}
-            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="Team 1 games"
+            className={inputCls}
+            placeholder="0"
+            min="0"
           />
           <input
             type="number"
@@ -391,11 +386,12 @@ export function CompleteMatchTab() {
               setUpdateSet1Team2(e.target.value);
               setCompleteMatchCalculated(false);
             }}
-            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="Team 2 games"
+            className={inputCls}
+            placeholder="0"
+            min="0"
           />
 
-          <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
             Set 2
           </div>
           <input
@@ -405,8 +401,9 @@ export function CompleteMatchTab() {
               setUpdateSet2Team1(e.target.value);
               setCompleteMatchCalculated(false);
             }}
-            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="Team 1 games"
+            className={inputCls}
+            placeholder="0"
+            min="0"
           />
           <input
             type="number"
@@ -415,12 +412,14 @@ export function CompleteMatchTab() {
               setUpdateSet2Team2(e.target.value);
               setCompleteMatchCalculated(false);
             }}
-            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="Team 2 games"
+            className={inputCls}
+            placeholder="0"
+            min="0"
           />
 
-          <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Set 3 (optional)
+          <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
+            Set 3{" "}
+            <span className="ml-1 text-xs text-slate-400">(optional)</span>
           </div>
           <input
             type="number"
@@ -429,8 +428,9 @@ export function CompleteMatchTab() {
               setUpdateSet3Team1(e.target.value);
               setCompleteMatchCalculated(false);
             }}
-            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="Team 1 games"
+            className={inputCls}
+            placeholder="0"
+            min="0"
           />
           <input
             type="number"
@@ -439,78 +439,80 @@ export function CompleteMatchTab() {
               setUpdateSet3Team2(e.target.value);
               setCompleteMatchCalculated(false);
             }}
-            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100"
-            placeholder="Team 2 games"
+            className={inputCls}
+            placeholder="0"
+            min="0"
           />
         </div>
-      </div>
+      </section>
 
       <div>
         <button
           type="button"
           onClick={handleCalculateOutcome}
           disabled={!loadedMatchDetails}
-          className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
           Calculate Outcome
         </button>
       </div>
 
-      <div className="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-3">
-        <div className="font-medium text-slate-900 dark:text-slate-100">
+      {/* Rating preview */}
+      <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
           Rating Effect Preview (v3)
-        </div>
+        </h3>
 
         {!completeMatchCalculated ? (
-          <div className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-slate-400 dark:text-slate-500">
             Click Calculate Outcome to preview winner and rating changes.
-          </div>
+          </p>
         ) : !loadedMatchDetails ? (
-          <div className="text-sm text-slate-500 dark:text-slate-400">
-            Enter a valid match_id to preview ratings.
-          </div>
+          <p className="text-sm text-slate-400 dark:text-slate-500">
+            Select a valid match to preview ratings.
+          </p>
         ) : ratingPreviewError ? (
-          <div className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-slate-400 dark:text-slate-500">
             {ratingPreviewError}
-          </div>
+          </p>
         ) : ratingPreviewWithRows ? (
-          <div className="space-y-2">
-            <div className="text-sm text-slate-600 dark:text-slate-300">
-              Winner preview: Team {ratingPreviewWithRows.winnerTeam}
-            </div>
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Winner: Team {ratingPreviewWithRows.winnerTeam}
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-slate-500 dark:text-slate-400">
-                    <th className="py-1 pr-3">Player</th>
-                    <th className="py-1 pr-3">Team</th>
-                    <th className="py-1 pr-3">Before</th>
-                    <th className="py-1 pr-3">After</th>
-                    <th className="py-1">Delta</th>
+                  <tr className="text-left">
+                    <th className={`${labelCls} py-1 pr-3`}>Player</th>
+                    <th className={`${labelCls} py-1 pr-3`}>Team</th>
+                    <th className={`${labelCls} py-1 pr-3`}>Before</th>
+                    <th className={`${labelCls} py-1 pr-3`}>After</th>
+                    <th className={`${labelCls} py-1`}>Delta</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {ratingPreviewRows.map((row) => (
                     <tr key={row.player.player_id}>
-                      <td className="py-1 pr-3 text-slate-900 dark:text-slate-100">
+                      <td className="py-2 pr-3 text-slate-900 dark:text-slate-100">
                         {row.player.nickname ||
                           row.player.name ||
                           row.player.player_id}
                       </td>
-                      <td className="py-1 pr-3 text-slate-700 dark:text-slate-300">
+                      <td className="py-2 pr-3 text-slate-600 dark:text-slate-400">
                         {row.team}
                       </td>
-                      <td className="py-1 pr-3 text-slate-700 dark:text-slate-300">
+                      <td className="py-2 pr-3 text-slate-600 dark:text-slate-400 tabular-nums">
                         {row.before.toFixed(4)}
                       </td>
-                      <td className="py-1 pr-3 text-slate-900 dark:text-slate-100">
+                      <td className="py-2 pr-3 text-slate-900 dark:text-slate-100 tabular-nums">
                         {row.after.toFixed(4)}
                       </td>
                       <td
-                        className={`py-1 ${
+                        className={`py-2 tabular-nums font-medium ${
                           row.delta >= 0
-                            ? "text-emerald-700 dark:text-emerald-300"
-                            : "text-rose-700 dark:text-rose-300"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-rose-600 dark:text-rose-400"
                         }`}
                       >
                         {row.delta >= 0 ? "+" : ""}
@@ -523,16 +525,16 @@ export function CompleteMatchTab() {
             </div>
           </div>
         ) : null}
-      </div>
+      </section>
 
+      {/* Feedback */}
       {completeMatchError && (
-        <div className="rounded bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2 text-rose-700 dark:text-rose-300">
+        <div className="rounded-md border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
           {completeMatchError}
         </div>
       )}
-
       {completeMatchSuccess && (
-        <div className="rounded bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-2 text-emerald-700 dark:text-emerald-300">
+        <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
           {completeMatchSuccess}
         </div>
       )}
@@ -546,9 +548,9 @@ export function CompleteMatchTab() {
             !completeMatchCalculated ||
             !ratingPreviewWithRows
           }
-          className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          {completingMatch ? "Completing..." : "Complete Match"}
+          {completingMatch ? "Completing…" : "Complete Match"}
         </button>
       </div>
     </div>
