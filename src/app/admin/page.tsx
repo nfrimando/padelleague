@@ -11,6 +11,7 @@ import { EventsTab } from "@/components/admin/EventsTab";
 import { MembersTab } from "@/components/admin/MembersTab";
 import { ScheduleMatchTab } from "@/components/admin/ScheduleMatchTab";
 import { UpdateMatchTab } from "@/components/admin/UpdateMatchTab";
+import { ReviseScoreTab } from "@/components/admin/ReviseScoreTab";
 import { CreateEventTab } from "@/components/admin/CreateEventTab";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
@@ -26,11 +27,12 @@ type TabValue =
   | "EDIT"
   | "SCHEDULE_MATCH"
   | "COMPLETE_MATCH"
-  | "UPDATE_MATCH";
+  | "UPDATE_MATCH"
+  | "REVISE_SCORE";
 
 const NAV_GROUPS: {
   label: string;
-  items: { value: TabValue; label: string }[];
+  items: { value: TabValue; label: string; danger?: boolean }[];
 }[] = [
   {
     label: "Matches",
@@ -38,6 +40,7 @@ const NAV_GROUPS: {
       { value: "SCHEDULE_MATCH", label: "Schedule Match" },
       { value: "COMPLETE_MATCH", label: "Complete Match" },
       { value: "UPDATE_MATCH", label: "Update Match" },
+      { value: "REVISE_SCORE", label: "Revise Score", danger: true },
     ],
   },
   {
@@ -362,6 +365,7 @@ function AdminPageContent() {
                   </div>
                   {group.items.map((item) => {
                     const active = activeTab === item.value;
+                    const danger = item.danger === true;
                     return (
                       <button
                         key={item.value}
@@ -370,9 +374,14 @@ function AdminPageContent() {
                         className={`w-full text-left text-sm px-4 py-2 transition-colors border-l-2 ${
                           active
                             ? "border-[#00C8DC] bg-[#00C8DC]/10 text-[#00C8DC] font-medium"
-                            : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                            : danger
+                              ? "border-transparent text-rose-600 dark:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-700 dark:hover:text-rose-400"
+                              : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
                         }`}
                       >
+                        {danger && !active && (
+                          <span className="mr-1">⚠</span>
+                        )}
                         {item.label}
                       </button>
                     );
@@ -400,6 +409,7 @@ function AdminPageContent() {
               <div className="flex items-center gap-0.5 px-3 py-2 min-w-max">
                 {ALL_TABS.map((tab) => {
                   const active = activeTab === tab.value;
+                  const danger = tab.danger === true;
                   return (
                     <button
                       key={tab.value}
@@ -408,9 +418,12 @@ function AdminPageContent() {
                       className={`px-3 py-1.5 text-sm rounded-md whitespace-nowrap transition-colors ${
                         active
                           ? "bg-[#00C8DC]/10 text-[#00C8DC] font-medium"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                          : danger
+                            ? "text-rose-600 dark:text-rose-500 hover:text-rose-700 dark:hover:text-rose-400"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                       }`}
                     >
+                      {danger && !active && <span className="mr-0.5">⚠</span>}
                       {tab.label}
                     </button>
                   );
@@ -427,6 +440,8 @@ function AdminPageContent() {
                   <CompleteMatchTab />
                 ) : activeTab === "UPDATE_MATCH" ? (
                   <UpdateMatchTab />
+                ) : activeTab === "REVISE_SCORE" ? (
+                  <ReviseScoreTab />
                 ) : activeTab === "CREATE" ? (
                   <CreatePlayerTab />
                 ) : activeTab === "EDIT" ? (
