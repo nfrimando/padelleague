@@ -147,10 +147,12 @@ export default function HeroSection({
   const [payOnlineLoading, setPayOnlineLoading] = useState(false);
   const [payOnlineError, setPayOnlineError] = useState<string | null>(null);
   const [paymentLinkOpened, setPaymentLinkOpened] = useState(false);
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [showGCashModal, setShowGCashModal] = useState(false);
 
   useEffect(() => {
     setPaymentLinkOpened(false);
+    setPaymentLinkUrl(null);
     setPayOnlineError(null);
   }, [payingSignupId]);
 
@@ -218,8 +220,11 @@ export default function HeroSection({
         return;
       }
 
-      window.open(json.link_url, "_blank", "noopener,noreferrer");
-      setPaymentLinkOpened(true);
+      setPaymentLinkUrl(json.link_url);
+      const popup = window.open(json.link_url, "_blank", "noopener,noreferrer");
+      if (popup) {
+        setPaymentLinkOpened(true);
+      }
     } catch {
       setPayOnlineError("Network error. Please try again.");
     } finally {
@@ -458,9 +463,45 @@ export default function HeroSection({
                       >
                         Check Payment Status
                       </button>
+                      {paymentLinkUrl && (
+                        <a
+                          href={paymentLinkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block text-center text-[10px] text-[#687FA3] hover:text-orange-300 underline underline-offset-2 transition-colors"
+                        >
+                          Re-open payment link
+                        </a>
+                      )}
                       <p className="text-[10px] text-[#687FA3] text-center">
                         Completed your payment? Tap above to refresh.
                       </p>
+                    </div>
+                  ) : paymentLinkUrl ? (
+                    <div className="space-y-2">
+                      <div className="rounded-xl bg-orange-500/10 border border-orange-500/20 px-4 py-3 text-center">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-orange-300 mb-1">
+                          Popup blocked by browser
+                        </p>
+                        <p className="text-xs text-white/60">
+                          Use the link below to open the payment page.
+                        </p>
+                      </div>
+                      <a
+                        href={paymentLinkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full bg-orange-500 hover:bg-orange-400 text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        Open Payment Link
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => void handleCheckPaymentStatus()}
+                        className="w-full bg-[#1a2540] hover:bg-[#1e2d50] border border-orange-500/30 text-orange-300 font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        Check Payment Status
+                      </button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
