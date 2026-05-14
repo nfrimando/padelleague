@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type UsePlayerMatchCountsResult = {
-  matchCounts: Record<string, number>;
+  matchCountCompleted: Record<string, number>;
   latestMatchDates: Record<string, string | null>;
   latestRatings: Record<string, number | null>;
   loading: boolean;
@@ -25,7 +25,7 @@ type PlayerSummaryRow = {
 export function usePlayerMatchCounts(
   playerIds: Array<number | string>,
 ): UsePlayerMatchCountsResult {
-  const [matchCounts, setMatchCounts] = useState<Record<string, number>>({});
+  const [matchCountCompleted, setMatchCountCompleted] = useState<Record<string, number>>({});
   const [latestMatchDates, setLatestMatchDates] = useState<
     Record<string, string | null>
   >({});
@@ -40,7 +40,7 @@ export function usePlayerMatchCounts(
 
   useEffect(() => {
     if (normalizedIds.length === 0) {
-      setMatchCounts({});
+      setMatchCountCompleted({});
       setLatestMatchDates({});
       setLatestRatings({});
       setLoading(false);
@@ -57,7 +57,7 @@ export function usePlayerMatchCounts(
 
       if (numericIds.length === 0) {
         if (!isCancelled) {
-          setMatchCounts({});
+          setMatchCountCompleted({});
           setLatestMatchDates({});
           setLatestRatings({});
           setLoading(false);
@@ -90,7 +90,7 @@ export function usePlayerMatchCounts(
             return;
           }
 
-          const matchCount = Number(row.match_count_completed) + Number(row.match_count_scheduled) + Number(row.match_count_forfeit);
+          const matchCount = Number(row.match_count_completed);
           counts[playerId] = Number.isFinite(matchCount) ? matchCount : 0;
 
           latestDates[playerId] = row.latest_match_date || null;
@@ -100,7 +100,7 @@ export function usePlayerMatchCounts(
         });
       }
 
-      setMatchCounts(counts);
+      setMatchCountCompleted(counts);
       setLatestMatchDates(latestDates);
       setLatestRatings(latestRatingValues);
       setLoading(false);
@@ -114,7 +114,7 @@ export function usePlayerMatchCounts(
   }, [normalizedIds]);
 
   return {
-    matchCounts,
+    matchCountCompleted,
     latestMatchDates,
     latestRatings,
     loading,

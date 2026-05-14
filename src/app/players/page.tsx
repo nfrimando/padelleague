@@ -54,7 +54,7 @@ function PlayersPageContent() {
     [displayedPlayers],
   );
   const {
-    matchCounts,
+    matchCountCompleted,
     latestMatchDates,
     latestRatings,
     loading: loadingMatchCounts,
@@ -139,7 +139,7 @@ function PlayersPageContent() {
                 player={player}
                 href={playerCardHrefBuilder(String(player.player_id))}
                 loadingLifetimeMatches={loadingMatchCounts}
-                lifetimeMatches={matchCounts[String(player.player_id)] ?? null}
+                lifetimeMatches={matchCountCompleted[String(player.player_id)] ?? null}
                 latestMatchDate={
                   latestMatchDates[String(player.player_id)] ?? null
                 }

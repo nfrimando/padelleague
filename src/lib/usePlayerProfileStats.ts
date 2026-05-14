@@ -238,7 +238,7 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
 
       setLightMatches(typedMatches);
       setTeamsByMatchId(teamsById);
-      setMatchCount(nonCancelled.length);
+      setMatchCount(completed.length);
       setWins(winCount);
       setWinRate(wr);
       setPartnerStats(computedPartnerStats);
