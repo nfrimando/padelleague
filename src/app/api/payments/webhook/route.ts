@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Signature mismatch." }, { status: 400 });
   }
 
-  let event: { data: { attributes: { type: string; data: { attributes: { reference_number?: string }; relationships?: { payment_intent?: unknown } } } } };
+  let event: { data: { attributes: { type: string; data: unknown } } };
   try {
     event = JSON.parse(rawBody) as typeof event;
   } catch {
@@ -61,14 +61,18 @@ export async function POST(request: Request) {
   const eventType = event.data?.attributes?.type;
   console.log("[webhook] event type:", eventType);
 
-  // Only handle link payment paid events
-  if (eventType !== "link.payment.paid") {
+  // Only handle payment paid events
+  if (eventType !== "payment.paid") {
     console.log("[webhook] ignoring event type:", eventType);
     return NextResponse.json({ ok: true });
   }
 
-  const linkId = (event.data?.attributes?.data as Record<string, unknown> | undefined)
-    ?.id as string | undefined;
+  const eventData = event.data?.attributes?.data as Record<string, unknown> | undefined;
+  const eventDataAttrs = eventData?.attributes as Record<string, unknown> | undefined;
+  const eventSource = eventDataAttrs?.source as Record<string, unknown> | undefined;
+  console.log("[webhook] data.id:", eventData?.id, "source:", JSON.stringify(eventSource));
+
+  const linkId = eventSource?.id as string | undefined;
   const paymongoPaymentId = (
     (event.data?.attributes?.data as Record<string, unknown> | undefined)
       ?.attributes as Record<string, unknown> | undefined
