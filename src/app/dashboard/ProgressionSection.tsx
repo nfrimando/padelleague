@@ -452,7 +452,7 @@ export default function ProgressionSection({
           : "default";
 
   return (
-    <div className="bg-[#162032] border border-[#687FA3]/10 rounded-3xl p-6 space-y-5">
+    <div className="bg-[#162032] border border-[#687FA3]/10 sm:rounded-3xl p-6 space-y-5">
       <div className="border-b border-[#687FA3]/10 pb-4">
         <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#687FA3]">
           Rating Progression
@@ -491,7 +491,7 @@ export default function ProgressionSection({
       </div>
 
       {/* Chart */}
-      <div className="h-60 sm:h-72">
+      <div className="h-60 sm:h-72 w-full">
         {loading ? (
           <div className="h-full bg-[#1a2540] rounded-xl animate-pulse" />
         ) : !hasData ? (

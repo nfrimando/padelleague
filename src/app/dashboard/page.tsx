@@ -259,10 +259,10 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 md:py-14 space-y-6">
+      <div className="max-w-5xl mx-auto sm:px-6 py-10 md:py-14 space-y-6">
         {/* ── View As banner ── */}
         {isViewingAs && viewAsPlayer && (
-          <div className="bg-[#00C8DC]/5 border border-[#00C8DC]/20 rounded-2xl px-5 py-3 flex items-center justify-between gap-4">
+          <div className="bg-[#00C8DC]/5 border border-[#00C8DC]/20 sm:rounded-2xl px-5 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <Eye size={15} className="text-[#00C8DC] shrink-0" />
               <div className="min-w-0">
