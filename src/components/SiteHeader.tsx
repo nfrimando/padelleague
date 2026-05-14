@@ -90,7 +90,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               <Zap className="text-[#0E1523] w-5 h-5" fill="currentColor" />
             </div>
           </div>
-          <div className="flex flex-col leading-none">
+          <div className="hidden sm:flex flex-col leading-none">
             <span className="font-black text-xl tracking-tighter uppercase italic text-white">
               PADEL LEAGUE
             </span>
@@ -170,23 +170,25 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
 
           {rightSlot ? (
             <div className="flex md:hidden items-center gap-4 font-bold text-[10px] uppercase tracking-[0.15em]">
-              {loading ? (
-                <div className="h-6 w-16 rounded-full bg-[#22304a] animate-pulse" />
-              ) : user ? (
+              {(
+                [
+                  ["/matches", "Matches"],
+                  ["/players", "Players"],
+                  ["/leaderboard", "Standings"],
+                ] as const
+              ).map(([href, label]) => (
                 <a
-                  href="/dashboard"
-                  className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
+                  key={href}
+                  href={href}
+                  className={
+                    currentPath === href
+                      ? "text-[#00C8DC]"
+                      : "text-white/75 hover:text-[#00C8DC] transition-colors"
+                  }
                 >
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt="Profile"
-                      className="h-4 w-4 rounded-full border border-white/20 object-cover"
-                    />
-                  ) : null}
-                  Me
+                  {label}
                 </a>
-              ) : null}
+              ))}
               {rightSlot}
             </div>
           ) : (

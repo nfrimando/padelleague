@@ -160,7 +160,7 @@ export default function HeroSection({
     openEvents.length > 0;
 
   return (
-    <div className="bg-[#162032] border border-[#687FA3]/10 rounded-3xl overflow-hidden">
+    <div className="bg-[#162032] border border-[#687FA3]/10 sm:rounded-3xl overflow-hidden">
       {/* ── Player identity row ── */}
       <div className="px-6 pt-6 pb-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
         <div className="shrink-0">
