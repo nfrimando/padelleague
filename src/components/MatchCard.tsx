@@ -112,6 +112,14 @@ function TeamLabel({
   );
 }
 
+function YoutubeIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.75 15.5V8.5l6.5 3.5-6.5 3.5z" />
+    </svg>
+  );
+}
+
 function getSetScores(match: MatchWithTeams): string {
   if (!match.sets || match.sets.length === 0) return "";
   return match.sets
@@ -186,11 +194,35 @@ export default function MatchCard({
         >
           {statusLabel}
         </span>
+        {match.youtube_link && (
+          <a
+            href={match.youtube_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Watch on YouTube"
+            className="md:hidden text-slate-400 dark:text-[#687FA3]/50 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+          >
+            <YoutubeIcon size={13} />
+          </a>
+        )}
         <div className="ml-auto hidden items-center gap-3 md:flex">
           {match.venue && (
             <span className="text-slate-400 dark:text-[#687FA3]/50 text-[10px] font-bold">
               {match.venue}
             </span>
+          )}
+          {match.youtube_link && (
+            <a
+              href={match.youtube_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Watch on YouTube"
+              className="text-slate-400 dark:text-[#687FA3]/50 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+            >
+              <YoutubeIcon size={14} />
+            </a>
           )}
           <span className="text-slate-300 dark:text-[#687FA3]/30 text-[9px] font-mono opacity-0 group-hover:opacity-100 transition-opacity duration-200 select-none">
             #{match.match_id}

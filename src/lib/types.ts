@@ -108,6 +108,7 @@ export type MatchWithTeams = {
   type: string | null;
   winner_team: number | null;
   status: "scheduled" | "completed" | "forfeit" | "cancelled";
+  youtube_link?: string | null;
   teams: TeamWithPlayers[];
   sets?: MatchSet[];
 };
@@ -129,6 +130,7 @@ export type LoadedMatchDetails = {
   venue: string | null;
   type: string | null;
   winnerTeam: number | null;
+  youtubeLink: string | null;
   team1SetsWon: number | null;
   team2SetsWon: number | null;
   team1: {

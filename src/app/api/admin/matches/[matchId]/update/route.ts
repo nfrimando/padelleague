@@ -24,6 +24,7 @@ type UpdateMatchRequest = {
   timeLocal?: string | null;
   venue?: string | null;
   type?: string | null;
+  youtubeLink?: string | null;
   sets?: SetScoreInput[];
 };
 
@@ -197,6 +198,14 @@ function validatePayload(payload: unknown): ValidationResult {
           ? undefined
           : normalizeOptionalString(payload.type),
       sets: parsedSets,
+      youtubeLink:
+        payload.youtubeLink === undefined
+          ? undefined
+          : payload.youtubeLink === null || payload.youtubeLink === ""
+            ? null
+            : typeof payload.youtubeLink === "string"
+              ? payload.youtubeLink.trim()
+              : undefined,
     },
   };
 }
@@ -306,6 +315,9 @@ export async function PATCH(
   }
   if (validation.value.type !== undefined) {
     matchUpdates.type = validation.value.type;
+  }
+  if (validation.value.youtubeLink !== undefined) {
+    matchUpdates.youtube_link = validation.value.youtubeLink;
   }
 
   if (validation.value.status === "completed") {

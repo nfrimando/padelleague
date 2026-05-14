@@ -28,11 +28,15 @@ type MatchListRow = {
   team2p2Id: number | null;
 };
 
+const PAGE_SIZE = 20;
+
 const STATUS_CLS: Record<string, string> = {
   scheduled:
     "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   cancelled:
     "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+  completed:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
 };
 
 function resolvePlayerName(
@@ -88,6 +92,9 @@ export function UpdateMatchTab() {
   const [listError, setListError] = useState<string | null>(null);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [onlyScheduled, setOnlyScheduled] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Edit modal state
   const [editMatchId, setEditMatchId] = useState("");
@@ -99,6 +106,7 @@ export function UpdateMatchTab() {
   const [updateMatchTimeLocal, setUpdateMatchTimeLocal] = useState("");
   const [updateMatchVenue, setUpdateMatchVenue] = useState("");
   const [updateMatchType, setUpdateMatchType] = useState("");
+  const [updateMatchYoutubeLink, setUpdateMatchYoutubeLink] = useState("");
   const [updateMatchTeam1Player1, setUpdateMatchTeam1Player1] = useState("");
   const [updateMatchTeam1Player2, setUpdateMatchTeam1Player2] = useState("");
   const [updateMatchTeam2Player1, setUpdateMatchTeam2Player1] = useState("");
@@ -114,47 +122,47 @@ export function UpdateMatchTab() {
   const [deletingMatch, setDeletingMatch] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Fetch scheduled + cancelled matches only
-  useEffect(() => {
-    let cancelled = false;
-    setListLoading(true);
-    setListError(null);
+  async function fetchPage(
+    pageOffset: number,
+    append: boolean,
+    signal: { cancelled: boolean },
+  ) {
+    const statuses = onlyScheduled
+      ? ["scheduled"]
+      : ["scheduled", "cancelled", "completed"];
 
-    async function loadList() {
-      const { data: matchData, error: matchErr } = await supabase
-        .from("matches")
-        .select("match_id,date_local,type,status")
-        .in("status", ["scheduled", "cancelled"])
-        .order("match_id", { ascending: false })
-        .limit(60);
+    const { data: matchData, error: matchErr } = await supabase
+      .from("matches")
+      .select("match_id,date_local,type,status")
+      .in("status", statuses)
+      .order("match_id", { ascending: false })
+      .range(pageOffset, pageOffset + PAGE_SIZE - 1);
 
-      if (cancelled) return;
-      if (matchErr) {
-        setListError(matchErr.message || "Failed to load matches.");
-        setListLoading(false);
-        return;
-      }
+    if (signal.cancelled) return;
+    if (matchErr) {
+      setListError(matchErr.message || "Failed to load matches.");
+      setListLoading(false);
+      setLoadingMore(false);
+      return;
+    }
 
-      const baseRows = (matchData ?? []) as Array<{
-        match_id: number;
-        date_local: string | null;
-        type: string | null;
-        status: string;
-      }>;
-      const matchIds = baseRows.map((r) => r.match_id);
+    const baseRows = (matchData ?? []) as Array<{
+      match_id: number;
+      date_local: string | null;
+      type: string | null;
+      status: string;
+    }>;
+    const matchIds = baseRows.map((r) => r.match_id);
 
-      if (matchIds.length === 0) {
-        setListRows([]);
-        setListLoading(false);
-        return;
-      }
+    let assembled: MatchListRow[] = [];
 
+    if (matchIds.length > 0) {
       const { data: teamData } = await supabase
         .from("match_teams")
         .select("match_id,team_number,player_1_id,player_2_id")
         .in("match_id", matchIds);
 
-      if (cancelled) return;
+      if (signal.cancelled) return;
 
       const teamMap = new Map<
         number,
@@ -183,33 +191,50 @@ export function UpdateMatchTab() {
         teamMap.set(t.match_id, e);
       }
 
-      setListRows(
-        baseRows.map((r) => {
-          const t = teamMap.get(r.match_id);
-          return {
-            match_id: r.match_id,
-            date_local: r.date_local,
-            type: r.type,
-            status: r.status,
-            team1p1Id: t?.t1p1 ?? null,
-            team1p2Id: t?.t1p2 ?? null,
-            team2p1Id: t?.t2p1 ?? null,
-            team2p2Id: t?.t2p2 ?? null,
-          };
-        }),
-      );
-      setListLoading(false);
+      assembled = baseRows.map((r) => {
+        const t = teamMap.get(r.match_id);
+        return {
+          match_id: r.match_id,
+          date_local: r.date_local,
+          type: r.type,
+          status: r.status,
+          team1p1Id: t?.t1p1 ?? null,
+          team1p2Id: t?.t1p2 ?? null,
+          team2p1Id: t?.t2p1 ?? null,
+          team2p2Id: t?.t2p2 ?? null,
+        };
+      });
     }
 
-    void loadList();
-    return () => {
-      cancelled = true;
-    };
-  }, [listRefreshKey]);
+    setHasMore(baseRows.length === PAGE_SIZE);
+    setOffset(pageOffset + baseRows.length);
+    if (append) {
+      setListRows((prev) => [...prev, ...assembled]);
+    } else {
+      setListRows(assembled);
+    }
+    setListLoading(false);
+    setLoadingMore(false);
+  }
 
-  const displayedRows = onlyScheduled
-    ? listRows.filter((r) => r.status === "scheduled")
-    : listRows;
+  useEffect(() => {
+    const signal = { cancelled: false };
+    setListLoading(true);
+    setListError(null);
+    setOffset(0);
+    setHasMore(false);
+    void fetchPage(0, false, signal);
+    return () => {
+      signal.cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listRefreshKey, onlyScheduled]);
+
+  const loadMore = () => {
+    const signal = { cancelled: false };
+    setLoadingMore(true);
+    void fetchPage(offset, true, signal);
+  };
 
   const {
     loadedMatchDetails,
@@ -238,6 +263,7 @@ export function UpdateMatchTab() {
     setUpdateMatchTimeLocal(loadedMatchDetails.timeLocal || "");
     setUpdateMatchVenue(loadedMatchDetails.venue || "");
     setUpdateMatchType(loadedMatchDetails.type || "");
+    setUpdateMatchYoutubeLink(loadedMatchDetails.youtubeLink || "");
     setUpdateMatchTeam1Player1(
       team1.player1 ? String(team1.player1.player_id) : "",
     );
@@ -398,6 +424,7 @@ export function UpdateMatchTab() {
       if (updateMatchTimeLocal) payload.timeLocal = updateMatchTimeLocal;
       if (updateMatchVenue.trim()) payload.venue = updateMatchVenue.trim();
       if (updateMatchType.trim()) payload.type = updateMatchType.trim();
+      payload.youtubeLink = updateMatchYoutubeLink.trim() || null;
 
       const response = await fetch(`/api/admin/matches/${parsedId}/update`, {
         method: "PATCH",
@@ -485,7 +512,7 @@ export function UpdateMatchTab() {
           Update Match
         </h2>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Edit or delete scheduled and cancelled matches.
+          Edit scheduled, cancelled, and completed matches.
         </p>
       </div>
 
@@ -529,7 +556,7 @@ export function UpdateMatchTab() {
           <p className="px-4 py-3 text-sm text-rose-500">{listError}</p>
         )}
         <div className="overflow-y-auto max-h-72 divide-y divide-slate-100 dark:divide-slate-800">
-          {displayedRows.map((row) => {
+          {listRows.map((row) => {
             const t1 = `${resolvePlayerName(row.team1p1Id, playerNameById)} & ${resolvePlayerName(row.team1p2Id, playerNameById)}`;
             const t2 = `${resolvePlayerName(row.team2p1Id, playerNameById)} & ${resolvePlayerName(row.team2p2Id, playerNameById)}`;
             const statusCls =
@@ -566,25 +593,39 @@ export function UpdateMatchTab() {
                   >
                     <IconPencil />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeleteTarget(row);
-                      setDeleteError(null);
-                    }}
-                    title="Delete match"
-                    className="rounded p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500/40"
-                  >
-                    <IconTrash />
-                  </button>
+                  {row.status !== "completed" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteTarget(row);
+                        setDeleteError(null);
+                      }}
+                      title="Delete match"
+                      className="rounded p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500/40"
+                    >
+                      <IconTrash />
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
-          {!listLoading && displayedRows.length === 0 && !listError && (
+          {!listLoading && listRows.length === 0 && !listError && (
             <p className="px-4 py-6 text-sm text-slate-400 dark:text-slate-500 text-center">
               No matches found.
             </p>
+          )}
+          {hasMore && !listLoading && (
+            <div className="px-4 py-3 flex justify-center border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 transition-colors"
+              >
+                {loadingMore ? "Loading…" : "Load more"}
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -780,6 +821,19 @@ export function UpdateMatchTab() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className={labelCls} htmlFor="update-match-youtube-link">
+                  YouTube Link (optional)
+                </label>
+                <input
+                  id="update-match-youtube-link"
+                  type="url"
+                  value={updateMatchYoutubeLink}
+                  onChange={(e) => setUpdateMatchYoutubeLink(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className={inputCls}
+                />
               </div>
             </div>
 
