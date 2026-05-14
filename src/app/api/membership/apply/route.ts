@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  getPaymentsServiceClient,
-  getPaymentsUserClient,
-} from "@/app/api/payments/_lib/supabase";
+  getServerServiceClient,
+  getServerUserClient,
+} from "@/app/api/_lib/supabase";
 
 function normalizeString(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   const authorization = request.headers.get("authorization");
   if (authorization?.startsWith("Bearer ")) {
     try {
-      const userClient = getPaymentsUserClient(authorization);
+      const userClient = getServerUserClient(authorization);
       const {
         data: { user },
       } = await userClient.auth.getUser();
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
   let serviceClient;
   try {
-    serviceClient = getPaymentsServiceClient();
+    serviceClient = getServerServiceClient();
   } catch (error) {
     console.error("Failed to initialize service Supabase client:", error);
     return NextResponse.json(

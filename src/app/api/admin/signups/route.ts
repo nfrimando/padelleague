@@ -4,19 +4,13 @@ import {
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
 
-type SignupStatus =
-  | "registered"
-  | "accepted"
-  | "waitlisted"
-  | "cancelled"
-  | "pending_payment";
+type SignupStatus = "registered" | "accepted" | "waitlisted" | "cancelled";
 
 const ALLOWED_SIGNUP_STATUSES: SignupStatus[] = [
   "registered",
   "accepted",
   "waitlisted",
   "cancelled",
-  "pending_payment",
 ];
 
 /** GET /api/admin/signups?event_id=123 — list signups for an event */
@@ -85,7 +79,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "status must be one of registered, accepted, waitlisted, cancelled, pending_payment.",
+          "status must be one of registered, accepted, waitlisted, cancelled.",
       },
       { status: 400 },
     );

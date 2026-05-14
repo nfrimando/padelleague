@@ -110,12 +110,6 @@ export async function PATCH(request: Request) {
   if (typeof body.status === "string") update.status = body.status;
   if (typeof body.name === "string") update.name = body.name;
   if (typeof body.event_type === "string") update.event_type = body.event_type;
-  if (typeof body.registration_fee === "number") {
-    update.registration_fee = body.registration_fee;
-  }
-  if (typeof body.requires_payment === "boolean") {
-    update.requires_payment = body.requires_payment;
-  }
   if (typeof body.start_date === "string" && body.start_date.trim()) update.start_date = body.start_date.trim();
   if (typeof body.end_date === "string" && body.end_date.trim()) update.end_date = body.end_date.trim();
   if (Object.prototype.hasOwnProperty.call(body, "image_url")) {

@@ -19,8 +19,7 @@ type SignupStatus =
   | "registered"
   | "accepted"
   | "waitlisted"
-  | "cancelled"
-  | "pending_payment";
+  | "cancelled";
 type VerifyStatus = "verified" | "pending" | "unknown";
 
 type RegisterLookupPlayer = {
@@ -59,8 +58,6 @@ function signupStatusLabel(status: Exclude<SignupStatus, "none">): string {
       return "Waitlisted";
     case "cancelled":
       return "Cancelled";
-    case "pending_payment":
-      return "Pending Payment";
   }
 }
 
@@ -72,8 +69,6 @@ function signupStatusBadgeClass(status: Exclude<SignupStatus, "none">): string {
       return "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
     case "waitlisted":
       return "bg-amber-500/10 border-amber-500/30 text-amber-300";
-    case "pending_payment":
-      return "bg-cyan-500/10 border-cyan-500/30 text-cyan-300";
     case "cancelled":
       return "bg-red-500/10 border-red-500/30 text-red-300";
   }
@@ -118,7 +113,7 @@ export default function RegisterPage() {
           supabase
             .from("events")
             .select(
-              "event_id, name, event_type, registration_fee, requires_payment, start_date, end_date, registration_status, status, created_at, updated_at",
+              "event_id, name, event_type, start_date, end_date, registration_status, status, created_at, updated_at",
             )
             .eq("registration_status", "open")
             .order("event_id", { ascending: false }),
@@ -339,10 +334,6 @@ export default function RegisterPage() {
   };
 
   const selectedEvent = events.find((e) => e.event_id === selectedEventId);
-  const isSelectedEventFree =
-    (selectedEvent as (Event & { requires_payment?: boolean }) | undefined)
-      ?.requires_payment === false;
-  const fee = selectedEvent?.registration_fee ?? 5;
 
   if (loading) {
     return (
@@ -786,15 +777,6 @@ export default function RegisterPage() {
                     {error}
                   </p>
                 )}
-
-                <div className="flex items-center justify-between text-sm py-3 border-t border-white/10">
-                  <span className="text-white/60">
-                    Registration fee (Pay later)
-                  </span>
-                  <span className="font-bold text-[#00C8DC]">
-                    {isSelectedEventFree ? "Free" : `₱${fee.toLocaleString()}`}
-                  </span>
-                </div>
 
                 <button
                   type="submit"

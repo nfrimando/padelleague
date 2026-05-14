@@ -13,10 +13,8 @@ type AdminEventRow = {
   event_type: string;
   start_date?: string | null;
   end_date?: string | null;
-  registration_fee?: number | null;
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
-  requires_payment?: boolean | null;
   image_url?: string | null;
   description?: string | null;
   deleted_at?: string | null;
@@ -50,10 +48,8 @@ type EventEditForm = {
   event_type: string;
   start_date: string;
   end_date: string;
-  registration_fee: string;
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
-  requires_payment: boolean;
   image_url: string;
   description: string;
 };
@@ -209,13 +205,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
       event_type: event.event_type,
       start_date: event.start_date ?? "",
       end_date: event.end_date ?? "",
-      registration_fee:
-        event.registration_fee != null
-          ? String(event.registration_fee)
-          : "1000",
       registration_status: event.registration_status,
       status: event.status,
-      requires_payment: event.requires_payment !== false,
       image_url: event.image_url ?? "",
       description: event.description ?? "",
     });
@@ -242,8 +233,6 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
       return;
     }
 
-    const fee = Number(editForm.registration_fee);
-
     const res = await fetch("/api/admin/events", {
       method: "PATCH",
       headers: {
@@ -256,10 +245,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
         event_type: editForm.event_type,
         start_date: editForm.start_date,
         end_date: editForm.end_date,
-        registration_fee: Number.isFinite(fee) ? fee : 1000,
         registration_status: editForm.registration_status,
         status: editForm.status,
-        requires_payment: editForm.requires_payment,
         image_url: editForm.image_url || null,
         description: editForm.description || null,
       }),
@@ -650,10 +637,6 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                             ? `${e.start_date} → ${e.end_date}`
                             : "Dates TBD"}
                           {` · ${e.event_type}`}
-                          {e.registration_fee != null
-                            ? ` · ₱${e.registration_fee.toLocaleString()}`
-                            : ""}
-                          {` · ${e.requires_payment === false ? "Free" : "Paid"}`}
                           {isArchived ? " · Archived" : ""}
                         </p>
                       </div>
@@ -788,26 +771,6 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                               />
                             </div>
                             <div>
-                              <label className={labelCls}>
-                                Registration Fee (₱)
-                              </label>
-                              <input
-                                type="number"
-                                className={inputCls}
-                                value={editForm.registration_fee}
-                                onChange={(ev) =>
-                                  setEditForm((prev) =>
-                                    prev
-                                      ? {
-                                          ...prev,
-                                          registration_fee: ev.target.value,
-                                        }
-                                      : prev,
-                                  )
-                                }
-                              />
-                            </div>
-                            <div>
                               <label className={labelCls}>Registration</label>
                               <select
                                 className={inputCls}
@@ -851,26 +814,6 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                                 <option value="ongoing">Ongoing</option>
                                 <option value="completed">Completed</option>
                               </select>
-                            </div>
-                            <div className="flex items-end">
-                              <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                                <input
-                                  type="checkbox"
-                                  checked={editForm.requires_payment}
-                                  onChange={(ev) =>
-                                    setEditForm((prev) =>
-                                      prev
-                                        ? {
-                                            ...prev,
-                                            requires_payment: ev.target.checked,
-                                          }
-                                        : prev,
-                                    )
-                                  }
-                                  className="rounded border-slate-300 dark:border-slate-700"
-                                />
-                                Requires payment
-                              </label>
                             </div>
                             <div className="sm:col-span-2 lg:col-span-3">
                               <label className={labelCls}>
