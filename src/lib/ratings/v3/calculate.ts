@@ -113,12 +113,14 @@ export function calculateV3Ratings<TPlayerId extends PlayerId>(
   const applyDelta = (
     player: PlayerRatingInput<TPlayerId>,
     delta: number,
-  ): PlayerRatingResult<TPlayerId> => ({
-    playerId: player.playerId,
-    preMatchRating: player.preMatchRating,
-    postMatchRating: player.preMatchRating + delta,
-    ratingDelta: delta,
-  });
+  ): PlayerRatingResult<TPlayerId> => {
+    return {
+      playerId: player.playerId,
+      preMatchRating: player.preMatchRating,
+      postMatchRating: Math.max(player.preMatchRating + delta, 0),
+      ratingDelta: delta,
+    };
+  };
 
   return {
     winnerTeam,
