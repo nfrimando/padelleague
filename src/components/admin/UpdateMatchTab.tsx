@@ -418,12 +418,14 @@ export function UpdateMatchTab() {
           return;
         }
         payload.eventId = seasonId;
+      } else {
+        payload.eventId = null;
       }
 
-      if (updateMatchDateLocal) payload.dateLocal = updateMatchDateLocal;
-      if (updateMatchTimeLocal) payload.timeLocal = updateMatchTimeLocal;
-      if (updateMatchVenue.trim()) payload.venue = updateMatchVenue.trim();
-      if (updateMatchType.trim()) payload.type = updateMatchType.trim();
+      payload.dateLocal = updateMatchDateLocal || null;
+      payload.timeLocal = updateMatchTimeLocal || null;
+      payload.venue = updateMatchVenue.trim() || null;
+      payload.type = updateMatchType.trim() || null;
       payload.youtubeLink = updateMatchYoutubeLink.trim() || null;
 
       const response = await fetch(`/api/admin/matches/${parsedId}/update`, {
@@ -731,7 +733,7 @@ export function UpdateMatchTab() {
                   onChange={(e) => setUpdateMatchSeasonId(e.target.value)}
                   className={inputCls}
                 >
-                  <option value="">Keep existing</option>
+                  <option value="">No event</option>
                   {matchSeasons
                     .slice()
                     .sort((a, b) => b.id - a.id)
@@ -795,7 +797,7 @@ export function UpdateMatchTab() {
                   onChange={(e) => setUpdateMatchType(e.target.value)}
                   className={inputCls}
                 >
-                  <option value="">Keep existing</option>
+                  <option value="">No type</option>
                   {SCHEDULE_MATCH_TYPE_OPTIONS.map((type) => (
                     <option key={type} value={type}>
                       {type}
@@ -814,7 +816,7 @@ export function UpdateMatchTab() {
                   onChange={(e) => setUpdateMatchVenue(e.target.value)}
                   className={inputCls}
                 >
-                  <option value="">Keep existing</option>
+                  <option value="">No venue</option>
                   {SCHEDULE_MATCH_VENUE_OPTIONS.map((venue) => (
                     <option key={venue} value={venue}>
                       {venue}
