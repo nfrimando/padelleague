@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -403,6 +403,8 @@ export default function ProgressionSection({
 }: Props) {
   const hasData = chartData.length >= 2;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // Auto-scroll to latest (rightmost) card on load
   useEffect(() => {
@@ -498,8 +500,10 @@ export default function ProgressionSection({
           <div className="h-full flex items-center justify-center text-[#687FA3] text-sm">
             Not enough match data to show progression.
           </div>
+        ) : !mounted ? (
+          <div className="h-full bg-[#1a2540] rounded-xl animate-pulse" />
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}>
             <LineChart
               data={chartData}
               margin={{ top: 12, right: 16, bottom: 0, left: 0 }}
