@@ -73,6 +73,7 @@ CREATE TABLE public.matches (
   status text NOT NULL CHECK (status = ANY (ARRAY['scheduled'::text, 'completed'::text, 'forfeit'::text, 'cancelled'::text])),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   reminder_sent_at timestamp without time zone,
+  youtube_link text,
   CONSTRAINT matches_pkey PRIMARY KEY (match_id)
 );
 CREATE TABLE public.player_claims (

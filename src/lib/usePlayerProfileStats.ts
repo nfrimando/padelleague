@@ -15,6 +15,7 @@ type LightMatchRow = {
   type: string | null;
   winner_team: number | null;
   status: "scheduled" | "completed" | "forfeit" | "cancelled";
+  youtube_link?: string | null;
 };
 
 type RatingRow = {
@@ -139,7 +140,7 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
         supabase
           .from("matches")
           .select(
-            "match_id, created_at, event_id, date_local, time_local, venue, type, winner_team, status",
+            "match_id, created_at, event_id, date_local, time_local, venue, type, winner_team, status, youtube_link",
           )
           .in("match_id", matchIds)
           .order("date_local", { ascending: false, nullsFirst: false })

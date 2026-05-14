@@ -173,6 +173,14 @@ function HoverTooltip({
 
 // ── Scroll match card ─────────────────────────────────────────────────────────
 
+function YoutubeIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.75 15.5V8.5l6.5 3.5-6.5 3.5z" />
+    </svg>
+  );
+}
+
 function MatchScrollCard({
   point,
   playerId,
@@ -228,6 +236,18 @@ function MatchScrollCard({
             >
               {won ? "W" : "L"}
             </span>
+          )}
+          {match.youtube_link && (
+            <a
+              href={match.youtube_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Watch on YouTube"
+              className="text-[#687FA3]/50 hover:text-red-400 transition-colors"
+            >
+              <YoutubeIcon size={12} />
+            </a>
           )}
         </div>
       </div>

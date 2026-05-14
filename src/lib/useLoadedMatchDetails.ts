@@ -47,7 +47,7 @@ export function useLoadedMatchDetails({ matchId, enabled }: Options): Result {
       const { data: matchRow, error: matchError } = await supabase
         .from("matches")
         .select(
-          "match_id,status,event_id,date_local,time_local,venue,type,winner_team",
+          "match_id,status,event_id,date_local,time_local,venue,type,winner_team,youtube_link",
         )
         .eq("match_id", parsedId)
         .maybeSingle();
@@ -179,6 +179,7 @@ export function useLoadedMatchDetails({ matchId, enabled }: Options): Result {
         venue: matchRow.venue,
         type: matchRow.type,
         winnerTeam: matchRow.winner_team,
+        youtubeLink: typeof matchRow.youtube_link === "string" ? matchRow.youtube_link : null,
         team1SetsWon:
           typeof team1?.sets_won === "number" ? team1.sets_won : null,
         team2SetsWon:
