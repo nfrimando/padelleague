@@ -20,6 +20,7 @@ export function CreateEventTab() {
   const [newEventFee, setNewEventFee] = useState("1000");
   const [newEventImageUrl, setNewEventImageUrl] = useState("");
   const [newEventDescription, setNewEventDescription] = useState("");
+  const [newEventPaymentInstructions, setNewEventPaymentInstructions] = useState("");
   const [newEventRegStatus, setNewEventRegStatus] = useState<"open" | "closed">(
     "open",
   );
@@ -65,6 +66,7 @@ export function CreateEventTab() {
         status: newEventStatus,
         image_url: newEventImageUrl || undefined,
         description: newEventDescription || undefined,
+        payment_instructions: newEventPaymentInstructions || undefined,
       }),
     });
 
@@ -88,6 +90,7 @@ export function CreateEventTab() {
       setNewEventFee("1000");
       setNewEventImageUrl("");
       setNewEventDescription("");
+      setNewEventPaymentInstructions("");
       setNewEventRegStatus("open");
       setNewEventStatus("upcoming");
     }
@@ -205,6 +208,16 @@ export function CreateEventTab() {
               placeholder="Short description of the event..."
               value={newEventDescription}
               onChange={(ev) => setNewEventDescription(ev.target.value)}
+            />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className={labelCls}>Payment Instructions (optional)</label>
+            <textarea
+              rows={4}
+              className={inputCls}
+              placeholder="e.g. Bank: BDO&#10;Account: 1234567890&#10;Name: Padel League PH&#10;GCash: 0917-xxx-xxxx"
+              value={newEventPaymentInstructions}
+              onChange={(ev) => setNewEventPaymentInstructions(ev.target.value)}
             />
           </div>
         </div>

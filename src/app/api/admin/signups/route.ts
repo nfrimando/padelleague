@@ -4,10 +4,11 @@ import {
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
 
-type SignupStatus = "registered" | "accepted" | "waitlisted" | "cancelled";
+type SignupStatus = "applied" | "pending_payment" | "accepted" | "waitlisted" | "cancelled";
 
 const ALLOWED_SIGNUP_STATUSES: SignupStatus[] = [
-  "registered",
+  "applied",
+  "pending_payment",
   "accepted",
   "waitlisted",
   "cancelled",
@@ -72,14 +73,14 @@ export async function POST(request: Request) {
     typeof statusRaw === "string" && ALLOWED_SIGNUP_STATUSES.includes(statusRaw as SignupStatus)
       ? (statusRaw as SignupStatus)
       : statusRaw === undefined
-        ? "registered"
+        ? "applied"
         : null;
 
   if (!status) {
     return NextResponse.json(
       {
         error:
-          "status must be one of registered, accepted, waitlisted, cancelled.",
+          "status must be one of applied, pending_payment, accepted, waitlisted, cancelled.",
       },
       { status: 400 },
     );

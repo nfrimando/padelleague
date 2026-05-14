@@ -34,6 +34,8 @@ type SignupRow = {
     start_date?: string | null;
     registration_status: "open" | "closed";
     status: "upcoming" | "ongoing" | "completed";
+    registration_fee?: number | null;
+    payment_instructions?: string | null;
   } | null;
 };
 
@@ -142,7 +144,7 @@ export default function DashboardPage() {
     const supsResult = await supabase
       .from("signups_events")
       .select(
-        "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
+        "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status, registration_fee, payment_instructions)",
       )
       .eq("player_id", p.player_id)
       .order("created_at", { ascending: false });
@@ -168,6 +170,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (signupResult === "registered") void load();
   }, [signupResult, load]);
+
 
   // ── Match data (always for displayPlayer) ────────────────────────────────
   const {

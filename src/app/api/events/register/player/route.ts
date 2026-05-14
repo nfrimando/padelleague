@@ -89,7 +89,8 @@ export async function POST(request: Request) {
 
   if (existingSignup) {
     if (
-      existingSignup.status === "registered" ||
+      existingSignup.status === "applied" ||
+      existingSignup.status === "pending_payment" ||
       existingSignup.status === "accepted"
     ) {
       return NextResponse.json(
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
     .insert({
       event_id: eventId,
       player_id: playerId,
-      status: "registered",
+      status: "applied",
     })
     .select("id")
     .single();

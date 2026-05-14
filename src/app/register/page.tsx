@@ -16,7 +16,8 @@ import type { Event } from "@/lib/types";
 
 type SignupStatus =
   | "none"
-  | "registered"
+  | "applied"
+  | "pending_payment"
   | "accepted"
   | "waitlisted"
   | "cancelled";
@@ -50,8 +51,10 @@ function eventLabel(e: Event): string {
 
 function signupStatusLabel(status: Exclude<SignupStatus, "none">): string {
   switch (status) {
-    case "registered":
-      return "Pending Approval";
+    case "applied":
+      return "Applied — Pending Approval";
+    case "pending_payment":
+      return "Payment Required";
     case "accepted":
       return "Accepted";
     case "waitlisted":
@@ -63,8 +66,10 @@ function signupStatusLabel(status: Exclude<SignupStatus, "none">): string {
 
 function signupStatusBadgeClass(status: Exclude<SignupStatus, "none">): string {
   switch (status) {
-    case "registered":
+    case "applied":
       return "bg-amber-500/10 border-amber-500/30 text-amber-300";
+    case "pending_payment":
+      return "bg-orange-500/10 border-orange-500/30 text-orange-300";
     case "accepted":
       return "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
     case "waitlisted":
@@ -154,7 +159,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (signupResult === "registered") {
-      setSignupStatus("registered");
+      setSignupStatus("applied");
     }
   }, [signupResult]);
   useEffect(() => {
@@ -662,14 +667,23 @@ export default function RegisterPage() {
               <div
                 className={`mx-auto flex w-fit items-center gap-2 border px-4 py-2 rounded-lg text-sm font-bold ${signupStatusBadgeClass(signupStatus)}`}
               >
-                ✓ {signupStatusLabel(signupStatus)} for{" "}
-                {selectedEvent ? eventLabel(selectedEvent) : "this event"}
+                {signupStatusLabel(signupStatus)}
+                {signupStatus !== "pending_payment" && (
+                  <> for {selectedEvent ? eventLabel(selectedEvent) : "this event"}</>
+                )}
               </div>
+              {signupStatus === "pending_payment" && (
+                <p className="text-white/60 text-sm">
+                  Your application was accepted. Please complete payment to confirm your spot.
+                </p>
+              )}
               <Link
                 href="/dashboard"
                 className="mt-3 block text-[#00C8DC] text-sm font-bold hover:underline"
               >
-                Go to your dashboard →
+                {signupStatus === "pending_payment"
+                  ? "Go to dashboard to pay →"
+                  : "Go to your dashboard →"}
               </Link>
             </div>
           )}
