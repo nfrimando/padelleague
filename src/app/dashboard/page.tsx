@@ -20,6 +20,7 @@ import ProgressionSection from "./ProgressionSection";
 import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
 import ViewAsSelector from "./ViewAsSelector";
+import DashboardBanner from "./DashboardBanner";
 import type { User } from "@supabase/supabase-js";
 import type { Event, Player } from "@/lib/types";
 
@@ -60,6 +61,7 @@ export default function DashboardPage() {
   const [signups, setSignups] = useState<SignupRow[]>([]);
   const [openEvents, setOpenEvents] = useState<Event[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [payingSignupId, setPayingSignupId] = useState<string | null>(null);
 
   // Admin-only: player to view as (null = view as self)
   const [viewAsPlayer, setViewAsPlayer] = useState<Player | null>(null);
@@ -222,6 +224,10 @@ export default function DashboardPage() {
   const heroSignups = isViewingAs ? [] : signups;
   const heroOpenEvents = isViewingAs ? [] : openEvents;
 
+  const pendingPaymentSignup = !isViewingAs
+    ? (heroSignups.find((s) => s.status === "pending_payment") ?? null)
+    : null;
+
   // ── Loading / redirect states ─────────────────────────────────────────────
   if (user === undefined) {
     return (
@@ -304,6 +310,18 @@ export default function DashboardPage() {
           />
         ) : displayPlayer ? (
           <>
+            {pendingPaymentSignup && (
+              <DashboardBanner
+                type="pending_payment"
+                signupId={pendingPaymentSignup.id}
+                eventName={
+                  eventMap[pendingPaymentSignup.event_id] ??
+                  pendingPaymentSignup.event?.name ??
+                  `Event ${pendingPaymentSignup.event_id}`
+                }
+                onPayNow={(id) => setPayingSignupId(id)}
+              />
+            )}
             <HeroSection
               player={displayPlayer}
               avatarUrl={isViewingAs ? undefined : avatarUrl}
@@ -322,6 +340,9 @@ export default function DashboardPage() {
               registering={payLoading}
               loading={isLoading}
               isViewingAs={isViewingAs}
+              payingSignupId={payingSignupId}
+              onPayingSignupIdChange={setPayingSignupId}
+              onRefreshSignups={() => void load()}
             />
 
             <ProgressionSection

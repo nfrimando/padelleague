@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -35,6 +35,9 @@ type Props = {
   registering: boolean;
   loading: boolean;
   isViewingAs?: boolean;
+  payingSignupId: string | null;
+  onPayingSignupIdChange: (id: string | null) => void;
+  onRefreshSignups: () => void;
 };
 
 function eventDisplayName(
@@ -137,10 +140,19 @@ export default function HeroSection({
   registering,
   loading,
   isViewingAs = false,
+  payingSignupId,
+  onPayingSignupIdChange,
+  onRefreshSignups,
 }: Props) {
-  const [payingSignupId, setPayingSignupId] = useState<string | null>(null);
   const [payOnlineLoading, setPayOnlineLoading] = useState(false);
   const [payOnlineError, setPayOnlineError] = useState<string | null>(null);
+  const [paymentLinkOpened, setPaymentLinkOpened] = useState(false);
+  const [showGCashModal, setShowGCashModal] = useState(false);
+
+  useEffect(() => {
+    setPaymentLinkOpened(false);
+    setPayOnlineError(null);
+  }, [payingSignupId]);
 
   const signedUpEventIds = new Set(signups.map((s) => s.event_id));
   const playedOnlyEventIds = matchEventIds.filter(
@@ -205,11 +217,16 @@ export default function HeroSection({
       }
 
       window.open(json.link_url, "_blank", "noopener,noreferrer");
+      setPaymentLinkOpened(true);
     } catch {
       setPayOnlineError("Network error. Please try again.");
     } finally {
       setPayOnlineLoading(false);
     }
+  }
+
+  function handleCheckPaymentStatus() {
+    onRefreshSignups();
   }
 
   return (
@@ -338,7 +355,7 @@ export default function HeroSection({
                         <button
                           type="button"
                           onClick={() => {
-                            setPayingSignupId(isExpanded ? null : s.id);
+                            onPayingSignupIdChange(isExpanded ? null : s.id);
                             setPayOnlineError(null);
                           }}
                           className="flex items-center gap-0.5 bg-orange-500 hover:bg-orange-400 text-white font-black text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-full transition-all shrink-0"
@@ -411,7 +428,7 @@ export default function HeroSection({
                     <button
                       type="button"
                       onClick={() => {
-                        setPayingSignupId(null);
+                        onPayingSignupIdChange(null);
                         setPayOnlineError(null);
                       }}
                       className="text-white/40 hover:text-white transition-colors shrink-0"
@@ -420,21 +437,55 @@ export default function HeroSection({
                     </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => void handlePayOnline()}
-                    disabled={payOnlineLoading}
-                    className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-                  >
-                    {payOnlineLoading ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Generating link…
-                      </>
-                    ) : (
-                      "Pay Online"
-                    )}
-                  </button>
+                  {payingSignup.status === "accepted" ? (
+                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 flex items-center gap-3">
+                      <span className="text-emerald-400 text-lg">✓</span>
+                      <div>
+                        <p className="text-emerald-400 font-black text-sm">Payment confirmed!</p>
+                        <p className="text-emerald-300/60 text-xs mt-0.5">
+                          You&apos;re all set for this event.
+                        </p>
+                      </div>
+                    </div>
+                  ) : paymentLinkOpened ? (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleCheckPaymentStatus()}
+                        className="w-full bg-[#1a2540] hover:bg-[#1e2d50] border border-orange-500/30 text-orange-300 font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        Check Payment Status
+                      </button>
+                      <p className="text-[10px] text-[#687FA3] text-center">
+                        Completed your payment? Tap above to refresh.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handlePayOnline()}
+                        disabled={payOnlineLoading}
+                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        {payOnlineLoading ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Generating…
+                          </>
+                        ) : (
+                          "Pay Online"
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowGCashModal(true)}
+                        className="bg-[#1a2540] hover:bg-[#1e2d50] border border-orange-500/20 text-orange-200 font-black py-2.5 px-4 rounded-xl text-sm transition-colors"
+                      >
+                        Cash / GCash
+                      </button>
+                    </div>
+                  )}
 
                   {payOnlineError && (
                     <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
@@ -468,6 +519,55 @@ export default function HeroSection({
           Full profile <ChevronRight size={12} />
         </Link>
       </div>
+
+      {/* ── GCash payment modal ── */}
+      {showGCashModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/60"
+            onClick={() => setShowGCashModal(false)}
+            aria-hidden="true"
+          />
+          <div className="relative w-full max-w-sm bg-[#162032] border border-[#687FA3]/20 rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-400 mb-1">
+                  Cash / GCash Payment
+                </p>
+                <p className="text-sm font-bold text-white">Send payment to Robin</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGCashModal(false)}
+                className="text-white/40 hover:text-white transition-colors shrink-0"
+                aria-label="Close"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3 text-center">
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-orange-400 mb-1">
+                GCash Number
+              </p>
+              {/* TODO: make configurable per-event */}
+              <p className="text-xl font-black text-white tracking-widest">
+                +63 917 848 2217
+              </p>
+            </div>
+            <p className="text-xs text-[#687FA3] leading-relaxed">
+              Send the exact registration fee and include your name in the GCash
+              message. Contact Robin directly to confirm once sent.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowGCashModal(false)}
+              className="w-full bg-[#1a2540] hover:bg-[#1e2d50] border border-[#687FA3]/20 text-white/70 font-black py-2.5 px-4 rounded-xl text-sm transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
