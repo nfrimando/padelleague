@@ -22,7 +22,7 @@ type AdminEventRow = {
   updated_at: string;
 };
 
-type SignupStatus = "registered" | "accepted" | "waitlisted" | "cancelled";
+type SignupStatus = "applied" | "pending_payment" | "accepted" | "waitlisted" | "cancelled";
 
 type AdminSignupRow = {
   id: string;
@@ -67,7 +67,8 @@ const labelCls =
   "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
 
 const SIGNUP_STATUS_OPTIONS: SignupStatus[] = [
-  "registered",
+  "applied",
+  "pending_payment",
   "accepted",
   "waitlisted",
   "cancelled",
@@ -102,7 +103,15 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
 
   const [addSignupSearch, setAddSignupSearch] = useState("");
   const [addSignupStatus, setAddSignupStatus] =
-    useState<SignupStatus>("registered");
+    useState<SignupStatus>("applied");
+  const [markingPaidSignupId, setMarkingPaidSignupId] = useState<string | null>(null);
+  const [markPaidForm, setMarkPaidForm] = useState<{
+    method: string;
+    amount: string;
+    reference_number: string;
+    notes: string;
+  }>({ method: "cash", amount: "", reference_number: "", notes: "" });
+  const [markPaidLoading, setMarkPaidLoading] = useState(false);
   const [addSignupSelectedPlayer, setAddSignupSelectedPlayer] =
     useState<Player | null>(null);
   const [creatingSignup, setCreatingSignup] = useState(false);
@@ -436,7 +445,7 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setExpandedSignupsEventId(eventId);
     setAddSignupSearch("");
     setAddSignupSelectedPlayer(null);
-    setAddSignupStatus("registered");
+    setAddSignupStatus("applied");
     await loadSignupsForEvent(eventId);
   };
 
@@ -528,8 +537,56 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
 
     setAddSignupSearch("");
     setAddSignupSelectedPlayer(null);
-    setAddSignupStatus("registered");
+    setAddSignupStatus("applied");
     setCreatingSignup(false);
+    await loadSignupsForEvent(eventId);
+  };
+
+  const handleMarkPaid = async (eventId: number, signupId: string) => {
+    const amount = Number(markPaidForm.amount);
+    if (!amount || amount <= 0) {
+      setSignupPanelError("Enter a valid amount.");
+      return;
+    }
+
+    setMarkPaidLoading(true);
+    setSignupPanelError(null);
+
+    const token = await getAccessToken();
+    if (!token) {
+      setSignupPanelError("No active session.");
+      setMarkPaidLoading(false);
+      return;
+    }
+
+    const res = await fetch(
+      `/api/admin/signups/${encodeURIComponent(signupId)}/payment`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          method: markPaidForm.method,
+          amount,
+          reference_number: markPaidForm.reference_number || undefined,
+          notes: markPaidForm.notes || undefined,
+        }),
+      },
+    );
+
+    const json = (await res.json()) as { error?: string };
+
+    if (!res.ok) {
+      setSignupPanelError(json.error ?? "Failed to record payment.");
+      setMarkPaidLoading(false);
+      return;
+    }
+
+    setMarkingPaidSignupId(null);
+    setMarkPaidForm({ method: "cash", amount: "", reference_number: "", notes: "" });
+    setMarkPaidLoading(false);
     await loadSignupsForEvent(eventId);
   };
 
@@ -959,7 +1016,7 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                                           )}
                                         </select>
                                       </td>
-                                      <td className="px-3 py-2">
+                                      <td className="px-3 py-2 space-y-1">
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -977,11 +1034,94 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                                             ? "Saving…"
                                             : "Save"}
                                         </button>
+                                        {signup.status === "pending_payment" && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setMarkingPaidSignupId(signup.id);
+                                              setMarkPaidForm({ method: "cash", amount: "", reference_number: "", notes: "" });
+                                              setSignupPanelError(null);
+                                            }}
+                                            className="block rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                                          >
+                                            Mark Paid
+                                          </button>
+                                        )}
                                       </td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
+                            </div>
+                          )}
+
+                          {markingPaidSignupId && signupsByEvent[e.event_id]?.some((s) => s.id === markingPaidSignupId) && (
+                            <div className="border border-emerald-200 dark:border-emerald-800/40 rounded-md bg-emerald-50 dark:bg-emerald-900/10 p-3 space-y-3">
+                              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                                Record Manual Payment — {signupsByEvent[e.event_id]?.find((s) => s.id === markingPaidSignupId)?.player?.name ?? "Player"}
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <div>
+                                  <label className={labelCls}>Method</label>
+                                  <select
+                                    className={inputCls}
+                                    value={markPaidForm.method}
+                                    onChange={(ev) => setMarkPaidForm((prev) => ({ ...prev, method: ev.target.value }))}
+                                  >
+                                    <option value="cash">Cash</option>
+                                    <option value="bank_transfer">Bank Transfer</option>
+                                    <option value="gcash">GCash</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Amount (PHP)</label>
+                                  <input
+                                    type="number"
+                                    className={inputCls}
+                                    placeholder="1000"
+                                    value={markPaidForm.amount}
+                                    onChange={(ev) => setMarkPaidForm((prev) => ({ ...prev, amount: ev.target.value }))}
+                                  />
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Reference # (optional)</label>
+                                  <input
+                                    type="text"
+                                    className={inputCls}
+                                    placeholder="e.g. GCash ref no."
+                                    value={markPaidForm.reference_number}
+                                    onChange={(ev) => setMarkPaidForm((prev) => ({ ...prev, reference_number: ev.target.value }))}
+                                  />
+                                </div>
+                                <div>
+                                  <label className={labelCls}>Notes (optional)</label>
+                                  <input
+                                    type="text"
+                                    className={inputCls}
+                                    placeholder="Any notes"
+                                    value={markPaidForm.notes}
+                                    onChange={(ev) => setMarkPaidForm((prev) => ({ ...prev, notes: ev.target.value }))}
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleMarkPaid(e.event_id, markingPaidSignupId)}
+                                  disabled={markPaidLoading}
+                                  className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                                >
+                                  {markPaidLoading ? "Saving…" : "Confirm Payment"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setMarkingPaidSignupId(null)}
+                                  className="inline-flex items-center rounded-md bg-slate-200 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
                             </div>
                           )}
 

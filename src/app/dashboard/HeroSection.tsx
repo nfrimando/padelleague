@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import type { Event, Player } from "@/lib/types";
 import type { DashboardStats } from "@/lib/useDashboardStats";
 
@@ -15,6 +17,8 @@ type EventSignupRow = {
     start_date?: string | null;
     registration_status: "open" | "closed";
     status: "upcoming" | "ongoing" | "completed";
+    registration_fee?: number | null;
+    payment_instructions?: string | null;
   } | null;
 };
 
@@ -49,10 +53,15 @@ const STATUS_STYLES: Record<
   string,
   { label: string; cls: string; dot: string }
 > = {
-  registered: {
-    label: "Pending",
+  applied: {
+    label: "Applied",
     cls: "bg-amber-500/10 border-amber-500/30 text-amber-300",
     dot: "bg-amber-300",
+  },
+  pending_payment: {
+    label: "Payment Required",
+    cls: "bg-orange-500/10 border-orange-500/30 text-orange-300",
+    dot: "bg-orange-300",
   },
   accepted: {
     label: "Accepted",
@@ -129,6 +138,10 @@ export default function HeroSection({
   loading,
   isViewingAs = false,
 }: Props) {
+  const [payingSignupId, setPayingSignupId] = useState<string | null>(null);
+  const [payOnlineLoading, setPayOnlineLoading] = useState(false);
+  const [payOnlineError, setPayOnlineError] = useState<string | null>(null);
+
   const signedUpEventIds = new Set(signups.map((s) => s.event_id));
   const playedOnlyEventIds = matchEventIds.filter(
     (id) => !signedUpEventIds.has(id),
@@ -155,6 +168,49 @@ export default function HeroSection({
     signups.length > 0 ||
     playedOnlyEventIds.length > 0 ||
     openEvents.length > 0;
+
+  const payingSignup = payingSignupId
+    ? signups.find((s) => s.id === payingSignupId) ?? null
+    : null;
+
+  async function handlePayOnline() {
+    if (!payingSignupId) return;
+    setPayOnlineLoading(true);
+    setPayOnlineError(null);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        setPayOnlineError("Session expired. Please refresh and try again.");
+        return;
+      }
+
+      const res = await fetch("/api/payments/create-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ signup_id: payingSignupId }),
+      });
+
+      const json = (await res.json()) as { link_url?: string; error?: string };
+
+      if (!res.ok || !json.link_url) {
+        setPayOnlineError(json.error ?? "Failed to create payment link.");
+        return;
+      }
+
+      window.open(json.link_url, "_blank", "noopener,noreferrer");
+    } catch {
+      setPayOnlineError("Network error. Please try again.");
+    } finally {
+      setPayOnlineLoading(false);
+    }
+  }
 
   return (
     <div className="bg-[#162032] border border-[#687FA3]/10 sm:rounded-3xl overflow-hidden">
@@ -255,66 +311,151 @@ export default function HeroSection({
               ))}
             </div>
           ) : (
-            <div
-              className="flex gap-2 overflow-x-auto"
-              style={{ scrollbarWidth: "none" }}
-            >
-              {/* Signup events */}
-              {signups.map((s) => {
-                const label = eventDisplayName(s.event_id, eventMap, s.event);
-                return (
+            <>
+              <div
+                className="flex gap-2 overflow-x-auto"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {/* Signup events */}
+                {signups.map((s) => {
+                  const label = eventDisplayName(s.event_id, eventMap, s.event);
+                  const isPendingPayment = s.status === "pending_payment";
+                  const isExpanded = payingSignupId === s.id;
+
+                  return (
+                    <div
+                      key={s.id}
+                      className={`shrink-0 flex items-center gap-2 border rounded-full pl-3 pr-2 py-1.5 transition-colors ${
+                        isExpanded
+                          ? "bg-orange-500/10 border-orange-500/30"
+                          : "bg-[#1a2540] border-[#687FA3]/10"
+                      }`}
+                    >
+                      <span className="text-xs font-bold text-white/80 whitespace-nowrap">
+                        {label}
+                      </span>
+                      {isPendingPayment ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPayingSignupId(isExpanded ? null : s.id);
+                            setPayOnlineError(null);
+                          }}
+                          className="flex items-center gap-0.5 bg-orange-500 hover:bg-orange-400 text-white font-black text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-full transition-all shrink-0"
+                        >
+                          {isExpanded ? "Close" : "Pay Now"}
+                        </button>
+                      ) : (
+                        <StatusBadge status={s.status} />
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Match-only events (no signup) */}
+                {playedOnlyEventIds.map((id) => (
                   <div
-                    key={s.id}
+                    key={id}
                     className="shrink-0 flex items-center gap-2 bg-[#1a2540] border border-[#687FA3]/10 rounded-full pl-3 pr-2 py-1.5"
                   >
                     <span className="text-xs font-bold text-white/80 whitespace-nowrap">
-                      {label}
+                      {eventMap[id] ?? `Event ${id}`}
                     </span>
-                    <StatusBadge status={s.status} />
+                    <StatusBadge status="played" />
                   </div>
-                );
-              })}
+                ))}
 
-              {/* Match-only events (no signup) */}
-              {playedOnlyEventIds.map((id) => (
-                <div
-                  key={id}
-                  className="shrink-0 flex items-center gap-2 bg-[#1a2540] border border-[#687FA3]/10 rounded-full pl-3 pr-2 py-1.5"
-                >
-                  <span className="text-xs font-bold text-white/80 whitespace-nowrap">
-                    {eventMap[id] ?? `Event ${id}`}
-                  </span>
-                  <StatusBadge status="played" />
-                </div>
-              ))}
-
-              {/* Open events (not yet signed up) */}
-              {openEvents.map((event) => (
-                <div
-                  key={event.event_id}
-                  className="shrink-0 flex items-center gap-2 bg-[#00C8DC]/5 border border-[#00C8DC]/20 rounded-full pl-3 pr-2 py-1.5"
-                >
-                  <span className="text-xs font-bold text-white/80 whitespace-nowrap">
-                    {eventMap[event.event_id] ?? event.name ?? `Event ${event.event_id}`}
-                  </span>
-                  {!player.is_profile_complete ? (
-                    <span className="text-amber-400/70 text-[9px] font-black uppercase whitespace-nowrap">
-                      Verify first
+                {/* Open events (not yet signed up) */}
+                {openEvents.map((event) => (
+                  <div
+                    key={event.event_id}
+                    className="shrink-0 flex items-center gap-2 bg-[#00C8DC]/5 border border-[#00C8DC]/20 rounded-full pl-3 pr-2 py-1.5"
+                  >
+                    <span className="text-xs font-bold text-white/80 whitespace-nowrap">
+                      {eventMap[event.event_id] ?? event.name ?? `Event ${event.event_id}`}
                     </span>
-                  ) : (
+                    {!player.is_profile_complete ? (
+                      <span className="text-amber-400/70 text-[9px] font-black uppercase whitespace-nowrap">
+                        Verify first
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => void onRegister(event.event_id)}
+                        disabled={registering}
+                        className="flex items-center gap-0.5 bg-[#00C8DC] hover:bg-white disabled:opacity-50 text-[#0E1523] font-black text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-full transition-all shrink-0"
+                      >
+                        Join <ChevronRight size={10} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Payment panel — shown below chips when pending_payment is expanded */}
+              {payingSignup && (
+                <div className="rounded-2xl bg-orange-500/5 border border-orange-500/20 p-4 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-orange-300 mb-1">
+                        Payment Required
+                      </p>
+                      <p className="font-bold text-white text-sm">
+                        {eventDisplayName(payingSignup.event_id, eventMap, payingSignup.event)}
+                      </p>
+                      {payingSignup.event?.registration_fee != null && (
+                        <p className="text-orange-200/80 text-xs mt-0.5">
+                          Fee: ₱{payingSignup.event.registration_fee.toLocaleString()}
+                        </p>
+                      )}
+                    </div>
                     <button
-                      onClick={() => void onRegister(event.event_id)}
-                      disabled={registering}
-                      className="flex items-center gap-0.5 bg-[#00C8DC] hover:bg-white disabled:opacity-50 text-[#0E1523] font-black text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-full transition-all shrink-0"
+                      type="button"
+                      onClick={() => {
+                        setPayingSignupId(null);
+                        setPayOnlineError(null);
+                      }}
+                      className="text-white/40 hover:text-white transition-colors shrink-0"
                     >
-                      Join <ChevronRight size={10} />
+                      <X size={14} />
                     </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handlePayOnline()}
+                    disabled={payOnlineLoading}
+                    className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    {payOnlineLoading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Generating link…
+                      </>
+                    ) : (
+                      "Pay Online"
+                    )}
+                  </button>
+
+                  {payOnlineError && (
+                    <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                      {payOnlineError}
+                    </p>
+                  )}
+
+                  {payingSignup.event?.payment_instructions && (
+                    <div className="border-t border-orange-500/15 pt-3">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#687FA3] mb-2">
+                        Manual Payment
+                      </p>
+                      <pre className="text-xs text-white/70 whitespace-pre-wrap font-sans leading-relaxed">
+                        {payingSignup.event.payment_instructions}
+                      </pre>
+                    </div>
                   )}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
-
         </div>
       )}
 

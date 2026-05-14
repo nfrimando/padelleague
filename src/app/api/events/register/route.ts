@@ -132,7 +132,8 @@ export async function POST(request: Request) {
 
   if (existingSignup) {
     if (
-      existingSignup.status === "registered" ||
+      existingSignup.status === "applied" ||
+      existingSignup.status === "pending_payment" ||
       existingSignup.status === "accepted"
     ) {
       return NextResponse.json(
@@ -143,13 +144,13 @@ export async function POST(request: Request) {
     // For waitlisted/cancelled, allow re-signup
   }
 
-  // 8. Create signup with status registered
+  // 8. Create signup with status applied
   const { data: signup, error: signupError } = await serviceClient
     .from("signups_events")
     .insert({
       event_id: eventId,
       player_id: player.player_id,
-      status: "registered",
+      status: "applied",
     })
     .select("id")
     .single();

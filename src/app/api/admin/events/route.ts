@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       typeof body.registration_fee === "number" && body.registration_fee > 0
         ? body.registration_fee
         : 1000,
+    payment_instructions: typeof body.payment_instructions === "string" && body.payment_instructions.trim() ? body.payment_instructions.trim() : null,
     registration_status:
       typeof body.registration_status === "string"
         ? body.registration_status
@@ -117,6 +118,12 @@ export async function PATCH(request: Request) {
   }
   if (Object.prototype.hasOwnProperty.call(body, "description")) {
     update.description = typeof body.description === "string" && body.description.trim() ? body.description.trim() : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "payment_instructions")) {
+    update.payment_instructions = typeof body.payment_instructions === "string" && body.payment_instructions.trim() ? body.payment_instructions.trim() : null;
+  }
+  if (typeof body.registration_fee === "number" && body.registration_fee > 0) {
+    update.registration_fee = body.registration_fee;
   }
   if (Object.prototype.hasOwnProperty.call(body, "deleted_at") && body.deleted_at === null) {
     update.deleted_at = null;

@@ -30,6 +30,8 @@ export type Event = {
   status: "upcoming" | "ongoing" | "completed";
   image_url?: string | null;
   description?: string | null;
+  registration_fee?: number | null;
+  payment_instructions?: string | null;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -43,7 +45,7 @@ export type SeasonSignup = {
   applicant_name?: string | null;
   applicant_contact?: string | null;
   applicant_email?: string | null;
-  status: "registered" | "accepted" | "waitlisted" | "cancelled";
+  status: "applied" | "pending_payment" | "accepted" | "waitlisted" | "cancelled";
   created_at: string;
   updated_at: string;
 };
