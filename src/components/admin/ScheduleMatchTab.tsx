@@ -215,6 +215,7 @@ export function ScheduleMatchTab() {
       setTimeLocal("");
       setVenue("");
       setMatchType("");
+      setEventId("");
       setSuccess(
         result.message ||
           `Match #${result.match?.match_id ?? ""} created successfully.`,
