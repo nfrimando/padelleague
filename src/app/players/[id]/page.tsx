@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   usePathname,
@@ -8,19 +8,45 @@ import {
   useSearchParams,
   useParams,
 } from "next/navigation";
-import BackToHome from "@/components/BackToHome";
+import SiteHeader from "@/components/SiteHeader";
 import MatchCard from "@/components/MatchCard";
 import MatchFiltersCard from "@/components/MatchFiltersCard";
-import PlayerCard from "@/components/PlayerCard";
+import RatingSparkline from "@/components/RatingSparkline";
 import { formatEventOptionLabel } from "@/lib/eventLabels";
-import {
-  ALL_MATCH_FILTER,
-  filterMatchesByEventAndType,
-  getEventsFromMatches,
-} from "@/lib/matches";
+import { ALL_MATCH_FILTER, getEventsFromMatches } from "@/lib/matches";
 import { useEventMap } from "@/lib/useEventMap";
-import { usePlayerMatches } from "@/lib/usePlayerMatches";
 import { usePlayers } from "@/lib/usePlayers";
+import { usePlayerProfileStats } from "@/lib/usePlayerProfileStats";
+import { useMatchSetsLoader } from "@/lib/useMatchSetsLoader";
+import type { MatchWithTeams } from "@/lib/types";
+
+const PAGE_SIZE = 15;
+
+function StatPill({
+  label,
+  value,
+  highlight,
+  small,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  small?: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-0.5 py-4 px-2">
+      <span
+        className={`${small ? "text-sm font-black leading-snug text-center px-1" : "text-3xl font-black tracking-tighter"} ${highlight ? "text-[#00C8DC]" : "text-white"}`}
+      >
+        {value}
+      </span>
+      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 
 function PlayerProfilePageContent() {
   const router = useRouter();
@@ -28,31 +54,35 @@ function PlayerProfilePageContent() {
   const searchParams = useSearchParams();
   const routeParams = useParams<{ id: string }>();
   const searchParamsString = searchParams.toString();
-  const selectedPlayerId = String(routeParams?.id || "");
+  const playerId = String(routeParams?.id || "");
 
-  const [eventFilter, setEventFilter] = useState<
-    number | typeof ALL_MATCH_FILTER
-  >(ALL_MATCH_FILTER);
-  const [selectedTypeFilter, setSelectedTypeFilter] =
-    useState<string>(ALL_MATCH_FILTER);
+  const [eventFilter, setEventFilter] = useState<number | typeof ALL_MATCH_FILTER>(
+    ALL_MATCH_FILTER,
+  );
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>(ALL_MATCH_FILTER);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const { players, loading: loadingPlayers } = usePlayers({
-    onlyActivePlayers: true,
-  });
-  const selectedPlayer = useMemo(() => {
-    return (
-      players.find((player) => String(player.player_id) === selectedPlayerId) ??
-      null
-    );
-  }, [players, selectedPlayerId]);
+  const { players, loading: loadingPlayers } = usePlayers({ onlyActivePlayers: true });
+  const selectedPlayer = useMemo(
+    () => players.find((p) => String(p.player_id) === playerId) ?? null,
+    [players, playerId],
+  );
 
   const {
-    matches: playerMatches,
-    latestRating: selectedPlayerLatestRating,
-    ratingHistory: playerRatingHistory,
-    loading: loadingMatches,
-  } = usePlayerMatches(selectedPlayerId || null);
+    lightMatches,
+    teamsByMatchId,
+    matchCount,
+    wins,
+    winRate,
+    partnerStats,
+    latestRating,
+    ratingHistory,
+    loading: loadingStats,
+  } = usePlayerProfileStats(playerId);
+
   const { eventMap, events } = useEventMap();
+
+  // ── URL state sync ─────────────────────────────────────────────────────────
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
@@ -68,14 +98,10 @@ function PlayerProfilePageContent() {
 
     const typeParam = params.get("type");
     const nextType =
-      typeParam && typeParam !== ALL_MATCH_FILTER
-        ? typeParam
-        : ALL_MATCH_FILTER;
+      typeParam && typeParam !== ALL_MATCH_FILTER ? typeParam : ALL_MATCH_FILTER;
 
-    setEventFilter((current) => (current === nextEvent ? current : nextEvent));
-    setSelectedTypeFilter((current) =>
-      current === nextType ? current : nextType,
-    );
+    setEventFilter((curr) => (curr === nextEvent ? curr : nextEvent));
+    setSelectedTypeFilter((curr) => (curr === nextType ? curr : nextType));
   }, [searchParamsString]);
 
   useEffect(() => {
@@ -83,394 +109,386 @@ function PlayerProfilePageContent() {
     params.set("event", String(eventFilter));
     params.delete("season");
     params.set("type", selectedTypeFilter);
-
     const nextQuery = params.toString();
-    if (nextQuery === searchParamsString) {
-      return;
-    }
-
-    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
-    router.replace(nextUrl, { scroll: false });
+    if (nextQuery === searchParamsString) return;
+    router.replace(`${pathname}?${nextQuery}`, { scroll: false });
   }, [pathname, router, searchParamsString, eventFilter, selectedTypeFilter]);
 
-  const eventOptions = useMemo(() => {
-    const eventRowsById = new Map(
-      events.map((event) => [Number(event.event_id), event] as const),
-    );
+  // Reset visible count on filter or player change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [eventFilter, selectedTypeFilter, playerId]);
 
-    const toStartTime = (eventId: number) => {
-      const raw = eventRowsById.get(eventId)?.start_date;
-      if (!raw) {
-        return Number.NEGATIVE_INFINITY;
-      }
+  // ── Filtering ──────────────────────────────────────────────────────────────
+
+  const filteredLightMatches = useMemo(() => {
+    return lightMatches.filter((match) => {
+      if (match.status === "cancelled") return false;
+      if (
+        eventFilter !== ALL_MATCH_FILTER &&
+        Number.isFinite(eventFilter) &&
+        match.event_id != null &&
+        match.event_id !== eventFilter
+      )
+        return false;
+      if (selectedTypeFilter !== ALL_MATCH_FILTER && match.type !== selectedTypeFilter)
+        return false;
+      return true;
+    });
+  }, [lightMatches, eventFilter, selectedTypeFilter]);
+
+  // ── Pagination ─────────────────────────────────────────────────────────────
+
+  const visibleLightMatches = filteredLightMatches.slice(0, visibleCount);
+  const visibleMatchIds = visibleLightMatches.map((m) => String(m.match_id));
+  const hasMore = visibleCount < filteredLightMatches.length;
+
+  const { setsByMatchId, loading: loadingSets } = useMatchSetsLoader(playerId, visibleMatchIds);
+
+  // Assemble MatchWithTeams for display (no pre-match ratings shown — privacy)
+  const displayMatches = useMemo((): MatchWithTeams[] => {
+    return visibleLightMatches.map((match) => {
+      const matchKey = String(match.match_id);
+      const teams = (teamsByMatchId.get(matchKey) ?? []).map((team) => ({
+        uuid: team.uuid,
+        team_number: team.team_number,
+        sets_won: team.sets_won,
+        player_1: team.player_1,
+        player_2: team.player_2,
+      }));
+      const sets = setsByMatchId.get(matchKey) ?? [];
+      return { ...match, teams, sets };
+    });
+  }, [visibleLightMatches, teamsByMatchId, setsByMatchId]);
+
+  // ── Event filter options ───────────────────────────────────────────────────
+
+  const eventOptions = useMemo(() => {
+    const eventRowsById = new Map(events.map((e) => [Number(e.event_id), e] as const));
+    const toStartTime = (id: number) => {
+      const raw = eventRowsById.get(id)?.start_date;
+      if (!raw) return Number.NEGATIVE_INFINITY;
       const parsed = Date.parse(raw);
       return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
     };
+    return [...getEventsFromMatches(lightMatches)]
+      .sort((a, b) => toStartTime(b) - toStartTime(a) || b - a)
+      .map((id) => ({
+        id,
+        label: formatEventOptionLabel(
+          eventRowsById.get(id) ?? {
+            event_id: id,
+            name: eventMap[id] ?? null,
+            start_date: null,
+            end_date: null,
+          },
+        ),
+      }));
+  }, [lightMatches, events, eventMap]);
 
-    const sortedEventIds = [...getEventsFromMatches(playerMatches)].sort(
-      (a, b) => {
-        const byStartDate = toStartTime(b) - toStartTime(a);
-        if (byStartDate !== 0) {
-          return byStartDate;
+  // ── Derived stats ──────────────────────────────────────────────────────────
+
+  const mostRecentEventLabel = useMemo(() => {
+    const match = lightMatches.find((m) => m.event_id != null);
+    if (!match?.event_id) return null;
+    return eventMap[match.event_id] ?? `Event ${match.event_id}`;
+  }, [lightMatches, eventMap]);
+
+  const topPartners = useMemo(
+    () =>
+      [...partnerStats]
+        .sort((a, b) => b.matchesPlayed - a.matchesPlayed || b.winRate - a.winRate)
+        .slice(0, 5),
+    [partnerStats],
+  );
+
+  // ── Infinite scroll ────────────────────────────────────────────────────────
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasMore && !loadingSets) {
+          setVisibleCount((v) => v + PAGE_SIZE);
         }
-        return b - a;
       },
+      { threshold: 0.1 },
     );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingSets]);
 
-    return sortedEventIds.map((id) => ({
-      id,
-      label: formatEventOptionLabel(
-        eventRowsById.get(id) ?? {
-          event_id: id,
-          name: eventMap[id] ?? null,
-          start_date: null,
-          end_date: null,
-        },
-      ),
-    }));
-  }, [playerMatches, eventMap, events]);
+  // ── Player profile link helper ─────────────────────────────────────────────
 
-  const filteredMatches = useMemo(() => {
-    return filterMatchesByEventAndType(
-      playerMatches,
-      eventFilter,
-      selectedTypeFilter,
-    );
-  }, [playerMatches, eventFilter, selectedTypeFilter]);
-
-  const selectedPlayerLatestMatchDate = useMemo(() => {
-    const latest = playerMatches.find(
-      (match) => typeof match.date_local === "string" && match.date_local,
-    );
-    return latest?.date_local || null;
-  }, [playerMatches]);
-
-  const getPlayerProfileHref = (playerId: string | number) => {
+  const getPlayerHref = (pid: string | number) => {
     const params = new URLSearchParams(searchParamsString);
-    const nextQuery = params.toString();
-    if (!nextQuery) {
-      return `/players/${encodeURIComponent(String(playerId))}`;
-    }
-    return `/players/${encodeURIComponent(String(playerId))}?${nextQuery}`;
+    const q = params.toString();
+    const base = `/players/${encodeURIComponent(String(pid))}`;
+    return q ? `${base}?${q}` : base;
   };
+
+  // ── Loading / not-found states ─────────────────────────────────────────────
 
   if (loadingPlayers && !selectedPlayer) {
     return (
-      <>
-        <BackToHome />
-        <div className="p-6 max-w-xl mx-auto text-sm text-slate-500">
-          Loading player...
-        </div>
-      </>
+      <div className="min-h-screen bg-[#0E1523] flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   if (!selectedPlayer) {
     return (
-      <>
-        <BackToHome />
-        <div className="p-6 max-w-xl mx-auto">
-          <h1 className="text-xl font-semibold mb-2">Player not found</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-            This player does not exist or is not currently active.
-          </p>
-          <Link
-            href="/players"
-            className="text-sm text-sky-700 dark:text-sky-300 hover:underline"
-          >
-            Back to players
-          </Link>
-        </div>
-      </>
+      <div className="min-h-screen bg-[#0E1523] flex flex-col items-center justify-center gap-4 px-4">
+        <h1 className="text-xl font-black text-white">Player not found</h1>
+        <p className="text-sm text-[#687FA3]">
+          This player does not exist or is not currently active.
+        </p>
+        <Link href="/players" className="text-sm text-[#00C8DC] hover:underline">
+          ← Back to players
+        </Link>
+      </div>
     );
   }
 
-  // Exclude cancelled matches
-  const nonCancelledMatches = filteredMatches.filter(
-    (m) => m.status !== "cancelled",
-  );
-  const matchCount = nonCancelledMatches.length;
-  const winCount = nonCancelledMatches.filter((m) => {
-    const playerTeam = m.teams.find(
-      (t) =>
-        String(t.player_1?.player_id) === selectedPlayerId ||
-        String(t.player_2?.player_id) === selectedPlayerId,
-    );
-    return playerTeam && m.winner_team === playerTeam.team_number;
-  }).length;
+  const initials = selectedPlayer.name
+    ? selectedPlayer.name
+        .split(" ")
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+    : "?";
 
-  const partnerCountMap = new Map<
-    string,
-    {
-      player_id?: string;
-      name: string;
-      nickname?: string;
-      count: number;
-    }
-  >();
-
-  filteredMatches.forEach((m) => {
-    const playerTeam = m.teams.find(
-      (t) =>
-        String(t.player_1?.player_id) === selectedPlayerId ||
-        String(t.player_2?.player_id) === selectedPlayerId,
-    );
-
-    if (!playerTeam) {
-      return;
-    }
-
-    const partner =
-      String(playerTeam.player_1?.player_id) === selectedPlayerId
-        ? playerTeam.player_2
-        : playerTeam.player_1;
-
-    if (!partner) {
-      return;
-    }
-
-    const partnerKey = partner.player_id
-      ? String(partner.player_id)
-      : partner.name;
-    const current = partnerCountMap.get(partnerKey);
-
-    if (current) {
-      current.count += 1;
-    } else {
-      partnerCountMap.set(partnerKey, {
-        player_id: partner.player_id ? String(partner.player_id) : undefined,
-        name: partner.name || "Unknown",
-        nickname: partner.nickname || undefined,
-        count: 1,
-      });
-    }
-  });
-
-  const topPartners = Array.from(partnerCountMap.values())
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 3);
-
-  const normalizeEventId = (value: unknown): number | null => {
-    if (typeof value === "number") {
-      return Number.isInteger(value) && value > 0 ? value : null;
-    }
-    if (typeof value === "bigint") {
-      const normalized = Number(value);
-      return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
-    }
-    if (typeof value === "string") {
-      const parsed = Number.parseInt(value, 10);
-      return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-    }
-    return null;
-  };
-
-  const mostRecentEventFromMatch = playerMatches
-    .map((match) => {
-      const normalizedEventId = normalizeEventId(match.event_id);
-      if (normalizedEventId === null) {
-        return null;
-      }
-
-      const datePart =
-        typeof match.date_local === "string" ? match.date_local.trim() : "";
-      const timePart =
-        typeof match.time_local === "string" ? match.time_local.trim() : "";
-
-      let recencyValue = Number.NEGATIVE_INFINITY;
-      if (datePart) {
-        const withTime = Date.parse(`${datePart}T${timePart || "00:00:00"}`);
-        const dateOnly = Date.parse(datePart);
-
-        recencyValue = Number.isFinite(withTime)
-          ? withTime
-          : Number.isFinite(dateOnly)
-            ? dateOnly
-            : Number.NEGATIVE_INFINITY;
-      }
-
-      return {
-        normalizedEventId,
-        recencyValue,
-      };
-    })
-    .filter(
-      (
-        entry,
-      ): entry is {
-        normalizedEventId: number;
-        recencyValue: number;
-      } => entry !== null,
-    )
-    .sort((a, b) => {
-      if (a.recencyValue !== b.recencyValue) {
-        return b.recencyValue - a.recencyValue;
-      }
-
-      return b.normalizedEventId - a.normalizedEventId;
-    })[0];
-
-  const mostRecentEventLabel = mostRecentEventFromMatch
-    ? (eventMap[mostRecentEventFromMatch.normalizedEventId] ??
-      `Event ${mostRecentEventFromMatch.normalizedEventId}`)
-    : null;
+  const displayRating =
+    latestRating !== null
+      ? latestRating.toFixed(2)
+      : selectedPlayer.latest_rating != null
+        ? Number(selectedPlayer.latest_rating).toFixed(2)
+        : null;
 
   return (
-    <>
-      <BackToHome />
-      <div
-        className="p-6 mx-auto"
-        style={{ minWidth: "30vw", maxWidth: "32rem", width: "100%" }}
-      >
-        <div className="mt-6 border p-4 rounded">
-          <PlayerCard
-            player={{
-              ...selectedPlayer,
-              latest_rating: loadingMatches
-                ? undefined
-                : (selectedPlayerLatestRating ??
-                  selectedPlayer.initial_rating ??
-                  null),
-              latest_match_date: selectedPlayerLatestMatchDate,
-            }}
-            size="lg"
-            disableLink
-            ratingHistory={playerRatingHistory}
-            loadingRating={loadingMatches}
-          />
-          {!loadingMatches && matchCount > 0 && (
-            <div className="mt-4 pt-3 border-t space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                <div className="h-20 min-w-0 text-center flex flex-col justify-center">
-                  <div className="text-lg font-bold text-sky-700 dark:text-sky-200 leading-tight">
-                    {matchCount}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Matches
-                  </div>
-                </div>
-                <div className="h-20 min-w-0 text-center flex flex-col justify-center">
-                  <div className="text-lg font-bold text-green-600 dark:text-green-400 leading-tight">
-                    {winCount}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Wins
-                  </div>
-                </div>
-                <div className="h-20 min-w-0 text-center flex flex-col justify-center">
-                  <div className="text-lg font-bold text-sky-700 dark:text-sky-200 leading-tight">
-                    {matchCount - winCount}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Losses
-                  </div>
-                </div>
-                <div className="h-20 min-w-0 text-center flex flex-col justify-center">
-                  <div className="text-lg font-bold text-sky-700 dark:text-sky-200 leading-tight">
-                    {Math.round((winCount / matchCount) * 100)}%
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Win Rate
-                  </div>
-                </div>
-                <div className="h-20 min-w-0 text-center flex flex-col justify-center">
-                  <div
-                    className="px-1 text-[11px] sm:text-xs md:text-sm font-semibold text-sky-700 dark:text-sky-200 leading-snug whitespace-normal break-words"
-                    title={mostRecentEventLabel ?? "N/A"}
-                  >
-                    {mostRecentEventLabel ?? "N/A"}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Most Recent Event
-                  </div>
-                </div>
-              </div>
+    <div className="min-h-screen bg-[#0E1523]">
+      <SiteHeader />
 
-              <div className="border-t pt-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-white mb-2">
-                  Most Played Partners
+      <div className="max-w-3xl mx-auto py-6 md:py-10">
+        {/* Back link */}
+        <Link
+          href="/players"
+          className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3] hover:text-[#00C8DC] transition-colors mb-4 px-4 sm:px-6"
+        >
+          ← Players
+        </Link>
+
+        {/* ── Hero section ── */}
+        <div className="bg-[#162032] border-y sm:border border-[#687FA3]/10 sm:rounded-3xl overflow-hidden mb-4 sm:mb-6 sm:mx-6">
+          {/* Player identity */}
+          <div className="px-6 pt-6 pb-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+            <div className="shrink-0">
+              {selectedPlayer.image_link ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={selectedPlayer.image_link}
+                  alt={selectedPlayer.name}
+                  className="w-16 h-16 rounded-full border-2 border-[#00C8DC]/30 shadow-lg object-cover"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-[#1a2540] border border-[#687FA3]/20 flex items-center justify-center">
+                  <span className="text-xl font-black text-[#687FA3]">{initials}</span>
                 </div>
-                {topPartners.length === 0 ? (
-                  <div className="text-xs text-slate-600 dark:text-slate-200">
-                    No partner data available.
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {topPartners.map((partner) => (
-                      <div
-                        key={`${partner.player_id || partner.name}-${partner.nickname || ""}`}
-                        className="inline-flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-600 px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-800/60"
-                      >
-                        {partner.player_id ? (
-                          <Link
-                            href={getPlayerProfileHref(partner.player_id)}
-                            className="text-slate-800 dark:text-white hover:underline"
-                          >
-                            {partner.name}
-                          </Link>
-                        ) : (
-                          <span className="text-slate-800 dark:text-white">
-                            {partner.name}
-                          </span>
-                        )}
-                        <span className="text-slate-600 dark:text-slate-200">
-                          {partner.count}x
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[#687FA3] text-[10px] font-black uppercase tracking-[0.3em] mb-1">
+                Player Profile
+              </p>
+              <h1 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter leading-none truncate text-white">
+                {selectedPlayer.name}
+              </h1>
+              {selectedPlayer.nickname && (
+                <p className="text-[#687FA3] text-sm mt-1">
+                  &ldquo;{selectedPlayer.nickname}&rdquo;
+                </p>
+              )}
+            </div>
+
+            {/* Rating + sparkline */}
+            {(displayRating || loadingStats) && (
+              <div className="shrink-0 flex flex-col items-end gap-2">
+                {loadingStats ? (
+                  <div className="h-8 w-20 rounded-lg bg-[#1a2540] animate-pulse" />
+                ) : displayRating ? (
+                  <p className="text-[#00C8DC] text-3xl font-black tracking-tighter leading-none">
+                    {displayRating}
+                  </p>
+                ) : null}
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
+                  Current Rating
+                </p>
+                {ratingHistory.length >= 2 && (
+                  <RatingSparkline history={ratingHistory} />
                 )}
               </div>
+            )}
+          </div>
+
+          {/* Stats row */}
+          <div className="border-t border-[#687FA3]/10 grid grid-cols-3 divide-x divide-[#687FA3]/10">
+            <StatPill
+              label="Matches"
+              value={loadingStats ? "…" : String(matchCount)}
+            />
+            <StatPill
+              label="Wins"
+              value={loadingStats ? "…" : String(wins)}
+            />
+            <StatPill
+              label="Win Rate"
+              value={loadingStats ? "…" : `${winRate}%`}
+              highlight
+            />
+          </div>
+
+          {/* Most recent event */}
+          {(mostRecentEventLabel || loadingStats) && (
+            <div className="border-t border-[#687FA3]/10 px-6 py-3">
+              {loadingStats ? (
+                <div className="h-4 w-40 rounded bg-[#1a2540] animate-pulse" />
+              ) : mostRecentEventLabel ? (
+                <p className="text-xs text-[#687FA3]">
+                  <span className="font-black uppercase tracking-[0.15em]">Most Recent · </span>
+                  <span className="font-bold text-white/70">{mostRecentEventLabel}</span>
+                </p>
+              ) : null}
             </div>
           )}
         </div>
-      </div>
 
-      <div className="mt-8">
-        <div className="max-w-xl mx-auto px-6 mb-4">
-          <h2 className="text-xl font-bold">Matches</h2>
-          <div className="mt-3">
+        {/* ── Partners section ── */}
+        {(loadingStats || topPartners.length > 0) && (
+          <div className="bg-[#162032] border-y sm:border border-[#687FA3]/10 sm:rounded-3xl mb-4 sm:mb-6 sm:mx-6">
+            <div className="px-6 pt-5 pb-3">
+              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#687FA3]">
+                Most Played Partners
+              </span>
+            </div>
+
+            {loadingStats ? (
+              <div className="flex gap-2 px-6 pb-5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-9 w-28 rounded-full bg-[#1a2540] animate-pulse shrink-0" />
+                ))}
+              </div>
+            ) : (
+              <div
+                className="flex gap-2 px-6 pb-5 overflow-x-auto"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {topPartners.map((stat) => {
+                  const p = stat.player as { player_id: string | number; name: string; nickname?: string | null; image_link?: string | null };
+                  const href = getPlayerHref(p.player_id);
+                  const initial = ((p.nickname || p.name || "?")[0] ?? "?").toUpperCase();
+                  return (
+                    <Link
+                      key={String(p.player_id)}
+                      href={href}
+                      className="shrink-0 flex items-center gap-2 bg-[#1a2540] border border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-full pl-2 pr-3 py-1.5 transition-colors group"
+                    >
+                      {p.image_link ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.image_link}
+                          alt={p.name}
+                          className="w-6 h-6 rounded-full object-cover border border-[#687FA3]/20 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-[#162032] border border-[#687FA3]/20 flex items-center justify-center shrink-0">
+                          <span className="text-[9px] font-black text-[#687FA3]">{initial}</span>
+                        </div>
+                      )}
+                      <span className="text-xs font-bold text-white/80 group-hover:text-[#00C8DC] transition-colors whitespace-nowrap">
+                        {p.nickname || p.name}
+                      </span>
+                      <span className="text-[10px] text-[#687FA3] whitespace-nowrap">
+                        {stat.matchesPlayed}x
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Match history section ── */}
+        <div className="px-4 sm:px-6">
+          <div className="mb-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#687FA3] mb-3">
+              Match History
+            </p>
             <MatchFiltersCard
               eventFilter={eventFilter}
               events={eventOptions}
               selectedTypeFilter={selectedTypeFilter}
               onEventChange={(value) => setEventFilter(value)}
               onTypeChange={(value) => setSelectedTypeFilter(value)}
+              variant="dark"
             />
           </div>
-        </div>
-        <div className="relative min-h-[220px] w-full lg:max-w-[75vw] mx-auto px-6">
-          {loadingMatches && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-[1px]">
-              <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                Loading matches...
-              </div>
-            </div>
-          )}
 
-          {filteredMatches.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No matches found for this player with the selected filters.
-            </div>
-          ) : (
-            <div className={`space-y-6 ${loadingMatches ? "opacity-70" : ""}`}>
-              {filteredMatches.map((match) => (
-                <MatchCard
-                  key={match.match_id}
-                  match={match}
-                  highlightPlayerId={selectedPlayer.player_id}
-                  seasonLabel={
-                    match.event_id != null
-                      ? (eventMap[match.event_id] ?? undefined)
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          )}
+          <div className="relative min-h-[180px]">
+            {/* Initial loading state */}
+            {loadingStats && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {!loadingStats && filteredLightMatches.length === 0 && (
+              <div className="text-center py-12 text-[#687FA3] text-sm">
+                No matches found for the selected filters.
+              </div>
+            )}
+
+            {!loadingStats && filteredLightMatches.length > 0 && (
+              <div className="space-y-4">
+                {displayMatches.map((match) => (
+                  <MatchCard
+                    key={match.match_id}
+                    match={match}
+                    highlightPlayerId={selectedPlayer.player_id}
+                    seasonLabel={
+                      match.event_id != null
+                        ? (eventMap[match.event_id] ?? undefined)
+                        : undefined
+                    }
+                  />
+                ))}
+
+                {/* Infinite scroll sentinel */}
+                <div ref={sentinelRef} className="h-4" />
+
+                {/* Loading more indicator */}
+                {loadingSets && hasMore && (
+                  <div className="flex justify-center py-4">
+                    <div className="w-5 h-5 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+
+                {!hasMore && filteredLightMatches.length > PAGE_SIZE && (
+                  <p className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3] py-4">
+                    All {filteredLightMatches.length} matches loaded
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -478,8 +496,8 @@ export default function PlayerProfilePage() {
   return (
     <Suspense
       fallback={
-        <div className="p-6 max-w-xl mx-auto text-sm text-slate-500">
-          Loading player...
+        <div className="min-h-screen bg-[#0E1523] flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
         </div>
       }
     >

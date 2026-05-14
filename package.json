@@ -1,6 +1,6 @@
 {
   "name": "padelleagueph",
-  "version": "2.9.1",
+  "version": "2.10.0",
   "private": true,
   "scripts": {
     "dev": "node -v && next dev",
@@ -23,6 +23,7 @@
     "next": "16.2.2",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "recharts": "^3.8.1",
     "supabase": "^2.84.10"
   },
   "devDependencies": {

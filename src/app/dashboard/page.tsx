@@ -1,16 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ChevronRight,
-  TrendingUp,
-  Trophy,
-  Calendar,
-  LogOut,
-  Users,
-} from "lucide-react";
+import { Eye, LogOut, X } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
 import {
@@ -20,7 +12,14 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useEventSignup } from "@/lib/useEventSignup";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
-import { formatMatchDate } from "@/lib/utils";
+import { useEventMap } from "@/lib/useEventMap";
+import { usePlayers } from "@/lib/usePlayers";
+import { useDashboardStats } from "@/lib/useDashboardStats";
+import HeroSection from "./HeroSection";
+import ProgressionSection from "./ProgressionSection";
+import RivalriesSection from "./RivalriesSection";
+import PartnersSection from "./PartnersSection";
+import ViewAsSelector from "./ViewAsSelector";
 import type { User } from "@supabase/supabase-js";
 import type { Event, Player } from "@/lib/types";
 
@@ -29,82 +28,45 @@ type SignupRow = {
   event_id: number;
   status: string;
   created_at: string;
-  event: Pick<
-    Event,
-    | "event_id"
-    | "name"
-    | "start_date"
-    | "end_date"
-    | "registration_status"
-    | "status"
-  > | null;
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function eventLabel(
-  s: {
+  event: {
     event_id: number;
     name?: string | null;
     start_date?: string | null;
-  } | null,
-): string {
-  if (!s) return "Unknown Event";
-  if (s.name) return s.name;
-  if (s.start_date)
-    return `Event ${s.event_id} · ${new Date(s.start_date).getFullYear()}`;
-  return `Event ${s.event_id}`;
-}
+    registration_status: "open" | "closed";
+    status: "upcoming" | "ongoing" | "completed";
+    requires_payment?: boolean | null;
+  } | null;
+};
 
-function SignupBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string; dot: string }> = {
-    registered: {
-      label: "Pending Approval",
-      cls: "bg-amber-500/10 border-amber-500/30 text-amber-300",
-      dot: "bg-amber-300",
-    },
-    accepted: {
-      label: "Accepted",
-      cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
-      dot: "bg-emerald-400",
-    },
-    waitlisted: {
-      label: "Waitlisted",
-      cls: "bg-[#687FA3]/10 border-[#687FA3]/30 text-[#687FA3]",
-      dot: "bg-[#687FA3]",
-    },
-    cancelled: {
-      label: "Cancelled",
-      cls: "bg-red-500/10 border-red-500/30 text-red-400",
-      dot: "bg-red-400",
-    },
-  };
-  const s = map[status] ?? {
-    label: status,
-    cls: "bg-white/5 border-white/10 text-white/50",
-    dot: "bg-white/30",
-  };
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 border px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest ${s.cls}`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-      {s.label}
-    </span>
-  );
+// ── Admin check (mirrors admin/page.tsx pattern) ───────────────────────────────
+async function resolveAdminStatus(userId: string | undefined): Promise<boolean> {
+  if (!userId) return false;
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) return false;
+  return !!data;
 }
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const router = useRouter();
 
-  // undefined = still resolving; null = no user
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [player, setPlayer] = useState<Player | null>(null);
   const [signups, setSignups] = useState<SignupRow[]>([]);
   const [openEvents, setOpenEvents] = useState<Event[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+
+  // Admin-only: player to view as (null = view as self)
+  const [viewAsPlayer, setViewAsPlayer] = useState<Player | null>(null);
+  const isViewingAs = isAdmin && viewAsPlayer !== null;
+
+  // The player whose data we display — guarded: only use viewAsPlayer when isAdmin
+  const displayPlayer = isViewingAs ? viewAsPlayer : player;
+
   const {
     handleSignup,
     loading: payLoading,
@@ -112,23 +74,40 @@ export default function DashboardPage() {
     result: signupResult,
   } = useEventSignup();
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
+  // ── Auth + admin check ─────────────────────────────────────────────────────
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    let isMounted = true;
+
+    async function init() {
+      const { data } = await supabase.auth.getUser();
+      if (!isMounted) return;
+      const currentUser = data.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        const adminStatus = await resolveAdminStatus(currentUser.id);
+        if (isMounted) setIsAdmin(adminStatus);
+      }
+    }
+
+    void init();
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
     });
-    return () => sub.subscription.unsubscribe();
+
+    return () => {
+      isMounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
     if (user === null) router.replace("/");
   }, [user, router]);
 
-  // ── Data ───────────────────────────────────────────────────────────────────
+  // ── Data loading (auth player's own data) ─────────────────────────────────
   const load = useCallback(async () => {
     if (!user) return;
-
     setDataLoading(true);
 
     const [
@@ -162,64 +141,70 @@ export default function DashboardPage() {
       return;
     }
 
-    if (p) {
-      const supsResult = await supabase
-        .from("signups_events")
-        .select(
-          "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
-        )
-        .eq("player_id", p.player_id)
-        .order("created_at", { ascending: false });
+    const supsResult = await supabase
+      .from("signups_events")
+      .select(
+        "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status, requires_payment)",
+      )
+      .eq("player_id", p.player_id)
+      .order("created_at", { ascending: false });
 
-      // Supabase infers FK joins as arrays; cast via unknown for correct runtime shape
-      let typedSups = (supsResult.data ?? []) as unknown as SignupRow[];
+    const typedSups = (supsResult.data ?? []) as unknown as SignupRow[];
+    setSignups(typedSups);
 
-      setSignups(typedSups);
-
-      // Filter out events already signed up for
-      const signedUpEventIds = new Set(typedSups.map((s) => s.event_id));
-      setOpenEvents(
-        ((openEventRows ?? []) as Event[]).filter(
-          (s) => !signedUpEventIds.has(s.event_id),
-        ),
-      );
-    } else {
-      setSignups([]);
-      setOpenEvents((openEventRows ?? []) as Event[]);
-    }
+    const signedUpEventIds = new Set(typedSups.map((s) => s.event_id));
+    setOpenEvents(
+      ((openEventRows ?? []) as Event[]).filter(
+        (e) => !signedUpEventIds.has(e.event_id),
+      ),
+    );
 
     setDataLoading(false);
   }, [user]);
 
   useEffect(() => {
     if (!user) return;
-    load();
+    void load();
   }, [user, load]);
 
   useEffect(() => {
-    if (signupResult === "registered") {
-      void load();
-    }
+    if (signupResult === "registered") void load();
   }, [signupResult, load]);
 
-  // ── Match stats (from existing hook) ──────────────────────────────────────
+  // ── Match data (always for displayPlayer) ────────────────────────────────
   const {
     matches,
     latestRating,
     loading: matchesLoading,
-  } = usePlayerMatches(player ? String(player.player_id) : null);
+  } = usePlayerMatches(displayPlayer ? String(displayPlayer.player_id) : null);
 
-  const completedMatches = matches.filter((m) => m.status === "completed");
-  const wins = completedMatches.filter((m) => {
-    const myTeam = m.teams.find(
-      (t) =>
-        String(t.player_1?.player_id) === String(player?.player_id) ||
-        String(t.player_2?.player_id) === String(player?.player_id),
-    );
-    return myTeam && m.winner_team === myTeam.team_number;
-  }).length;
-  const losses = completedMatches.length - wins;
+  const { eventMap } = useEventMap();
 
+  const stats = useDashboardStats(
+    matches,
+    displayPlayer ? String(displayPlayer.player_id) : null,
+    latestRating,
+  );
+
+  const matchEventIds = useMemo(() => {
+    const seen = new Set<number>();
+    const ids: number[] = [];
+    for (const m of matches) {
+      if (m.event_id != null && !seen.has(m.event_id)) {
+        seen.add(m.event_id);
+        ids.push(m.event_id);
+      }
+    }
+    return ids;
+  }, [matches]);
+
+  // ── All players list (only for admins, for ViewAsSelector) ────────────────
+  const { players: allPlayers } = usePlayers({
+    enabled: isAdmin,
+    orderByName: true,
+  });
+
+  // ── Auth helpers ──────────────────────────────────────────────────────────
   async function handleSignOut() {
     try {
       await supabase.auth.signOut();
@@ -228,8 +213,16 @@ export default function DashboardPage() {
     }
   }
 
-  // ── Loading / redirect states ──────────────────────────────────────────────
+  // ── Derived state ─────────────────────────────────────────────────────────
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+  const isLoading = dataLoading || matchesLoading;
 
+  // In viewAs mode: don't show auth player's signups/openEvents
+  const heroSignups = isViewingAs ? [] : signups;
+  const heroOpenEvents = isViewingAs ? [] : openEvents;
+  const heroPayError = isViewingAs ? null : payError;
+
+  // ── Loading / redirect states ─────────────────────────────────────────────
   if (user === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0E1523]">
@@ -240,61 +233,65 @@ export default function DashboardPage() {
 
   if (user === null) return null;
 
-  const displayName =
-    player?.name ?? user.user_metadata?.full_name ?? user.email ?? "Player";
-  const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
-  const recentMatches = matches.slice(0, 5);
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0E1523] text-white font-sans">
       <SiteHeader
         activePath="/dashboard"
         rightSlot={
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors"
-          >
-            <LogOut size={13} />
-            <span className="hidden sm:inline">Sign out</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {isAdmin && (
+              <ViewAsSelector
+                players={allPlayers}
+                selected={viewAsPlayer}
+                onSelect={setViewAsPlayer}
+              />
+            )}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors"
+            >
+              <LogOut size={13} />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
+          </div>
         }
       />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 md:py-14 space-y-12">
-        {/* ── Header ────────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-4">
-          {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatarUrl}
-              alt="avatar"
-              className="w-16 h-16 rounded-full border-2 border-[#00C8DC]/30 shadow-lg"
-            />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-[#162032] border border-[#687FA3]/20 flex items-center justify-center">
-              <Users size={24} className="text-[#687FA3]" />
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 md:py-14 space-y-6">
+        {/* ── View As banner ── */}
+        {isViewingAs && viewAsPlayer && (
+          <div className="bg-[#00C8DC]/5 border border-[#00C8DC]/20 rounded-2xl px-5 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Eye size={15} className="text-[#00C8DC] shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#00C8DC]">
+                  Admin · View As
+                </p>
+                <p className="text-sm font-bold truncate">
+                  {viewAsPlayer.name}
+                  {viewAsPlayer.nickname && (
+                    <span className="text-[#687FA3] font-normal ml-1.5">
+                      &ldquo;{viewAsPlayer.nickname}&rdquo;
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
-          )}
-          <div>
-            <p className="text-[#687FA3] text-[10px] font-black uppercase tracking-[0.3em] mb-1">
-              Player Dashboard
-            </p>
-            <h1 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter leading-none">
-              {displayName}
-            </h1>
-            {player?.nickname && (
-              <p className="text-[#687FA3] text-sm mt-1">
-                &ldquo;{player.nickname}&rdquo;
-              </p>
-            )}
+            <button
+              type="button"
+              onClick={() => setViewAsPlayer(null)}
+              className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors shrink-0"
+            >
+              <X size={13} />
+              <span>Exit</span>
+            </button>
           </div>
-        </div>
+        )}
 
-        {dataLoading ? (
-          <div className="flex items-center justify-center py-24">
+        {dataLoading && !player ? (
+          <div className="flex items-center justify-center py-32">
             <div className="w-8 h-8 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
           </div>
         ) : !player ? (
@@ -305,377 +302,50 @@ export default function DashboardPage() {
               void load();
             }}
           />
-        ) : (
-          <div className="space-y-12">
-            {/* ── New player: pending verification ─────────────────────────── */}
-            {player && !player.is_profile_complete && (
-              <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-5 flex gap-4">
-                <span className="text-2xl">⏳</span>
-                <div>
-                  <p className="font-bold text-amber-300 mb-1">
-                    Pending Verification
-                  </p>
-                  <p className="text-amber-200/60 text-sm leading-relaxed">
-                    Your account is awaiting admin approval. Once verified
-                    you&apos;ll be able to register for events. No action needed
-                    on your end — the league admin will review your request
-                    shortly.
-                  </p>
-                </div>
-              </div>
-            )}
+        ) : displayPlayer ? (
+          <>
+            <HeroSection
+              player={displayPlayer}
+              avatarUrl={isViewingAs ? undefined : avatarUrl}
+              currentRating={latestRating}
+              stats={{
+                totalMatches: stats.totalMatches,
+                wins: stats.wins,
+                losses: stats.losses,
+                winRate: stats.winRate,
+              }}
+              signups={heroSignups}
+              openEvents={heroOpenEvents}
+              eventMap={eventMap}
+              matchEventIds={matchEventIds}
+              onRegister={(eventId) => void handleSignup(eventId)}
+              registering={payLoading}
+              payError={heroPayError}
+              loading={isLoading}
+              isViewingAs={isViewingAs}
+            />
 
-            {/* ── Player Stats ─────────────────────────────────────────────── */}
-            {player && (
-              <section>
-                <SectionHeading
-                  icon={<TrendingUp size={14} />}
-                  label="Player Stats"
-                />
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
-                  <StatCard
-                    label="Rating"
-                    value={
-                      matchesLoading
-                        ? "…"
-                        : latestRating !== null
-                          ? latestRating.toFixed(2)
-                          : player.latest_rating != null
-                            ? player.latest_rating.toFixed(2)
-                            : "–"
-                    }
-                    highlight
-                  />
-                  <StatCard
-                    label="Wins"
-                    value={matchesLoading ? "…" : String(wins)}
-                  />
-                  <StatCard
-                    label="Losses"
-                    value={matchesLoading ? "…" : String(losses)}
-                  />
-                  <StatCard
-                    label="Matches"
-                    value={
-                      matchesLoading ? "…" : String(completedMatches.length)
-                    }
-                  />
-                </div>
-                {player && (
-                  <div className="mt-3 text-right">
-                    <Link
-                      href={`/players/${encodeURIComponent(String(player.player_id))}`}
-                      className="text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors"
-                    >
-                      Full profile →
-                    </Link>
-                  </div>
-                )}
-              </section>
-            )}
+            <ProgressionSection
+              chartData={stats.chartData}
+              currentRating={latestRating}
+              peakRating={stats.peakRating}
+              ratingLast5Delta={stats.ratingLast5Delta}
+              currentStreak={stats.currentStreak}
+              playerId={String(displayPlayer.player_id)}
+              loading={isLoading}
+            />
 
-            {/* ── Event Signup Status ───────────────────────────────────────── */}
-            <section>
-              <SectionHeading
-                icon={<Calendar size={14} />}
-                label="Event Registration Status"
-              />
+            <RivalriesSection
+              opponentStats={stats.opponentStats}
+              loading={isLoading}
+            />
 
-              <div className="mt-5 space-y-3">
-                {/* Existing signups */}
-                {signups.length > 0 ? (
-                  signups.map((s) => (
-                    <div
-                      key={s.id}
-                      className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl px-5 py-4 flex items-center justify-between gap-4"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-bold text-sm">
-                          {eventLabel(s.event)}
-                        </p>
-                        <p className="text-[#687FA3] text-xs mt-0.5">
-                          {s.status === "registered"
-                            ? "Pending approval since"
-                            : "Registered"}{" "}
-                          {new Date(s.created_at).toLocaleDateString("en-PH", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <SignupBadge status={s.status} />
-                        {s.status === "registered" &&
-                          (s.event as Event & { requires_payment?: boolean })
-                            ?.requires_payment === true && (
-                            <button
-                              onClick={() => void handleSignup(s.event_id)}
-                              disabled={payLoading}
-                              className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-full transition-all"
-                            >
-                              {payLoading ? (
-                                <span className="w-3 h-3 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <>
-                                  Pay Now <ChevronRight size={12} />
-                                </>
-                              )}
-                            </button>
-                          )}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl p-5 text-[#687FA3] text-sm">
-                    You are not registered for any event yet.
-                  </div>
-                )}
-              </div>
-
-              {/* Open events CTA */}
-              {openEvents.length > 0 && (
-                <div className="pt-4 space-y-3">
-                  <p className="text-[#687FA3] text-[10px] font-black uppercase tracking-[0.3em]">
-                    Open for Registration
-                  </p>
-                  {openEvents.map((event) => (
-                    <div
-                      key={event.event_id}
-                      className="bg-[#162032] border border-[#00C8DC]/20 hover:border-[#00C8DC]/40 rounded-2xl px-5 py-5 flex items-center justify-between gap-4 transition-colors"
-                    >
-                      <div>
-                        <p className="font-bold">{eventLabel(event)}</p>
-                        {event.start_date && event.end_date && (
-                          <p className="text-[#687FA3] text-xs mt-0.5">
-                            {new Date(event.start_date).toLocaleDateString(
-                              "en-PH",
-                              { month: "short", day: "numeric" },
-                            )}
-                            {" – "}
-                            {new Date(event.end_date).toLocaleDateString(
-                              "en-PH",
-                              {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              },
-                            )}
-                          </p>
-                        )}
-                        <p className="text-[#00C8DC] text-xs font-bold mt-1">
-                          {(event as Event & { requires_payment?: boolean })
-                            .requires_payment === false
-                            ? "Free"
-                            : `₱${(event.registration_fee ?? 5).toLocaleString()} registration fee`}
-                        </p>
-                      </div>
-                      {!player || !player.is_profile_complete ? (
-                        <span className="text-amber-400/70 text-xs font-bold">
-                          Verification required
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => void handleSignup(event.event_id)}
-                          disabled={payLoading}
-                          className="flex items-center gap-2 bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black text-[11px] uppercase tracking-widest px-5 py-2.5 rounded-full transition-all shrink-0"
-                        >
-                          {payLoading ? (
-                            <span className="w-4 h-4 border-2 border-[#0E1523] border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <>
-                              Sign Up <ChevronRight size={14} />
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-
-                  {payError && (
-                    <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
-                      {payError}
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
-
-            {/* ── Match History ─────────────────────────────────────────────── */}
-            {player && (
-              <section>
-                <SectionHeading
-                  icon={<Trophy size={14} />}
-                  label="Match History"
-                />
-
-                <div className="mt-5">
-                  {matchesLoading ? (
-                    <div className="space-y-3">
-                      {[...Array(3)].map((_, i) => (
-                        <div
-                          key={i}
-                          className="bg-[#162032]/50 border border-[#687FA3]/10 rounded-2xl h-20 animate-pulse"
-                        />
-                      ))}
-                    </div>
-                  ) : recentMatches.length === 0 ? (
-                    <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl p-5 text-[#687FA3] text-sm">
-                      No matches recorded yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {recentMatches.map((match) => {
-                        const myTeam = match.teams.find(
-                          (t) =>
-                            String(t.player_1?.player_id) ===
-                              String(player.player_id) ||
-                            String(t.player_2?.player_id) ===
-                              String(player.player_id),
-                        );
-                        const isWin =
-                          myTeam !== undefined &&
-                          match.status === "completed" &&
-                          match.winner_team === myTeam.team_number;
-                        const oppTeam = match.teams.find(
-                          (t) => t.team_number !== myTeam?.team_number,
-                        );
-                        const oppLabel =
-                          [oppTeam?.player_1?.name, oppTeam?.player_2?.name]
-                            .filter(Boolean)
-                            .join(" & ") || "TBD";
-                        const myPartnerLabel =
-                          myTeam == null
-                            ? "TBD"
-                            : String(myTeam.player_1?.player_id) ===
-                                String(player.player_id)
-                              ? (myTeam.player_2?.name ?? "TBD")
-                              : (myTeam.player_1?.name ?? "TBD");
-
-                        // Set score summary e.g. "6‑3  3‑6  7‑5"
-                        const setScores = (match.sets ?? [])
-                          .map((s) => `${s.team_1_games}‑${s.team_2_games}`)
-                          .join("  ");
-
-                        return (
-                          <div
-                            key={match.match_id}
-                            className="bg-[#162032]/60 border border-[#687FA3]/10 hover:border-[#687FA3]/30 rounded-2xl px-5 py-4 flex items-center gap-4 transition-colors"
-                          >
-                            {/* Win/loss stripe */}
-                            <div
-                              className={`w-1 h-10 rounded-full shrink-0 ${
-                                match.status !== "completed"
-                                  ? "bg-[#687FA3]/20"
-                                  : isWin
-                                    ? "bg-emerald-500"
-                                    : "bg-red-500/60"
-                              }`}
-                            />
-
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-sm truncate">
-                                {myPartnerLabel !== "TBD"
-                                  ? `You + ${myPartnerLabel} vs ${oppLabel}`
-                                  : `You vs ${oppLabel}`}
-                              </p>
-                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                <span className="text-[#687FA3] text-xs">
-                                  {formatMatchDate(match.date_local)}
-                                </span>
-                                {match.event_id && (
-                                  <span className="bg-[#00C8DC]/10 text-[#00C8DC] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-                                    S{match.event_id}
-                                  </span>
-                                )}
-                                {match.type && (
-                                  <span className="text-[#687FA3]/60 text-[9px] font-bold uppercase">
-                                    {match.type}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="text-right shrink-0 space-y-0.5">
-                              {match.status === "completed" ? (
-                                <p
-                                  className={`text-[11px] font-black uppercase tracking-widest ${isWin ? "text-emerald-400" : "text-red-400"}`}
-                                >
-                                  {isWin ? "Win" : "Loss"}
-                                </p>
-                              ) : (
-                                <p className="text-[11px] font-black uppercase tracking-widest text-[#687FA3]">
-                                  {match.status}
-                                </p>
-                              )}
-                              {setScores && (
-                                <p className="text-[9px] text-[#687FA3]/60 font-mono">
-                                  {setScores}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {matches.length > 5 && (
-                        <Link
-                          href={`/players/${encodeURIComponent(String(player.player_id))}`}
-                          className="flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors py-4"
-                        >
-                          View all {matches.length} matches{" "}
-                          <ChevronRight size={12} />
-                        </Link>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function SectionHeading({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 text-[#687FA3] border-b border-[#687FA3]/10 pb-3">
-      {icon}
-      <span className="text-[10px] font-black uppercase tracking-[0.3em]">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div className="bg-[#162032] border border-[#687FA3]/10 hover:border-[#00C8DC]/30 rounded-2xl p-5 transition-all">
-      <div
-        className={`text-3xl font-black tracking-tighter mb-1 ${highlight ? "text-[#00C8DC]" : "text-white"}`}
-      >
-        {value}
-      </div>
-      <div className="text-[#687FA3] text-[9px] font-black uppercase tracking-[0.2em]">
-        {label}
+            <PartnersSection
+              partnerStats={stats.partnerStats}
+              loading={isLoading}
+            />
+          </>
+        ) : null}
       </div>
     </div>
   );
