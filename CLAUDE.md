@@ -137,6 +137,16 @@ Prefer existing hooks before writing new fetch logic:
 - _Important_: In mobile, UI is allowed (and even preferred) to hug edge of screen with appropriate padding.
 - Mobile: calendar falls back to an agenda list; cards stack vertically
 
+## Dark Mode
+
+The app is **dark mode only** — do not add light mode variants or conditional `dark:` classes. All new UI must assume a dark background and use colors consistent with the existing dark palette (slate/zinc/neutral grays, muted text, subtle borders). Never use `bg-white`, `text-black`, or any explicitly light color without a `dark:` override.
+
+## Mobile Layout
+
+- Cards and content sections should extend edge-to-edge on mobile — use `px-4` (or tighter) on the container itself rather than wrapping in a centered column with large margins.
+- Avoid horizontal scroll; let content reflow or truncate instead.
+- Sticky/fixed elements (headers, bottom bars) must account for safe-area insets (`safe-area-inset-*`) on iOS.
+
 ## Coding Standards
 
 - Follow existing TypeScript and Tailwind style throughout

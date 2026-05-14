@@ -169,7 +169,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
           </div>
 
           {rightSlot ? (
-            <div className="flex md:hidden items-center gap-4 font-bold text-[10px] uppercase tracking-[0.15em] text-[#687FA3]">
+            <div className="flex md:hidden items-center gap-4 font-bold text-[10px] uppercase tracking-[0.15em]">
               {loading ? (
                 <div className="h-6 w-16 rounded-full bg-[#22304a] animate-pulse" />
               ) : user ? (
@@ -190,27 +190,28 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               {rightSlot}
             </div>
           ) : (
-            <div className="flex md:hidden gap-6 font-bold text-[10px] uppercase tracking-[0.15em] text-[#687FA3]">
-              <a
-                href="/matches"
-                className="hover:text-[#00C8DC] transition-colors"
-              >
-                Matches
-              </a>
-              <a
-                href="/players"
-                className="hover:text-[#00C8DC] transition-colors"
-              >
-                Players
-              </a>
-              <a
-                href="/leaderboard"
-                className="hover:text-[#00C8DC] transition-colors"
-              >
-                Standings
-              </a>
+            <div className="flex md:hidden gap-5 font-bold text-[11px] uppercase tracking-[0.12em]">
+              {(
+                [
+                  ["/matches", "Matches"],
+                  ["/players", "Players"],
+                  ["/leaderboard", "Standings"],
+                ] as const
+              ).map(([href, label]) => (
+                <a
+                  key={href}
+                  href={href}
+                  className={
+                    currentPath === href
+                      ? "text-[#00C8DC]"
+                      : "text-white/75 hover:text-[#00C8DC] transition-colors"
+                  }
+                >
+                  {label}
+                </a>
+              ))}
               {loading ? (
-                <div className="h-6 w-12 rounded-full bg-[#22304a] animate-pulse" />
+                <div className="h-6 w-10 rounded-full bg-[#22304a] animate-pulse" />
               ) : user ? (
                 <a
                   href="/dashboard"
