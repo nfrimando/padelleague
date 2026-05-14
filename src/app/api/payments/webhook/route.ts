@@ -16,6 +16,7 @@ export async function POST(request: Request) {
   const signatureHeader = request.headers.get("paymongo-signature");
 
   if (!signatureHeader) {
+    console.error("[webhook] Missing paymongo-signature header");
     return NextResponse.json({ error: "Missing signature." }, { status: 400 });
   }
 
@@ -28,9 +29,12 @@ export async function POST(request: Request) {
   );
 
   const timestamp = parts["t"];
-  const expectedSig = parts["te"] ?? parts["li"];
+  const expectedSig = parts["li"] || parts["te"]; // live sig preferred; fall back to test
+
+  console.log("[webhook] sig header parts:", { t: timestamp, te: parts["te"]?.slice(0, 8), li: parts["li"]?.slice(0, 8) });
 
   if (!timestamp || !expectedSig) {
+    console.error("[webhook] Invalid signature format — missing t or hmac");
     return NextResponse.json({ error: "Invalid signature format." }, { status: 400 });
   }
 
@@ -39,7 +43,10 @@ export async function POST(request: Request) {
     .update(signedPayload)
     .digest("hex");
 
+  console.log("[webhook] computed:", computedSig.slice(0, 8), "expected:", expectedSig.slice(0, 8));
+
   if (computedSig !== expectedSig) {
+    console.error("[webhook] Signature mismatch — secret may not match registered endpoint");
     return NextResponse.json({ error: "Signature mismatch." }, { status: 400 });
   }
 
