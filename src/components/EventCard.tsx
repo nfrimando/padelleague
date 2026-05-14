@@ -53,7 +53,6 @@ const STATUS_STYLES: Record<Event["status"], { badge: string; label: string }> =
 export default function EventCard({ event }: Props) {
   const statusStyle = STATUS_STYLES[event.status];
   const isOpen = event.registration_status === "open";
-  const isFree = event.requires_payment === false;
   const dateRange = formatDateRange(event.start_date, event.end_date);
 
   return (
@@ -106,15 +105,6 @@ export default function EventCard({ event }: Props) {
         {/* Details row */}
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600 dark:text-slate-300">
           <span>📅 {dateRange}</span>
-          <span>
-            {isFree ? (
-              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                Free
-              </span>
-            ) : event.registration_fee != null ? (
-              <>₱{Number(event.registration_fee).toLocaleString()}</>
-            ) : null}
-          </span>
         </div>
 
         {/* CTA */}

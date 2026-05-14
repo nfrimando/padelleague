@@ -34,7 +34,6 @@ type SignupRow = {
     start_date?: string | null;
     registration_status: "open" | "closed";
     status: "upcoming" | "ongoing" | "completed";
-    requires_payment?: boolean | null;
   } | null;
 };
 
@@ -70,7 +69,6 @@ export default function DashboardPage() {
   const {
     handleSignup,
     loading: payLoading,
-    error: payError,
     result: signupResult,
   } = useEventSignup();
 
@@ -121,7 +119,7 @@ export default function DashboardPage() {
       supabase
         .from("events")
         .select(
-          "event_id, name, event_type, registration_fee, requires_payment, start_date, end_date, registration_status, status, created_at, updated_at",
+          "event_id, name, event_type, start_date, end_date, registration_status, status, created_at, updated_at",
         )
         .eq("registration_status", "open")
         .order("event_id", { ascending: false }),
@@ -144,7 +142,7 @@ export default function DashboardPage() {
     const supsResult = await supabase
       .from("signups_events")
       .select(
-        "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status, requires_payment)",
+        "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status)",
       )
       .eq("player_id", p.player_id)
       .order("created_at", { ascending: false });
@@ -220,7 +218,6 @@ export default function DashboardPage() {
   // In viewAs mode: don't show auth player's signups/openEvents
   const heroSignups = isViewingAs ? [] : signups;
   const heroOpenEvents = isViewingAs ? [] : openEvents;
-  const heroPayError = isViewingAs ? null : payError;
 
   // ── Loading / redirect states ─────────────────────────────────────────────
   if (user === undefined) {
@@ -320,7 +317,6 @@ export default function DashboardPage() {
               matchEventIds={matchEventIds}
               onRegister={(eventId) => void handleSignup(eventId)}
               registering={payLoading}
-              payError={heroPayError}
               loading={isLoading}
               isViewingAs={isViewingAs}
             />

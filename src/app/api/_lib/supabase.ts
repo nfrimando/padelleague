@@ -5,11 +5,10 @@ function getRequiredEnv(name: string): string {
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}.`);
   }
-
   return value;
 }
 
-export function getPaymentsUserClient(authorization: string) {
+export function getServerUserClient(authorization: string) {
   const supabaseUrl = getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL");
   const supabaseAnonKey = getRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
@@ -22,7 +21,7 @@ export function getPaymentsUserClient(authorization: string) {
   });
 }
 
-export function getPaymentsServiceClient() {
+export function getServerServiceClient() {
   const supabaseUrl = getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
 

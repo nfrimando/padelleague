@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  getPaymentsServiceClient,
-  getPaymentsUserClient,
-} from "@/app/api/payments/_lib/supabase";
+  getServerServiceClient,
+  getServerUserClient,
+} from "@/app/api/_lib/supabase";
 
 export async function POST(request: Request) {
   // 1. Authenticate
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
   let userClient;
   try {
-    userClient = getPaymentsUserClient(authorization);
+    userClient = getServerUserClient(authorization);
   } catch (error) {
     console.error("Failed to initialize user Supabase client:", error);
     return NextResponse.json({ error: "Server misconfiguration." }, { status: 500 });
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   let serviceClient;
   try {
-    serviceClient = getPaymentsServiceClient();
+    serviceClient = getServerServiceClient();
   } catch (error) {
     console.error("Failed to initialize service Supabase client:", error);
     return NextResponse.json({ error: "Server misconfiguration." }, { status: 500 });

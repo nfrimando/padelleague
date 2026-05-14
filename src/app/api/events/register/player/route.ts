@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPaymentsServiceClient } from "@/app/api/payments/_lib/supabase";
+import { getServerServiceClient } from "@/app/api/_lib/supabase";
 
 type PlayerRegisterBody = {
   event_id?: unknown;
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
   let serviceClient;
   try {
-    serviceClient = getPaymentsServiceClient();
+    serviceClient = getServerServiceClient();
   } catch (error) {
     console.error("Failed to initialize service Supabase client:", error);
     return NextResponse.json(

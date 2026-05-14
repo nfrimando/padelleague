@@ -15,8 +15,6 @@ export type Player = {
   latest_rating_formula?: string | null;
   latest_match_date?: string | null;
   email?: string | null;
-  paymongo_customer_id?: string | null;
-  auto_renew_season?: boolean;
   is_profile_complete?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -28,10 +26,8 @@ export type Event = {
   event_type: string;
   start_date?: string | null;
   end_date?: string | null;
-  registration_fee?: number | null;
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
-  requires_payment?: boolean | null;
   image_url?: string | null;
   description?: string | null;
   deleted_at?: string | null;
@@ -40,8 +36,6 @@ export type Event = {
 };
 
 // Maps to the `signups_events` table.
-// Status: registered = initially signed up, accepted = payment confirmed (or free event),
-// waitlisted/cancelled = other states, pending_payment = payment link created.
 export type SeasonSignup = {
   id: string;
   event_id: number;
@@ -49,12 +43,7 @@ export type SeasonSignup = {
   applicant_name?: string | null;
   applicant_contact?: string | null;
   applicant_email?: string | null;
-  status:
-    | "registered"
-    | "accepted"
-    | "waitlisted"
-    | "cancelled"
-    | "pending_payment";
+  status: "registered" | "accepted" | "waitlisted" | "cancelled";
   created_at: string;
   updated_at: string;
 };
@@ -88,39 +77,6 @@ export type PlayerClaim = {
   status: "pending" | "approved" | "rejected";
   created_at: string;
   reviewed_at?: string | null;
-};
-
-// Maps to the `payments` table.
-// provider: 'paymongo' | 'manual' | etc.
-export type Payment = {
-  payment_id: string;
-  player_id: number;
-  reference_doc_type: string;
-  reference_doc_id: string;
-  amount: number;
-  currency: string;
-  provider: string;
-  status: "pending" | "paid" | "failed" | "refunded" | "awaiting_payment_method";
-  payment_method_type?: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-// Maps to the `payments_paymongo` table (1-to-1 with payments).
-export type PaymentPaymongo = {
-  payment_id: string;
-  paymongo_payment_intent_id?: string | null;
-  paymongo_payment_method_id?: string | null;
-  raw_response?: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-};
-
-// Maps to the `webhook_events` table (idempotency log).
-export type WebhookEvent = {
-  id: string;
-  event_type: string;
-  processed_at: string;
 };
 
 // ─── Match / team entities ─────────────────────────────────────────────────────
