@@ -70,7 +70,10 @@ export async function POST(request: Request) {
   const eventData = event.data?.attributes?.data as Record<string, unknown> | undefined;
   const eventDataAttrs = eventData?.attributes as Record<string, unknown> | undefined;
   const eventSource = eventDataAttrs?.source as Record<string, unknown> | undefined;
-  console.log("[webhook] data.id:", eventData?.id, "source:", JSON.stringify(eventSource));
+  console.log("[webhook] data.id:", eventData?.id);
+  console.log("[webhook] attrs keys:", Object.keys(eventDataAttrs ?? {}));
+  console.log("[webhook] remarks:", eventDataAttrs?.remarks, "description:", eventDataAttrs?.description);
+  console.log("[webhook] source:", JSON.stringify(eventSource));
 
   const linkId = eventSource?.id as string | undefined;
   const paymongoPaymentId = (
