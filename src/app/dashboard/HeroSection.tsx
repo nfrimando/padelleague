@@ -155,9 +155,11 @@ export default function HeroSection({
   }, [payingSignupId]);
 
   const signedUpEventIds = new Set(signups.map((s) => s.event_id));
-  const playedOnlyEventIds = matchEventIds.filter(
-    (id) => !signedUpEventIds.has(id),
-  );
+  const hasPendingPayment = signups.some((s) => s.status === "pending_payment");
+  // Hide played chips when any signup is pending payment — pay now takes priority
+  const playedOnlyEventIds = hasPendingPayment
+    ? []
+    : matchEventIds.filter((id) => !signedUpEventIds.has(id));
 
   const displayRating =
     currentRating !== null
@@ -351,7 +353,7 @@ export default function HeroSection({
                       <span className="text-xs font-bold text-white/80 whitespace-nowrap">
                         {label}
                       </span>
-                      {isPendingPayment ? (
+                      {isPendingPayment && !isViewingAs ? (
                         <button
                           type="button"
                           onClick={() => {

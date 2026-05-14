@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, LogOut, X } from "lucide-react";
+import { Eye, Lock, LogOut, X } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
 import {
@@ -52,6 +52,26 @@ async function resolveAdminStatus(userId: string | undefined): Promise<boolean> 
   return !!data;
 }
 
+function LockedSection({ skeletonRows = 3 }: { skeletonRows?: number }) {
+  return (
+    <div className="bg-[#0d1520] border border-[#687FA3]/10 sm:rounded-3xl p-6 space-y-3 relative overflow-hidden">
+      <div className="h-2.5 w-20 bg-[#1a2540] rounded-full animate-pulse" />
+      <div className="h-28 bg-[#1a2540] rounded-xl animate-pulse" />
+      <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${skeletonRows}, 1fr)` }}>
+        {Array.from({ length: skeletonRows }).map((_, i) => (
+          <div key={i} className="h-10 bg-[#1a2540] rounded-xl animate-pulse" />
+        ))}
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+        <Lock size={16} className="text-[#687FA3]/60" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60">
+          Pay pending fees to unlock
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -65,6 +85,7 @@ export default function DashboardPage() {
 
   // Admin-only: player to view as (null = view as self)
   const [viewAsPlayer, setViewAsPlayer] = useState<Player | null>(null);
+  const [viewAsSignups, setViewAsSignups] = useState<SignupRow[]>([]);
   const isViewingAs = isAdmin && viewAsPlayer !== null;
 
   // The player whose data we display — guarded: only use viewAsPlayer when isAdmin
@@ -173,6 +194,23 @@ export default function DashboardPage() {
     if (signupResult === "registered") void load();
   }, [signupResult, load]);
 
+  // ── Fetch signups for the viewed player (admin View As) ───────────────────
+  useEffect(() => {
+    if (!viewAsPlayer) {
+      setViewAsSignups([]);
+      return;
+    }
+    void (async () => {
+      const result = await supabase
+        .from("signups_events")
+        .select(
+          "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status, registration_fee, payment_instructions)",
+        )
+        .eq("player_id", viewAsPlayer.player_id)
+        .order("created_at", { ascending: false });
+      setViewAsSignups((result.data ?? []) as unknown as SignupRow[]);
+    })();
+  }, [viewAsPlayer]);
 
   // ── Match data (always for displayPlayer) ────────────────────────────────
   const {
@@ -220,13 +258,12 @@ export default function DashboardPage() {
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
   const isLoading = dataLoading || matchesLoading;
 
-  // In viewAs mode: don't show auth player's signups/openEvents
-  const heroSignups = isViewingAs ? [] : signups;
+  // In viewAs mode, show the viewed player's signups (not the admin's own)
+  const heroSignups = isViewingAs ? viewAsSignups : signups;
   const heroOpenEvents = isViewingAs ? [] : openEvents;
 
-  const pendingPaymentSignup = !isViewingAs
-    ? (heroSignups.find((s) => s.status === "pending_payment") ?? null)
-    : null;
+  const pendingPaymentSignup =
+    heroSignups.find((s) => s.status === "pending_payment") ?? null;
 
   // ── Loading / redirect states ─────────────────────────────────────────────
   if (user === undefined) {
@@ -345,25 +382,35 @@ export default function DashboardPage() {
               onRefreshSignups={() => void load()}
             />
 
-            <ProgressionSection
-              chartData={stats.chartData}
-              currentRating={latestRating}
-              peakRating={stats.peakRating}
-              ratingLast5Delta={stats.ratingLast5Delta}
-              currentStreak={stats.currentStreak}
-              playerId={String(displayPlayer.player_id)}
-              loading={isLoading}
-            />
+            {pendingPaymentSignup ? (
+              <>
+                <LockedSection skeletonRows={4} />
+                <LockedSection skeletonRows={2} />
+                <LockedSection skeletonRows={3} />
+              </>
+            ) : (
+              <>
+                <ProgressionSection
+                  chartData={stats.chartData}
+                  currentRating={latestRating}
+                  peakRating={stats.peakRating}
+                  ratingLast5Delta={stats.ratingLast5Delta}
+                  currentStreak={stats.currentStreak}
+                  playerId={String(displayPlayer.player_id)}
+                  loading={isLoading}
+                />
 
-            <RivalriesSection
-              opponentStats={stats.opponentStats}
-              loading={isLoading}
-            />
+                <RivalriesSection
+                  opponentStats={stats.opponentStats}
+                  loading={isLoading}
+                />
 
-            <PartnersSection
-              partnerStats={stats.partnerStats}
-              loading={isLoading}
-            />
+                <PartnersSection
+                  partnerStats={stats.partnerStats}
+                  loading={isLoading}
+                />
+              </>
+            )}
           </>
         ) : null}
       </div>
