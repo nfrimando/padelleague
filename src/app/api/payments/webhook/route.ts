@@ -54,13 +54,16 @@ export async function POST(request: Request) {
   try {
     event = JSON.parse(rawBody) as typeof event;
   } catch {
+    console.error("[webhook] JSON parse failed");
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
   const eventType = event.data?.attributes?.type;
+  console.log("[webhook] event type:", eventType);
 
   // Only handle link payment paid events
   if (eventType !== "link.payment.paid") {
+    console.log("[webhook] ignoring event type:", eventType);
     return NextResponse.json({ ok: true });
   }
 
@@ -71,7 +74,10 @@ export async function POST(request: Request) {
       ?.attributes as Record<string, unknown> | undefined
   )?.reference_number as string | undefined;
 
+  console.log("[webhook] linkId:", linkId, "paymongoPaymentId:", paymongoPaymentId);
+
   if (!linkId) {
+    console.error("[webhook] Missing link id in payload");
     return NextResponse.json({ error: "Missing link id in payload." }, { status: 400 });
   }
 
@@ -79,6 +85,7 @@ export async function POST(request: Request) {
   try {
     serviceClient = getServerServiceClient();
   } catch {
+    console.error("[webhook] Failed to get service client");
     return NextResponse.json({ error: "Server misconfiguration." }, { status: 500 });
   }
 
@@ -89,11 +96,14 @@ export async function POST(request: Request) {
     .eq("link_id", linkId)
     .maybeSingle();
 
+  console.log("[webhook] pmRow lookup:", { pmRow, pmError: pmError?.message });
+
   if (pmError) {
     return NextResponse.json({ error: pmError.message }, { status: 500 });
   }
 
   if (!pmRow) {
+    console.log("[webhook] no matching pmRow for linkId:", linkId);
     // Unknown link — acknowledge without error so PayMongo doesn't retry
     return NextResponse.json({ ok: true });
   }
