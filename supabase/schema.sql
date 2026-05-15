@@ -84,6 +84,7 @@ CREATE TABLE public.player_claims (
   status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   reviewed_at timestamp with time zone,
+  notes text,
   CONSTRAINT player_claims_pkey PRIMARY KEY (id),
   CONSTRAINT player_claims_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
 );

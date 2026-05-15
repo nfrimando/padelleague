@@ -14,7 +14,7 @@ export async function PATCH(
   const { supabase } = authResult;
   const { signupId } = await params;
 
-  let body: { approved?: unknown };
+  let body: { approved?: unknown; notes?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -24,6 +24,8 @@ export async function PATCH(
   if (typeof body.approved !== "boolean") {
     return NextResponse.json({ error: "approved (boolean) is required." }, { status: 400 });
   }
+
+  const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null;
 
   const { data: signup, error: signupError } = await supabase
     .from("signups_players")
@@ -51,7 +53,7 @@ export async function PATCH(
   if (!body.approved) {
     const { error: rejectError } = await supabase
       .from("signups_players")
-      .update({ status: "cancelled" })
+      .update({ status: "cancelled", notes })
       .eq("id", signupId);
 
     if (rejectError) {
@@ -118,7 +120,7 @@ export async function PATCH(
 
   const { error: approveError } = await supabase
     .from("signups_players")
-    .update({ status: "accepted", player_id: playerId })
+    .update({ status: "accepted", player_id: playerId, notes })
     .eq("id", signupId);
 
   if (approveError) {

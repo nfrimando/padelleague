@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import { supabase } from "@/lib/supabase";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
@@ -139,6 +139,10 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   const [bulkTargetStatus, setBulkTargetStatus] = useState<SignupStatus>("accepted");
   const [bulkSaving, setBulkSaving] = useState(false);
 
+  const [bulkMarkPaidOpen, setBulkMarkPaidOpen] = useState(false);
+  const [bulkMarkPaidForm, setBulkMarkPaidForm] = useState<PayForm>(EMPTY_PAY_FORM);
+  const [bulkMarkPaidLoading, setBulkMarkPaidLoading] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -148,6 +152,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   const [bulkAddSelectedIds, setBulkAddSelectedIds] = useState<Set<number>>(new Set());
   const [bulkAddStatus, setBulkAddStatus] = useState<SignupStatus>("applied");
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
+
+  const [signupSearch, setSignupSearch] = useState("");
 
   const addSignupSuggestions = usePlayerSearch(players, addSignupSearch);
 
@@ -212,6 +218,20 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     return counts;
   }, [eventSignups]);
 
+  const sortedFilteredSignups = useMemo(() => {
+    const getName = (s: AdminSignupRow) =>
+      s.player?.name || s.player?.nickname || s.applicant_name || "";
+    const sorted = [...eventSignups].sort((a, b) =>
+      getName(a).localeCompare(getName(b))
+    );
+    const q = signupSearch.toLowerCase().trim();
+    if (!q) return sorted;
+    return sorted.filter(s =>
+      getName(s).toLowerCase().includes(q) ||
+      (s.player?.email || s.applicant_email || s.applicant_contact || "").toLowerCase().includes(q)
+    );
+  }, [eventSignups, signupSearch]);
+
   const alreadySignedUpPlayerIds = useMemo(
     () => new Set(eventSignups.map(s => s.player_id).filter((id): id is number => id !== null)),
     [eventSignups],
@@ -245,6 +265,9 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setShowBulkAdd(false);
     setBulkAddSearch("");
     setBulkAddSelectedIds(new Set());
+    setSignupSearch("");
+    setBulkMarkPaidOpen(false);
+    setBulkMarkPaidForm(EMPTY_PAY_FORM);
   };
 
   const handleSelectEvent = async (event: AdminEventRow) => {
@@ -264,6 +287,9 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setShowBulkAdd(false);
     setBulkAddSearch("");
     setBulkAddSelectedIds(new Set());
+    setSignupSearch("");
+    setBulkMarkPaidOpen(false);
+    setBulkMarkPaidForm(EMPTY_PAY_FORM);
     if (!signupsByEvent[event.event_id]) {
       await loadSignupsForEvent(event.event_id);
     } else {
@@ -487,6 +513,44 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     await loadSignupsForEvent(eventId);
     setBulkSelectedIds(new Set());
     setBulkSaving(false);
+  };
+
+  const handleBulkMarkPaid = async (eventId: number) => {
+    const amount = Number(bulkMarkPaidForm.amount);
+    if (!amount || amount <= 0) { setSignupPanelError("Enter a valid amount."); return; }
+    setBulkMarkPaidLoading(true);
+    setSignupPanelError(null);
+    const token = await getAccessToken();
+    if (!token) { setSignupPanelError("No active session."); setBulkMarkPaidLoading(false); return; }
+    const pendingIds = Array.from(bulkSelectedIds).filter(id =>
+      eventSignups.find(s => s.id === id)?.status === "pending_payment"
+    );
+    if (pendingIds.length === 0) {
+      setSignupPanelError("No selected signups are in pending_payment status.");
+      setBulkMarkPaidLoading(false);
+      return;
+    }
+    const results = await Promise.allSettled(
+      pendingIds.map(id =>
+        fetch(`/api/admin/signups/${encodeURIComponent(id)}/payment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            method: bulkMarkPaidForm.method,
+            amount,
+            reference_number: bulkMarkPaidForm.reference_number || undefined,
+            notes: bulkMarkPaidForm.notes || undefined,
+          }),
+        }),
+      ),
+    );
+    const failures = results.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)).length;
+    if (failures > 0) setSignupPanelError(`${failures} of ${pendingIds.length} payments failed.`);
+    await loadSignupsForEvent(eventId);
+    setBulkSelectedIds(new Set());
+    setBulkMarkPaidOpen(false);
+    setBulkMarkPaidForm(EMPTY_PAY_FORM);
+    setBulkMarkPaidLoading(false);
   };
 
   const handleBulkAddSignups = async (eventId: number) => {
@@ -932,6 +996,46 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
 
                 {eventSignups.length > 0 ? (
                   <>
+                    <div className="mb-2 flex items-center gap-2 flex-wrap">
+                      <input
+                        type="text"
+                        className={`${inputCls} flex-1 min-w-36`}
+                        placeholder="Search signups by name or email…"
+                        value={signupSearch}
+                        onChange={ev => setSignupSearch(ev.target.value)}
+                      />
+                      {bulkSelectedIds.size > 0 && (
+                        <>
+                          <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">
+                            {bulkSelectedIds.size} selected
+                          </span>
+                          <select
+                            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-slate-900 dark:text-slate-100 text-xs shrink-0"
+                            value={bulkTargetStatus}
+                            onChange={ev => setBulkTargetStatus(ev.target.value as SignupStatus)}
+                          >
+                            {SIGNUP_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => void handleBulkApply(selectedEvent.event_id)}
+                            disabled={bulkSaving || bulkMarkPaidLoading}
+                            className="inline-flex items-center rounded-md bg-slate-700 dark:bg-slate-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600 dark:hover:bg-slate-500 disabled:opacity-50 transition-colors shrink-0"
+                          >
+                            {bulkSaving ? "Applying…" : "Set status"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setBulkMarkPaidOpen(true); setBulkMarkPaidForm(EMPTY_PAY_FORM); setSignupPanelError(null); }}
+                            disabled={bulkSaving || bulkMarkPaidLoading}
+                            className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shrink-0"
+                          >
+                            Mark Paid…
+                          </button>
+                        </>
+                      )}
+                    </div>
+
                     <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-md">
                       <table className="min-w-full text-xs">
                         <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase tracking-wide">
@@ -940,10 +1044,10 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                               <input
                                 type="checkbox"
                                 ref={el => {
-                                  if (el) el.indeterminate = bulkSelectedIds.size > 0 && bulkSelectedIds.size < eventSignups.length;
+                                  if (el) el.indeterminate = bulkSelectedIds.size > 0 && bulkSelectedIds.size < sortedFilteredSignups.length;
                                 }}
-                                checked={eventSignups.length > 0 && bulkSelectedIds.size === eventSignups.length}
-                                onChange={() => handleBulkToggleAll(eventSignups)}
+                                checked={sortedFilteredSignups.length > 0 && bulkSelectedIds.size === sortedFilteredSignups.length}
+                                onChange={() => handleBulkToggleAll(sortedFilteredSignups)}
                               />
                             </th>
                             <th className="text-left px-3 py-2">Player</th>
@@ -954,7 +1058,7 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {eventSignups.map(signup => (
+                          {sortedFilteredSignups.map(signup => (
                             <Fragment key={signup.id}>
                               <tr className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
                                 <td className="px-3 py-2 align-middle">
@@ -1004,111 +1108,20 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                                   {signup.status === "pending_payment" && (
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        markingPaidSignupId === signup.id
-                                          ? setMarkingPaidSignupId(null)
-                                          : handleOpenMarkPaid(signup.id)
-                                      }
-                                      className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                                        markingPaidSignupId === signup.id
-                                          ? "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
-                                          : "bg-emerald-600 text-white hover:bg-emerald-700"
-                                      }`}
+                                      onClick={() => { handleOpenMarkPaid(signup.id); setSignupPanelError(null); }}
+                                      className="inline-flex items-center rounded-md bg-emerald-600 text-white px-2.5 py-1 text-xs font-medium hover:bg-emerald-700 transition-colors"
                                     >
-                                      {markingPaidSignupId === signup.id ? "Cancel" : "Mark Paid"}
+                                      Mark Paid
                                     </button>
                                   )}
                                 </td>
                               </tr>
-
-                              {markingPaidSignupId === signup.id && (
-                                <tr className="border-t border-slate-100 dark:border-slate-800">
-                                  <td colSpan={6} className="px-3 py-3 bg-emerald-50 dark:bg-emerald-900/10">
-                                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 mb-2">
-                                      <div>
-                                        <label className={labelCls}>Method</label>
-                                        <select className={inputCls} value={markPaidForm.method}
-                                          onChange={ev => setMarkPaidForm(prev => ({ ...prev, method: ev.target.value as PayForm["method"] }))}>
-                                          <option value="cash">Cash</option>
-                                          <option value="bank_transfer">Bank Transfer</option>
-                                          <option value="gcash">GCash</option>
-                                          <option value="other">Other</option>
-                                        </select>
-                                      </div>
-                                      <div>
-                                        <label className={labelCls}>Amount (PHP)</label>
-                                        <input type="number" min="0" className={inputCls} placeholder="1000"
-                                          value={markPaidForm.amount}
-                                          onChange={ev => setMarkPaidForm(prev => ({ ...prev, amount: ev.target.value }))} />
-                                      </div>
-                                      <div>
-                                        <label className={labelCls}>Ref # (optional)</label>
-                                        <input type="text" className={inputCls} placeholder="e.g. GCash ref"
-                                          value={markPaidForm.reference_number}
-                                          onChange={ev => setMarkPaidForm(prev => ({ ...prev, reference_number: ev.target.value }))} />
-                                      </div>
-                                      <div>
-                                        <label className={labelCls}>Notes (optional)</label>
-                                        <input type="text" className={inputCls}
-                                          value={markPaidForm.notes}
-                                          onChange={ev => setMarkPaidForm(prev => ({ ...prev, notes: ev.target.value }))} />
-                                      </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleMarkPaid(selectedEvent.event_id, signup.id)}
-                                        disabled={markPaidLoading}
-                                        className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                                      >
-                                        {markPaidLoading ? "Saving…" : "Confirm Payment"}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setMarkingPaidSignupId(null)}
-                                        className="inline-flex items-center rounded-md bg-slate-200 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
                             </Fragment>
                           ))}
                         </tbody>
                       </table>
                     </div>
 
-                    {/* Bulk action bar */}
-                    <div className="mt-2 flex items-center gap-2 flex-wrap">
-                      {bulkSelectedIds.size === 0 ? (
-                        <span className="text-xs text-slate-400 dark:text-slate-500">
-                          Select rows to bulk-update status
-                        </span>
-                      ) : (
-                        <>
-                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                            {bulkSelectedIds.size} selected →
-                          </span>
-                          <select
-                            className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100 text-xs"
-                            value={bulkTargetStatus}
-                            onChange={ev => setBulkTargetStatus(ev.target.value as SignupStatus)}
-                          >
-                            {SIGNUP_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => void handleBulkApply(selectedEvent.event_id)}
-                            disabled={bulkSaving}
-                            className="inline-flex items-center rounded-md bg-slate-700 dark:bg-slate-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600 dark:hover:bg-slate-500 disabled:opacity-50 transition-colors"
-                          >
-                            {bulkSaving ? "Applying…" : `Apply to ${bulkSelectedIds.size}`}
-                          </button>
-                        </>
-                      )}
-                    </div>
                   </>
                 ) : (
                   <div className="text-xs text-slate-500 dark:text-slate-400 py-6 text-center border border-dashed border-slate-200 dark:border-slate-700 rounded-md">
@@ -1126,6 +1139,127 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
           </div>
         </div>
       )}
+
+      {/* Mark Paid Modal — single and bulk */}
+      {(markingPaidSignupId !== null || bulkMarkPaidOpen) && selectedEvent && (() => {
+        const isBulk = bulkMarkPaidOpen;
+        const singleSignup = !isBulk && markingPaidSignupId
+          ? (eventSignups.find(s => s.id === markingPaidSignupId) ?? null)
+          : null;
+        const eligibleCount = isBulk
+          ? Array.from(bulkSelectedIds).filter(id =>
+              eventSignups.find(s => s.id === id)?.status === "pending_payment"
+            ).length
+          : 0;
+        const form = isBulk ? bulkMarkPaidForm : markPaidForm;
+        const updateForm = (update: Partial<PayForm>) => {
+          if (isBulk) setBulkMarkPaidForm(prev => ({ ...prev, ...update }));
+          else setMarkPaidForm(prev => ({ ...prev, ...update }));
+        };
+        const isLoading = isBulk ? bulkMarkPaidLoading : markPaidLoading;
+        const handleClose = () => {
+          if (isBulk) { setBulkMarkPaidOpen(false); setBulkMarkPaidForm(EMPTY_PAY_FORM); }
+          else { setMarkingPaidSignupId(null); setMarkPaidForm(EMPTY_PAY_FORM); }
+          setSignupPanelError(null);
+        };
+        const handleConfirm = () => {
+          if (isBulk) void handleBulkMarkPaid(selectedEvent.event_id);
+          else if (markingPaidSignupId) void handleMarkPaid(selectedEvent.event_id, markingPaidSignupId);
+        };
+        const playerName = singleSignup?.player?.name
+          ?? singleSignup?.player?.nickname
+          ?? singleSignup?.applicant_name
+          ?? "this signup";
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={ev => { if (ev.target === ev.currentTarget) handleClose(); }}
+          >
+            <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg">
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-slate-700">
+                <p className="font-semibold text-slate-100 text-sm">Confirm Payment</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {isBulk
+                    ? `${eligibleCount} of ${bulkSelectedIds.size} selected signup${bulkSelectedIds.size !== 1 ? "s" : ""} are in pending_payment status`
+                    : `Recording payment for ${playerName}`}
+                </p>
+              </div>
+
+              {/* Warning */}
+              <div className="px-5 py-3 flex items-start gap-2 bg-amber-950/30 border-b border-amber-800/30">
+                <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-300">
+                  {isBulk && eligibleCount === 0
+                    ? "None of the selected signups are in pending_payment status — nothing will be changed."
+                    : "This will record a payment and move the signup to accepted. This cannot be undone."}
+                </p>
+              </div>
+
+              {/* Form */}
+              <div className="px-5 py-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className={labelCls}>Method</label>
+                  <select className={inputCls} value={form.method}
+                    onChange={ev => updateForm({ method: ev.target.value as PayForm["method"] })}>
+                    <option value="cash">Cash</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="gcash">GCash</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Amount (PHP)</label>
+                  <input type="number" min="0" className={inputCls} placeholder="1000"
+                    value={form.amount}
+                    onChange={ev => updateForm({ amount: ev.target.value })} />
+                </div>
+                <div>
+                  <label className={labelCls}>Ref # (optional)</label>
+                  <input type="text" className={inputCls} placeholder="e.g. GCash ref"
+                    value={form.reference_number}
+                    onChange={ev => updateForm({ reference_number: ev.target.value })} />
+                </div>
+                <div>
+                  <label className={labelCls}>Notes (optional)</label>
+                  <input type="text" className={inputCls}
+                    value={form.notes}
+                    onChange={ev => updateForm({ notes: ev.target.value })} />
+                </div>
+              </div>
+
+              {signupPanelError && (
+                <div className="mx-5 mb-3 rounded bg-rose-900/30 border border-rose-800/40 px-3 py-2 text-rose-300 text-xs">
+                  {signupPanelError}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="px-5 py-4 border-t border-slate-700 flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isLoading}
+                  className="inline-flex items-center rounded-md bg-slate-800 border border-slate-600 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                >
+                  No, cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={isLoading || (isBulk && eligibleCount === 0)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  {isLoading
+                    ? "Saving…"
+                    : `🤝 Yes, confirm${isBulk && eligibleCount > 0 ? ` (${eligibleCount})` : ""}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
