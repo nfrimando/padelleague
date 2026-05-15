@@ -82,6 +82,7 @@ export default function DashboardPage() {
   const [openEvents, setOpenEvents] = useState<Event[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [payingSignupId, setPayingSignupId] = useState<string | null>(null);
+  const [paymentJustCompleted, setPaymentJustCompleted] = useState(false);
 
   // Admin-only: player to view as (null = view as self)
   const [viewAsPlayer, setViewAsPlayer] = useState<Player | null>(null);
@@ -96,6 +97,15 @@ export default function DashboardPage() {
     loading: payLoading,
     result: signupResult,
   } = useEventSignup();
+
+  // ── Detect return from PayMongo payment ───────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success") {
+      setPaymentJustCompleted(true);
+      window.history.replaceState(null, "", "/dashboard");
+    }
+  }, []);
 
   // ── Auth + admin check ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -347,6 +357,12 @@ export default function DashboardPage() {
           />
         ) : displayPlayer ? (
           <>
+            {paymentJustCompleted && !pendingPaymentSignup && (
+              <DashboardBanner
+                type="payment_success"
+                onDismiss={() => setPaymentJustCompleted(false)}
+              />
+            )}
             {pendingPaymentSignup && (
               <DashboardBanner
                 type="pending_payment"

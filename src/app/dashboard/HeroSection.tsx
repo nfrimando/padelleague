@@ -146,13 +146,9 @@ export default function HeroSection({
 }: Props) {
   const [payOnlineLoading, setPayOnlineLoading] = useState(false);
   const [payOnlineError, setPayOnlineError] = useState<string | null>(null);
-  const [paymentLinkOpened, setPaymentLinkOpened] = useState(false);
-  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [showGCashModal, setShowGCashModal] = useState(false);
 
   useEffect(() => {
-    setPaymentLinkOpened(false);
-    setPaymentLinkUrl(null);
     setPayOnlineError(null);
   }, [payingSignupId]);
 
@@ -220,11 +216,7 @@ export default function HeroSection({
         return;
       }
 
-      setPaymentLinkUrl(json.link_url);
-      const popup = window.open(json.link_url, "_blank", "noopener,noreferrer");
-      if (popup) {
-        setPaymentLinkOpened(true);
-      }
+      window.location.href = json.link_url;
     } catch {
       setPayOnlineError("Network error. Please try again.");
     } finally {
@@ -444,91 +436,30 @@ export default function HeroSection({
                     </button>
                   </div>
 
-                  {payingSignup.status === "accepted" ? (
-                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 flex items-center gap-3">
-                      <span className="text-emerald-400 text-lg">✓</span>
-                      <div>
-                        <p className="text-emerald-400 font-black text-sm">Payment confirmed!</p>
-                        <p className="text-emerald-300/60 text-xs mt-0.5">
-                          You&apos;re all set for this event.
-                        </p>
-                      </div>
-                    </div>
-                  ) : paymentLinkOpened ? (
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleCheckPaymentStatus()}
-                        className="w-full bg-[#1a2540] hover:bg-[#1e2d50] border border-orange-500/30 text-orange-300 font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-                      >
-                        Check Payment Status
-                      </button>
-                      {paymentLinkUrl && (
-                        <a
-                          href={paymentLinkUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block text-center text-[10px] text-[#687FA3] hover:text-orange-300 underline underline-offset-2 transition-colors"
-                        >
-                          Re-open payment link
-                        </a>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handlePayOnline()}
+                      disabled={payOnlineLoading}
+                      className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                      {payOnlineLoading ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Redirecting…
+                        </>
+                      ) : (
+                        "Pay Online"
                       )}
-                      <p className="text-[10px] text-[#687FA3] text-center">
-                        Completed your payment? Tap above to refresh.
-                      </p>
-                    </div>
-                  ) : paymentLinkUrl ? (
-                    <div className="space-y-2">
-                      <div className="rounded-xl bg-orange-500/10 border border-orange-500/20 px-4 py-3 text-center">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-orange-300 mb-1">
-                          Popup blocked by browser
-                        </p>
-                        <p className="text-xs text-white/60">
-                          Use the link below to open the payment page.
-                        </p>
-                      </div>
-                      <a
-                        href={paymentLinkUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full bg-orange-500 hover:bg-orange-400 text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-                      >
-                        Open Payment Link
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => void handleCheckPaymentStatus()}
-                        className="w-full bg-[#1a2540] hover:bg-[#1e2d50] border border-orange-500/30 text-orange-300 font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-                      >
-                        Check Payment Status
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handlePayOnline()}
-                        disabled={payOnlineLoading}
-                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-                      >
-                        {payOnlineLoading ? (
-                          <>
-                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Generating…
-                          </>
-                        ) : (
-                          "Pay Online"
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowGCashModal(true)}
-                        className="bg-[#1a2540] hover:bg-[#1e2d50] border border-orange-500/20 text-orange-200 font-black py-2.5 px-4 rounded-xl text-sm transition-colors"
-                      >
-                        Cash / GCash
-                      </button>
-                    </div>
-                  )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowGCashModal(true)}
+                      className="bg-[#1a2540] hover:bg-[#1e2d50] border border-orange-500/20 text-orange-200 font-black py-2.5 px-4 rounded-xl text-sm transition-colors"
+                    >
+                      Cash / GCash
+                    </button>
+                  </div>
 
                   {payOnlineError && (
                     <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
