@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import { supabase } from "@/lib/supabase";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
@@ -141,6 +142,13 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [eventInfoExpanded, setEventInfoExpanded] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkAddSearch, setBulkAddSearch] = useState("");
+  const [bulkAddSelectedIds, setBulkAddSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkAddStatus, setBulkAddStatus] = useState<SignupStatus>("applied");
+  const [bulkAddLoading, setBulkAddLoading] = useState(false);
+
   const addSignupSuggestions = usePlayerSearch(players, addSignupSearch);
 
   const getAccessToken = useCallback(async () => {
@@ -204,6 +212,20 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     return counts;
   }, [eventSignups]);
 
+  const alreadySignedUpPlayerIds = useMemo(
+    () => new Set(eventSignups.map(s => s.player_id).filter((id): id is number => id !== null)),
+    [eventSignups],
+  );
+
+  const bulkAddFilteredPlayers = useMemo(() => {
+    const q = bulkAddSearch.toLowerCase().trim();
+    return players.filter(p => {
+      if (alreadySignedUpPlayerIds.has(Number(p.player_id))) return false;
+      if (!q) return true;
+      return (p.name?.toLowerCase().includes(q) ?? false) || (p.nickname?.toLowerCase().includes(q) ?? false);
+    });
+  }, [players, bulkAddSearch, alreadySignedUpPlayerIds]);
+
   const filteredEvents = events.filter(event => {
     if (statusFilter === "all") return true;
     if (statusFilter === "non_completed") return event.status !== "completed";
@@ -219,6 +241,10 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setMarkingPaidSignupId(null);
     setMarkPaidForm(EMPTY_PAY_FORM);
     setSignupPanelError(null);
+    setEventInfoExpanded(false);
+    setShowBulkAdd(false);
+    setBulkAddSearch("");
+    setBulkAddSelectedIds(new Set());
   };
 
   const handleSelectEvent = async (event: AdminEventRow) => {
@@ -234,6 +260,10 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setSignupPanelError(null);
     setSuccess(null);
     setError(null);
+    setEventInfoExpanded(false);
+    setShowBulkAdd(false);
+    setBulkAddSearch("");
+    setBulkAddSelectedIds(new Set());
     if (!signupsByEvent[event.event_id]) {
       await loadSignupsForEvent(event.event_id);
     } else {
@@ -459,6 +489,30 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setBulkSaving(false);
   };
 
+  const handleBulkAddSignups = async (eventId: number) => {
+    if (bulkAddSelectedIds.size === 0) return;
+    setBulkAddLoading(true);
+    setSignupPanelError(null);
+    const token = await getAccessToken();
+    if (!token) { setSignupPanelError("No active session."); setBulkAddLoading(false); return; }
+    const ids = Array.from(bulkAddSelectedIds);
+    const results = await Promise.allSettled(
+      ids.map(playerId =>
+        fetch("/api/admin/signups", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ event_id: eventId, player_id: playerId, status: bulkAddStatus }),
+        }),
+      ),
+    );
+    const failures = results.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)).length;
+    if (failures > 0) setSignupPanelError(`${failures} of ${ids.length} signups failed.`);
+    await loadSignupsForEvent(eventId);
+    setBulkAddSelectedIds(new Set());
+    setBulkAddSearch("");
+    setBulkAddLoading(false);
+  };
+
   const regBadge = (s: string) =>
     s === "open"
       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -631,84 +685,110 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
           </div>
 
           {/* Event Info */}
-          <div className="px-4 py-4 border-b border-slate-200 dark:border-slate-700">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
-              Event Info
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label className={labelCls}>Name</label>
-                <input type="text" className={inputCls} value={editDraft.name}
-                  onChange={ev => handleEditDraftChange("name", ev.target.value)} />
+          <div className="border-b border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setEventInfoExpanded(prev => !prev)}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0">
+                  Event Info
+                </span>
+                {!eventInfoExpanded && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {[
+                      selectedEvent.registration_fee != null && `₱${selectedEvent.registration_fee.toLocaleString()}`,
+                      selectedEvent.status,
+                      `reg ${selectedEvent.registration_status}`,
+                    ].filter(Boolean).join(" · ")}
+                  </span>
+                )}
               </div>
-              <div>
-                <label className={labelCls}>Type</label>
-                <input type="text" className={inputCls} value={editDraft.event_type}
-                  onChange={ev => handleEditDraftChange("event_type", ev.target.value)} />
+              <span className="flex items-center gap-1 text-[10px] text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors shrink-0">
+                {eventInfoExpanded ? "collapse" : "edit"}
+                <ChevronRight size={12} className={`transition-transform duration-150 ${eventInfoExpanded ? "rotate-90" : ""}`} />
+              </span>
+            </button>
+
+            {eventInfoExpanded && (
+              <div className="px-4 pb-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <label className={labelCls}>Name</label>
+                    <input type="text" className={inputCls} value={editDraft.name}
+                      onChange={ev => handleEditDraftChange("name", ev.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Type</label>
+                    <input type="text" className={inputCls} value={editDraft.event_type}
+                      onChange={ev => handleEditDraftChange("event_type", ev.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Start Date</label>
+                    <input type="date" className={inputCls} value={editDraft.start_date}
+                      onChange={ev => handleEditDraftChange("start_date", ev.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>End Date</label>
+                    <input type="date" className={inputCls} value={editDraft.end_date}
+                      onChange={ev => handleEditDraftChange("end_date", ev.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Registration Fee (PHP)</label>
+                    <input type="number" min="0" className={inputCls} placeholder="1000"
+                      value={editDraft.registration_fee}
+                      onChange={ev => handleEditDraftChange("registration_fee", ev.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Registration</label>
+                    <select className={inputCls} value={editDraft.registration_status}
+                      onChange={ev => handleEditDraftChange("registration_status", ev.target.value)}>
+                      <option value="open">Open</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Status</label>
+                    <select className={inputCls} value={editDraft.status}
+                      onChange={ev => handleEditDraftChange("status", ev.target.value)}>
+                      <option value="upcoming">Upcoming</option>
+                      <option value="ongoing">Ongoing</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label className={labelCls}>Image URL (optional)</label>
+                    <input type="url" className={inputCls} placeholder="https://…"
+                      value={editDraft.image_url}
+                      onChange={ev => handleEditDraftChange("image_url", ev.target.value)} />
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label className={labelCls}>Description (optional)</label>
+                    <textarea rows={3} className={inputCls} placeholder="Short description…"
+                      value={editDraft.description}
+                      onChange={ev => handleEditDraftChange("description", ev.target.value)} />
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label className={labelCls}>Payment Instructions (optional)</label>
+                    <textarea rows={4} className={inputCls}
+                      placeholder={"e.g. Bank: BDO\nAccount: 1234567890\nGCash: 0917-xxx-xxxx"}
+                      value={editDraft.payment_instructions}
+                      onChange={ev => handleEditDraftChange("payment_instructions", ev.target.value)} />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveEdit(selectedEvent.event_id)}
+                    disabled={!editDraftDirty || savingEdit}
+                    className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                  >
+                    {savingEdit ? "Saving…" : "Save Changes"}
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Start Date</label>
-                <input type="date" className={inputCls} value={editDraft.start_date}
-                  onChange={ev => handleEditDraftChange("start_date", ev.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>End Date</label>
-                <input type="date" className={inputCls} value={editDraft.end_date}
-                  onChange={ev => handleEditDraftChange("end_date", ev.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Registration Fee (PHP)</label>
-                <input type="number" min="0" className={inputCls} placeholder="1000"
-                  value={editDraft.registration_fee}
-                  onChange={ev => handleEditDraftChange("registration_fee", ev.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Registration</label>
-                <select className={inputCls} value={editDraft.registration_status}
-                  onChange={ev => handleEditDraftChange("registration_status", ev.target.value)}>
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>Status</label>
-                <select className={inputCls} value={editDraft.status}
-                  onChange={ev => handleEditDraftChange("status", ev.target.value)}>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="ongoing">Ongoing</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-              <div className="sm:col-span-2 lg:col-span-3">
-                <label className={labelCls}>Image URL (optional)</label>
-                <input type="url" className={inputCls} placeholder="https://…"
-                  value={editDraft.image_url}
-                  onChange={ev => handleEditDraftChange("image_url", ev.target.value)} />
-              </div>
-              <div className="sm:col-span-2 lg:col-span-3">
-                <label className={labelCls}>Description (optional)</label>
-                <textarea rows={3} className={inputCls} placeholder="Short description…"
-                  value={editDraft.description}
-                  onChange={ev => handleEditDraftChange("description", ev.target.value)} />
-              </div>
-              <div className="sm:col-span-2 lg:col-span-3">
-                <label className={labelCls}>Payment Instructions (optional)</label>
-                <textarea rows={4} className={inputCls}
-                  placeholder={"e.g. Bank: BDO\nAccount: 1234567890\nGCash: 0917-xxx-xxxx"}
-                  value={editDraft.payment_instructions}
-                  onChange={ev => handleEditDraftChange("payment_instructions", ev.target.value)} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={() => void handleSaveEdit(selectedEvent.event_id)}
-                disabled={!editDraftDirty || savingEdit}
-                className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-              >
-                {savingEdit ? "Saving…" : "Save Changes"}
-              </button>
-            </div>
+            )}
           </div>
 
           {/* Signups */}
@@ -734,8 +814,8 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                   </p>
                 )}
 
-                {/* Add signup */}
-                <div className="flex items-end gap-2 mb-4 flex-wrap">
+                {/* Add signup — single */}
+                <div className="flex items-end gap-2 flex-wrap">
                   <div className="flex-1 min-w-52">
                     <PlayerSearchBox
                       value={addSignupSearch}
@@ -765,9 +845,90 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                     disabled={creatingSignup || !addSignupSelectedPlayer}
                     className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                   >
-                    {creatingSignup ? "Adding…" : "Add Signup"}
+                    {creatingSignup ? "Adding…" : "Add"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowBulkAdd(prev => !prev); setBulkAddSearch(""); setBulkAddSelectedIds(new Set()); }}
+                    className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors border ${
+                      showBulkAdd
+                        ? "border-[#00C8DC] text-[#00C8DC] bg-[#00C8DC]/5"
+                        : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    Bulk add
+                    <ChevronRight size={11} className={`transition-transform duration-150 ${showBulkAdd ? "rotate-90" : ""}`} />
                   </button>
                 </div>
+
+                {/* Add signup — bulk */}
+                {showBulkAdd && (
+                  <div className="mt-2 mb-4 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700">
+                      <input
+                        type="text"
+                        className={inputCls}
+                        placeholder="Filter players by name or nickname…"
+                        value={bulkAddSearch}
+                        onChange={ev => setBulkAddSearch(ev.target.value)}
+                      />
+                    </div>
+                    <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                      {bulkAddFilteredPlayers.length === 0 ? (
+                        <div className="px-3 py-4 text-xs text-slate-500 dark:text-slate-400 text-center">
+                          {players.length === 0 ? "Loading players…" : "No players available to add."}
+                        </div>
+                      ) : (
+                        bulkAddFilteredPlayers.map(player => {
+                          const pid = Number(player.player_id);
+                          return (
+                            <label
+                              key={pid}
+                              className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={bulkAddSelectedIds.has(pid)}
+                                onChange={() => setBulkAddSelectedIds(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(pid)) next.delete(pid); else next.add(pid);
+                                  return next;
+                                })}
+                              />
+                              <span className="text-sm text-slate-900 dark:text-slate-100">{player.name}</span>
+                              {player.nickname && (
+                                <span className="text-xs text-slate-500 dark:text-slate-400">&ldquo;{player.nickname}&rdquo;</span>
+                              )}
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                    <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">
+                        {bulkAddSelectedIds.size > 0 ? `${bulkAddSelectedIds.size} selected` : "Select players above"}
+                      </span>
+                      <div className="flex-1" />
+                      <select
+                        className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-900 dark:text-slate-100 text-xs"
+                        value={bulkAddStatus}
+                        onChange={ev => setBulkAddStatus(ev.target.value as SignupStatus)}
+                      >
+                        {SIGNUP_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={bulkAddSelectedIds.size === 0 || bulkAddLoading}
+                        onClick={() => void handleBulkAddSignups(selectedEvent.event_id)}
+                        className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      >
+                        {bulkAddLoading ? "Adding…" : `Add ${bulkAddSelectedIds.size || ""} Players`.trim()}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!showBulkAdd && <div className="mb-4" />}
 
                 {eventSignups.length > 0 ? (
                   <>
