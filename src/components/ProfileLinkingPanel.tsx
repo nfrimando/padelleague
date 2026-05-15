@@ -171,8 +171,8 @@ export default function ProfileLinkingPanel({
       {claimStatus === "none" && (
         <div className="space-y-4">
           <p className="text-[#687FA3] text-sm">
-            Your Google account is not linked to a player profile yet. Are you
-            an existing player?
+            Your account is not linked to a player profile yet. Are you an
+            existing player?
           </p>
 
           <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl p-6 space-y-4">
