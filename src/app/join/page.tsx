@@ -47,6 +47,18 @@ function JoinPageContent() {
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
+    async function lookupPlayer(currentUser: User) {
+      if (!currentUser.email) return;
+      const { player } = await fetchPlayerByEmail<ExistingPlayerLookup>({
+        email: currentUser.email,
+        select: "player_id, name, is_profile_complete",
+      });
+      setExistingPlayer(player ?? null);
+      if (player?.is_profile_complete) {
+        setAlreadyMember(true);
+      }
+    }
+
     async function init() {
       const {
         data: { user: currentUser },
@@ -66,16 +78,7 @@ function JoinPageContent() {
           setNickname(full.split(" ")[0] ?? "");
         }
 
-        if (currentUser.email) {
-          const { player } = await fetchPlayerByEmail<ExistingPlayerLookup>({
-            email: currentUser.email,
-            select: "player_id, name, is_profile_complete",
-          });
-          setExistingPlayer(player ?? null);
-          if (player?.is_profile_complete) {
-            setAlreadyMember(true);
-          }
-        }
+        await lookupPlayer(currentUser);
       }
 
       setLoading(false);
@@ -85,8 +88,17 @@ function JoinPageContent() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (event === "SIGNED_IN" && currentUser) {
+        setExistingPlayer(null);
+        setAlreadyMember(false);
+        void lookupPlayer(currentUser);
+      } else if (event === "SIGNED_OUT") {
+        setExistingPlayer(null);
+        setAlreadyMember(false);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -246,10 +258,7 @@ function JoinPageContent() {
               </Link>
             </div>
           ) : (
-            <form
-              onSubmit={handleSubmit}
-              className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6"
-            >
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6">
               {!user && (
                 <div className="rounded-xl border border-[#687FA3]/20 bg-[#162032] px-4 py-3">
                   <p className="text-xs text-[#687FA3] mb-3">
@@ -272,6 +281,7 @@ function JoinPageContent() {
                 </div>
               )}
 
+              <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-2">
                   Full name
@@ -359,7 +369,8 @@ function JoinPageContent() {
                   "Submit Membership Application"
                 )}
               </button>
-            </form>
+              </form>
+            </div>
           )}
         </div>
       </div>
