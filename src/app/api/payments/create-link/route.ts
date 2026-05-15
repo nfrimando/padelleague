@@ -126,6 +126,9 @@ export async function POST(request: Request) {
   const amountCentavos = Math.round(fee * 100);
   const description = `Registration fee for ${event.name ?? `Event ${event.event_id}`}`;
 
+  const origin = request.headers.get("origin") ?? `https://${request.headers.get("host") ?? ""}`;
+  const afterPaymentUrl = `${origin}/dashboard?payment=success`;
+
   // Create PayMongo payment link
   const paymongoRes = await fetch("https://api.paymongo.com/v1/links", {
     method: "POST",
@@ -139,6 +142,7 @@ export async function POST(request: Request) {
           amount: amountCentavos,
           description,
           remarks: `signup:${signupId}`,
+          after_payment_result_url: afterPaymentUrl,
         },
       },
     }),
