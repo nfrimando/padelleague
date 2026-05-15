@@ -17,7 +17,7 @@ export async function PATCH(
   const { supabase } = authResult;
   const { claimId } = await params;
 
-  let body: { approved?: unknown };
+  let body: { approved?: unknown; notes?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -27,6 +27,8 @@ export async function PATCH(
   if (typeof body.approved !== "boolean") {
     return NextResponse.json({ error: "approved (boolean) is required." }, { status: 400 });
   }
+
+  const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null;
 
   // 1. Fetch the claim
   const { data: claim, error: claimError } = await supabase
@@ -68,7 +70,7 @@ export async function PATCH(
       // Someone else was approved or the player already has an email
       await supabase
         .from("player_claims")
-        .update({ status: "rejected", reviewed_at: now })
+        .update({ status: "rejected", reviewed_at: now, notes })
         .eq("id", claimId);
 
       return NextResponse.json(
@@ -91,7 +93,7 @@ export async function PATCH(
     // 2c. Approve this claim
     await supabase
       .from("player_claims")
-      .update({ status: "approved", reviewed_at: now })
+      .update({ status: "approved", reviewed_at: now, notes })
       .eq("id", claimId);
 
     // 2d. Reject all other pending claims for this player
@@ -105,7 +107,7 @@ export async function PATCH(
     // 3. Reject the claim
     const { error: rejectError } = await supabase
       .from("player_claims")
-      .update({ status: "rejected", reviewed_at: now })
+      .update({ status: "rejected", reviewed_at: now, notes })
       .eq("id", claimId);
 
     if (rejectError) {
