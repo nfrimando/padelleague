@@ -53,3 +53,4 @@ __pycache__/
 
 # playwright auth session
 src/__tests__/e2e/.auth/session.json
+.claude
