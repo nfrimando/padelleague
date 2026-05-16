@@ -154,6 +154,7 @@ The app is **dark mode only** — do not add light mode variants or conditional 
 - Preserve null-safe handling for all Supabase data (`data?.field ?? null`)
 - After edits, verify there are no TypeScript/compile errors
 - Admin API routes use `getAuthorizedAdminClient` from `src/app/api/admin/_lib/auth.ts` — always go through this for admin endpoints
+- **Email notifications:** Always include the claimant or applicant's name in the email `subject` line (e.g. `"New Player Claim: ${name}"`). This prevents Gmail from threading separate notifications into the same conversation.
 
 ## Known Technical Debt (Future Work)
 

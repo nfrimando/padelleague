@@ -3,6 +3,7 @@ import {
   getServerServiceClient,
   getServerUserClient,
 } from "@/app/api/_lib/supabase";
+import { notifyNewPlayerClaim } from "@/lib/email/notifications/newPlayerClaim";
 
 export async function POST(request: Request) {
   // 1. Authenticate
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   // 3. Validate target player: must exist, have no email (i.e. claimable), and be verified
   const { data: targetPlayer, error: targetError } = await serviceClient
     .from("players")
-    .select("player_id, name, email, is_profile_complete")
+    .select("player_id, name, nickname, email, is_profile_complete")
     .eq("player_id", playerId)
     .maybeSingle();
 
@@ -147,6 +148,13 @@ export async function POST(request: Request) {
     console.error("Failed to insert claim:", insertError?.message);
     return NextResponse.json({ error: "Failed to submit claim." }, { status: 500 });
   }
+
+  notifyNewPlayerClaim({
+    claimantName,
+    claimantEmail: user.email ?? "",
+    playerName: targetPlayer.name,
+    playerNickname: targetPlayer.nickname ?? null,
+  }).catch((err) => console.error("[email] notifyNewPlayerClaim failed:", err));
 
   return NextResponse.json({ claimed: true, claim_id: claim.id }, { status: 201 });
 }
