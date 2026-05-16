@@ -3,6 +3,7 @@ import {
   getServerServiceClient,
   getServerUserClient,
 } from "@/app/api/_lib/supabase";
+import { notifyNewMemberApplication } from "@/lib/email/notifications/newMemberApplication";
 
 function normalizeString(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -86,6 +87,10 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  notifyNewMemberApplication({ name, nickname, email, contact }).catch((err) =>
+    console.error("[email] notifyNewMemberApplication failed:", err),
+  );
 
   return NextResponse.json({ applied: true, signup_id: data.id }, { status: 201 });
 }
