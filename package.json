@@ -1,6 +1,6 @@
 {
   "name": "padelleagueph",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "private": true,
   "scripts": {
     "dev": "node -v && next dev",
@@ -24,6 +24,7 @@
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "recharts": "^3.8.1",
+    "resend": "^6.12.3",
     "supabase": "^2.84.10"
   },
   "devDependencies": {
