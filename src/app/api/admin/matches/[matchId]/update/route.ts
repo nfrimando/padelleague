@@ -9,6 +9,7 @@ import {
 } from "@/app/api/admin/_lib/auth";
 import { calculateRatings } from "@/lib/ratingCalculator";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
+import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
 
 type MatchStatus = "scheduled" | "completed" | "forfeit" | "cancelled";
 
@@ -640,6 +641,51 @@ export async function PATCH(
       return rollbackCompletedFlow(
         insertRatingsError.message || "Failed to insert match player ratings.",
       );
+    }
+
+    const { data: playerRows } = await supabase
+      .from("players")
+      .select("player_id,name,nickname,email")
+      .in("player_id", playerIds);
+
+    if (playerRows && playerRows.length === 4) {
+      const byId = new Map(playerRows.map((p) => [p.player_id as number, p]));
+      const toPlayerInfo = (id: number) => ({
+        player_id: id,
+        name: (byId.get(id)?.name as string | null) ?? null,
+        nickname: (byId.get(id)?.nickname as string | null) ?? null,
+        email: (byId.get(id)?.email as string | null) ?? null,
+      });
+
+      const finalDateLocal =
+        validation.value.dateLocal !== undefined
+          ? validation.value.dateLocal
+          : matchSnapshot.date_local;
+      const finalTimeLocal =
+        validation.value.timeLocal !== undefined
+          ? validation.value.timeLocal
+          : matchSnapshot.time_local;
+      const finalVenue =
+        validation.value.venue !== undefined
+          ? validation.value.venue
+          : matchSnapshot.venue;
+
+      notifyMatchCompleted({
+        matchId,
+        dateLocal: finalDateLocal,
+        timeLocal: finalTimeLocal,
+        venue: finalVenue,
+        team1Players: [toPlayerInfo(team1.player_1_id), toPlayerInfo(team1.player_2_id)],
+        team2Players: [toPlayerInfo(team2.player_1_id), toPlayerInfo(team2.player_2_id)],
+        sets: setRows.map((s) => ({ team_1_games: s.team_1_games, team_2_games: s.team_2_games })),
+        ratings: (insertedRatings ?? []).map((r) => ({
+          player_id: r.player_id as number,
+          rating_pre: r.rating_pre as number,
+          rating_post: r.rating_post as number,
+          result: r.result as "win" | "loss",
+        })),
+        winnerTeam: calculation.winnerTeam as 1 | 2,
+      }).catch((err) => console.error("[email] notifyMatchCompleted failed:", err));
     }
 
     return NextResponse.json(
