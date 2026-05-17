@@ -114,12 +114,10 @@ function buildEmailHtml({
       </table>
 
       <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-        <p style="margin: 0 0 8px 0; color: #555; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Your Result</p>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 20px; font-weight: 700; color: ${resultColor};">${resultLabel}</span>
-          <span style="font-size: 15px; color: #374151;">${ratingLine}</span>
-        </div>
-        <p style="margin: 6px 0 0 0; font-size: 12px; color: #9ca3af;">Team ${recipientTeam}</p>
+        <p style="margin: 0 0 10px 0; color: #555; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Your Result</p>
+        <span style="font-size: 28px; font-weight: 700; color: ${resultColor};">${resultLabel}</span>
+        <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;">${ratingLine}</p>
+        <p style="margin: 4px 0 0 0; font-size: 12px; color: #9ca3af;">Team ${recipientTeam}</p>
       </div>
 
       <a
