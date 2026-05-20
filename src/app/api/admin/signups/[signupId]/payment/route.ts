@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
+import { notifyPaymentCompleted } from "@/lib/email/notifications/paymentCompleted";
 
 const ALLOWED_METHODS = ["cash", "bank_transfer", "gcash", "other"] as const;
 type PaymentMethod = (typeof ALLOWED_METHODS)[number];
@@ -107,6 +108,21 @@ export async function POST(
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
+
+  // Fire notification (non-blocking)
+  const [{ data: player }, { data: eventRecord }] = await Promise.all([
+    supabase.from("players").select("name, email").eq("player_id", signup.player_id).maybeSingle(),
+    supabase.from("events").select("name").eq("id", signup.event_id).maybeSingle(),
+  ]);
+  await notifyPaymentCompleted({
+    playerName: player?.name ?? null,
+    playerEmail: player?.email ?? null,
+    eventName: eventRecord?.name ?? null,
+    amount,
+    method,
+    referenceNumber,
+    source: "admin",
+  }).catch((err) => console.error("[email] notifyPaymentCompleted failed:", err));
 
   return NextResponse.json({ ok: true, payment_id: payment.id });
 }

@@ -18,6 +18,7 @@ import { useDashboardStats } from "@/lib/useDashboardStats";
 import HeroSection from "./HeroSection";
 import ProgressionSection from "./ProgressionSection";
 import SimilarPlayersSection from "./SimilarPlayersSection";
+import WinProbabilityCalculator from "./WinProbabilityCalculator";
 import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
 import ViewAsSelector from "./ViewAsSelector";
@@ -421,6 +422,11 @@ export default function DashboardPage() {
                 <SimilarPlayersSection
                   playerId={displayPlayer.player_id}
                   currentPlayerRating={latestRating}
+                />
+
+                <WinProbabilityCalculator
+                  lockedPlayer={displayPlayer}
+                  lockedPlayerRating={latestRating}
                 />
 
                 <RivalriesSection
