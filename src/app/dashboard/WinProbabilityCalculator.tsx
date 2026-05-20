@@ -323,7 +323,7 @@ export default function WinProbabilityCalculator({
 
       <div className="px-4 pb-6 space-y-4">
         {/* Team columns */}
-        <div className="grid grid-cols-[1fr_28px_1fr] items-center gap-2">
+        <div className="flex flex-col sm:grid sm:grid-cols-[1fr_28px_1fr] sm:items-center gap-3 sm:gap-2">
           {/* Team 1 */}
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 px-0.5">
@@ -336,8 +336,13 @@ export default function WinProbabilityCalculator({
             {renderSlot("t1p2", 1)}
           </div>
 
-          {/* VS */}
-          <div className="flex flex-col items-center justify-center gap-1 self-stretch pt-5">
+          {/* VS — horizontal on mobile, vertical on sm+ */}
+          <div className="flex sm:hidden items-center gap-3">
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#687FA3]/20 to-transparent" />
+            <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">VS</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#687FA3]/20 to-transparent" />
+          </div>
+          <div className="hidden sm:flex flex-col items-center justify-center gap-1 self-stretch pt-5">
             <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
             <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">
               VS
