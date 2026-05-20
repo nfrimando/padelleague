@@ -62,6 +62,20 @@ export const formatMatchDate = (dateString: string | null) => {
   return `${months[date.getMonth()]} ${String(date.getDate()).padStart(2, "0")} ${date.getFullYear()}`;
 };
 
+export function formatMatchDateRelative(dateString: string | null): string {
+  if (!dateString) return "";
+  const date = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks}w ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
 export const formatMatchTime = (timeString: string | null) => {
   if (!timeString) return "";
 
