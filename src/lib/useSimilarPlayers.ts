@@ -20,10 +20,15 @@ type UseSimilarPlayersResult = {
   loading: boolean;
 };
 
-type PlayerSummaryRow = {
+type SimilarPlayerRow = {
   player_id: number | string;
+  name: string | null;
+  nickname: string | null;
+  image_link: string | null;
   latest_rating: number | string | null;
-  latest_match_date: string | null;
+  last_match_date: string | null;
+  rank: number | string;
+  is_current_player: boolean;
 };
 
 export function useSimilarPlayers(
@@ -40,79 +45,37 @@ export function useSimilarPlayers(
     setLoading(true);
 
     (async () => {
-      const { data: allPlayers } = await supabase
-        .from("players")
-        .select("player_id, name, nickname, image_link, initial_rating");
-
-      if (cancelled || !allPlayers) {
-        setLoading(false);
-        return;
-      }
-
-      const numericIds = allPlayers
-        .map((p) => Number(p.player_id))
-        .filter((id) => Number.isInteger(id) && id > 0);
-
-      const { data: summaries } = await supabase.rpc("get_player_summary", {
-        p_ids: numericIds,
+      const { data, error } = await supabase.rpc("get_similar_players", {
+        p_player_id: Number(currentPlayerId),
+        p_window: 15,
       });
 
       if (cancelled) return;
 
-      const ratingMap: Record<string, number | null> = {};
-      const matchDateMap: Record<string, string | null> = {};
-
-      ((summaries || []) as PlayerSummaryRow[]).forEach((row) => {
-        const key = String(row.player_id);
-        const r = Number(row.latest_rating);
-        ratingMap[key] = Number.isFinite(r) ? r : null;
-        matchDateMap[key] = row.latest_match_date || null;
-      });
-
-      const currentIdStr = String(currentPlayerId);
-
-      const enriched: SimilarPlayer[] = allPlayers
-        .filter((p) => {
-          const key = String(p.player_id);
-          const initialRating = Number(p.initial_rating);
-          return ratingMap[key] != null || Number.isFinite(initialRating);
-        })
-        .map((p) => {
-          const key = String(p.player_id);
-          const initialRating = Number(p.initial_rating);
-          const latestRating =
-            ratingMap[key] ??
-            (Number.isFinite(initialRating) ? initialRating : 0);
-          return {
-            id: key,
-            name: p.name ?? null,
-            nickname: p.nickname ?? null,
-            image_link: p.image_link ?? null,
-            latestRating,
-            lastMatchDate: matchDateMap[key] ?? null,
-            isCurrentPlayer: key === currentIdStr,
-            rank: 0,
-          };
-        })
-        .sort((a, b) => b.latestRating - a.latestRating)
-        .map((p, i) => ({ ...p, rank: i + 1 }));
-
-      const idx = enriched.findIndex((p) => p.id === currentIdStr);
-
-      if (idx === -1) {
+      if (error || !data) {
+        console.error("[useSimilarPlayers] RPC error:", error);
         setPlayers([]);
         setCurrentPlayerIndex(-1);
         setLoading(false);
         return;
       }
 
-      const start = Math.max(0, idx - 15);
-      const end = Math.min(enriched.length, idx + 16);
-      const sliced = enriched.slice(start, end);
-      const adjustedIdx = idx - start;
+      const rows = data as SimilarPlayerRow[];
+      const mapped: SimilarPlayer[] = rows.map((row) => ({
+        id: String(row.player_id),
+        name: row.name ?? null,
+        nickname: row.nickname ?? null,
+        image_link: row.image_link ?? null,
+        latestRating: Number(row.latest_rating ?? 0),
+        lastMatchDate: row.last_match_date ?? null,
+        isCurrentPlayer: row.is_current_player,
+        rank: Number(row.rank),
+      }));
 
-      setPlayers(sliced);
-      setCurrentPlayerIndex(adjustedIdx);
+      const idx = mapped.findIndex((p) => p.isCurrentPlayer);
+
+      setPlayers(mapped);
+      setCurrentPlayerIndex(idx);
       setLoading(false);
     })();
 
