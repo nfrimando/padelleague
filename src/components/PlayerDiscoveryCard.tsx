@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Player } from "@/lib/types";
-import { formatMatchDate } from "@/lib/utils";
+import { formatMatchDateRelative } from "@/lib/utils";
 
 type PlayerDiscoveryCardProps = {
   player: Player;
@@ -62,8 +62,12 @@ export default function PlayerDiscoveryCard({
               Rating
             </div>
             <div className="mt-0.5 text-base font-bold tabular-nums text-sky-300">
-              {!loadingLifetimeMatches && cardRating != null ? (
-                cardRating.toFixed(2)
+              {!loadingLifetimeMatches ? (
+                cardRating != null ? (
+                  cardRating.toFixed(2)
+                ) : (
+                  <span className="text-slate-500 text-xs font-normal">No Rating</span>
+                )
               ) : (
                 <span className="inline-block h-5 w-12 rounded bg-slate-700/60 animate-pulse" />
               )}
@@ -86,7 +90,7 @@ export default function PlayerDiscoveryCard({
             {hasLatestMatchDate && (
               <>
                 <span className="text-slate-600">·</span>
-                <span>Last {formatMatchDate(effectiveLatestMatchDate)}</span>
+                <span>Last {formatMatchDateRelative(effectiveLatestMatchDate)}</span>
               </>
             )}
           </>

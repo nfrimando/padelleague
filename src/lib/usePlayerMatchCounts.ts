@@ -95,8 +95,9 @@ export function usePlayerMatchCounts(
 
           latestDates[playerId] = row.latest_match_date || null;
 
-          const rating = Number(row.latest_rating);
-          latestRatingValues[playerId] = Number.isFinite(rating) ? rating : null;
+          const rawRating = row.latest_rating;
+          const rating = rawRating !== null && rawRating !== undefined ? Number(rawRating) : null;
+          latestRatingValues[playerId] = rating !== null && Number.isFinite(rating) ? rating : null;
         });
       }
 
