@@ -670,7 +670,7 @@ export async function PATCH(
           ? validation.value.venue
           : matchSnapshot.venue;
 
-      notifyMatchCompleted({
+      await notifyMatchCompleted({
         matchId,
         dateLocal: finalDateLocal,
         timeLocal: finalTimeLocal,
