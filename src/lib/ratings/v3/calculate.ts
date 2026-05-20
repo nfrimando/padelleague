@@ -43,10 +43,21 @@ export type RatingCalculationResult<TPlayerId extends PlayerId = number> = {
   };
 };
 
+const ELO_VAR_1 = 2.67;
+
+export function computeV3ExpectedWinProbability(
+  avgRating1: number,
+  avgRating2: number,
+): [ewp1: number, ewp2: number] {
+  const elo1 = Math.pow(10, avgRating1 / ELO_VAR_1);
+  const elo2 = Math.pow(10, avgRating2 / ELO_VAR_1);
+  const ewp1 = elo1 / (elo1 + elo2);
+  return [ewp1, 1 - ewp1];
+}
+
 export function calculateV3Ratings<TPlayerId extends PlayerId>(
   input: RatingCalculationInput<TPlayerId>,
 ): RatingCalculationResult<TPlayerId> {
-  const ELO_VAR_1 = 2.67;
   const UTR_VAR_1 = 0.15;
   const UTR_VAR_2 = 1.5;
   const UTR_VAR_3 = 0.5;

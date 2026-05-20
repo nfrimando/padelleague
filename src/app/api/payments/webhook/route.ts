@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
+import { notifyPaymentCompleted } from "@/lib/email/notifications/paymentCompleted";
 
 /** POST /api/payments/webhook
  *  Handles PayMongo webhook events.
@@ -126,7 +127,7 @@ export async function POST(request: Request) {
       updated_at: now,
     })
     .eq("id", pmRow.payment_id)
-    .select("signup_id")
+    .select("signup_id, player_id, event_id, amount, method")
     .single();
 
   if (paymentUpdateError || !payment) {
@@ -141,6 +142,20 @@ export async function POST(request: Request) {
     .from("signups_events")
     .update({ status: "accepted" })
     .eq("id", payment.signup_id);
+
+  // Fire notification (non-blocking)
+  const [{ data: player }, { data: eventRecord }] = await Promise.all([
+    serviceClient.from("players").select("name, email").eq("player_id", payment.player_id).maybeSingle(),
+    serviceClient.from("events").select("name").eq("id", payment.event_id).maybeSingle(),
+  ]);
+  await notifyPaymentCompleted({
+    playerName: player?.name ?? null,
+    playerEmail: player?.email ?? null,
+    eventName: eventRecord?.name ?? null,
+    amount: payment.amount,
+    method: payment.method,
+    source: "webhook",
+  }).catch((err) => console.error("[email] notifyPaymentCompleted failed:", err));
 
   return NextResponse.json({ ok: true });
 }

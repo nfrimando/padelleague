@@ -1,0 +1,436 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { X } from "lucide-react";
+import { usePlayers } from "@/lib/usePlayers";
+import { usePlayerSearch } from "@/lib/usePlayerSearch";
+import { usePlayerMatchCounts } from "@/lib/usePlayerMatchCounts";
+import { computeV3ExpectedWinProbability } from "@/lib/ratings/v3/calculate";
+import { Player } from "@/lib/types";
+
+const FORMULA_NAME = "v3";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+type SlotKey = "t1p1" | "t1p2" | "t2p1" | "t2p2";
+type SlotState = { search: string; player: Player | null };
+const EMPTY: SlotState = { search: "", player: null };
+
+export type WinProbabilityCalculatorProps = {
+  lockedPlayer?: Player | null;
+  lockedSlot?: SlotKey;
+  lockedPlayerRating?: number | null;
+};
+
+// ── Search input ─────────────────────────────────────────────────────────────
+function SlotSearch({
+  value,
+  suggestions,
+  onChange,
+  onSelect,
+  onClear,
+}: {
+  value: string;
+  suggestions: Player[];
+  onChange: (v: string) => void;
+  onSelect: (p: Player) => void;
+  onClear: () => void;
+}) {
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const visible = suggestions.slice(0, 6);
+  const showDrop = value.trim().length > 0 && visible.length > 0;
+
+  const commit = (p: Player) => {
+    onSelect(p);
+    onClear();
+    setActiveIdx(-1);
+  };
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-2 bg-[#0d1520] border border-[#687FA3]/20 rounded-xl px-3 py-2.5 h-[52px]">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => {
+            setActiveIdx(-1);
+            onChange(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              if (showDrop) setActiveIdx((i) => (i < visible.length - 1 ? i + 1 : 0));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              if (showDrop) setActiveIdx((i) => (i > 0 ? i - 1 : visible.length - 1));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              if (showDrop && activeIdx >= 0 && visible[activeIdx]) commit(visible[activeIdx]);
+            } else if (e.key === "Escape") {
+              setActiveIdx(-1);
+            }
+          }}
+          placeholder="Search player…"
+          className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-[#687FA3]/50 focus:outline-none min-w-0"
+        />
+        {value.trim().length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 text-[#687FA3]/50 hover:text-slate-300 transition-colors"
+          >
+            <X size={11} />
+          </button>
+        )}
+      </div>
+      {showDrop && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#0d1520] border border-[#687FA3]/25 rounded-xl shadow-2xl overflow-hidden">
+          {visible.map((p, i) => (
+            <button
+              key={p.player_id}
+              type="button"
+              onMouseEnter={() => setActiveIdx(i)}
+              onClick={() => commit(p)}
+              className={`w-full text-left px-3 py-2.5 transition-colors ${
+                i === activeIdx ? "bg-[#1a2540]" : "hover:bg-[#1a2540]/60"
+              }`}
+            >
+              <div className="text-sm font-medium text-slate-100 truncate">{p.name}</div>
+              {p.nickname && (
+                <div className="text-[11px] text-[#687FA3] truncate">{p.nickname}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Selected player chip ──────────────────────────────────────────────────────
+function PlayerChip({
+  player,
+  rating,
+  isYou,
+  isLocked,
+  team,
+  onRemove,
+}: {
+  player: Player;
+  rating: number | null;
+  isYou?: boolean;
+  isLocked?: boolean;
+  team: 1 | 2;
+  onRemove?: () => void;
+}) {
+  const hasImg = !!(player.image_link && player.image_link !== "null");
+  const src = hasImg ? player.image_link! : "/default-avatar.webp";
+  const ringCls = team === 1 ? "ring-sky-500/40" : "ring-amber-500/40";
+
+  return (
+    <div className="flex items-center gap-2.5 bg-[#0d1520] border border-[#687FA3]/20 rounded-xl px-2.5 py-2 h-[52px]">
+      <img
+        src={src}
+        alt={player.name}
+        className={`h-8 w-8 rounded-full object-cover ring-1 shrink-0 ${ringCls}`}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="text-sm font-semibold text-slate-100 truncate leading-tight">
+            {player.nickname ?? player.name}
+          </span>
+          {isYou && (
+            <span className="shrink-0 text-[8px] font-black uppercase tracking-wider text-sky-400 bg-sky-400/10 border border-sky-400/20 px-1 py-px rounded-sm leading-tight">
+              YOU
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] font-mono text-[#687FA3] leading-tight mt-0.5">
+          {rating != null ? rating.toFixed(2) : "—"}
+        </div>
+      </div>
+      {!isLocked && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 text-[#687FA3]/40 hover:text-rose-400 transition-colors p-0.5 rounded"
+        >
+          <X size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function WinProbabilityCalculator({
+  lockedPlayer,
+  lockedSlot = "t1p1",
+  lockedPlayerRating,
+}: WinProbabilityCalculatorProps) {
+  const { players: allPlayers, loading: playersLoading } = usePlayers({
+    orderByName: true,
+    onlyActivePlayers: true,
+  });
+
+  const [slots, setSlots] = useState<Record<SlotKey, SlotState>>({
+    t1p1: { ...EMPTY },
+    t1p2: { ...EMPTY },
+    t2p1: { ...EMPTY },
+    t2p2: { ...EMPTY },
+  });
+
+  // Always reflect the current lockedPlayer without a sync effect
+  const effectiveSlots: Record<SlotKey, SlotState> = useMemo(
+    () => ({
+      ...slots,
+      [lockedSlot]: lockedPlayer ? { search: "", player: lockedPlayer } : slots[lockedSlot],
+    }),
+    [slots, lockedSlot, lockedPlayer],
+  );
+
+  const updateSlot = (key: SlotKey, patch: Partial<SlotState>) =>
+    setSlots((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+
+  const clearSlot = (key: SlotKey) => {
+    if (key === lockedSlot && lockedPlayer) return;
+    setSlots((prev) => ({ ...prev, [key]: { ...EMPTY } }));
+  };
+
+  const selectedIds = useMemo(
+    () =>
+      new Set(
+        Object.values(effectiveSlots)
+          .map((s) => (s.player ? String(s.player.player_id) : ""))
+          .filter(Boolean),
+      ),
+    [effectiveSlots],
+  );
+
+  const makeExcluded = (key: SlotKey): Set<string> => {
+    const own = effectiveSlots[key].player ? String(effectiveSlots[key].player!.player_id) : null;
+    return new Set([...selectedIds].filter((id) => id !== own));
+  };
+
+  // One hook per slot (hooks must be unconditional)
+  const t1p1Sugg = usePlayerSearch(allPlayers, slots.t1p1.search);
+  const t1p2Sugg = usePlayerSearch(allPlayers, slots.t1p2.search);
+  const t2p1Sugg = usePlayerSearch(allPlayers, slots.t2p1.search);
+  const t2p2Sugg = usePlayerSearch(allPlayers, slots.t2p2.search);
+
+  const filterSugg = (sugg: Player[], key: SlotKey) =>
+    sugg.filter((p) => !makeExcluded(key).has(String(p.player_id)));
+
+  const suggMap: Record<SlotKey, Player[]> = {
+    t1p1: filterSugg(t1p1Sugg, "t1p1"),
+    t1p2: filterSugg(t1p2Sugg, "t1p2"),
+    t2p1: filterSugg(t2p1Sugg, "t2p1"),
+    t2p2: filterSugg(t2p2Sugg, "t2p2"),
+  };
+
+  // Fetch ratings for selected players
+  const selectedPlayerIds = useMemo(
+    () =>
+      Object.values(effectiveSlots)
+        .filter((s) => s.player)
+        .map((s) => String(s.player!.player_id)),
+    [effectiveSlots],
+  );
+
+  const { latestRatings, loading: ratingsLoading } = usePlayerMatchCounts(selectedPlayerIds);
+
+  const getRating = (key: SlotKey): number | null => {
+    const p = effectiveSlots[key].player;
+    if (!p) return null;
+    if (key === lockedSlot && lockedPlayerRating != null) return lockedPlayerRating;
+    return latestRatings[String(p.player_id)] ?? null;
+  };
+
+  const r = {
+    t1p1: getRating("t1p1"),
+    t1p2: getRating("t1p2"),
+    t2p1: getRating("t2p1"),
+    t2p2: getRating("t2p2"),
+  };
+
+  const allSelected = !!(
+    effectiveSlots.t1p1.player &&
+    effectiveSlots.t1p2.player &&
+    effectiveSlots.t2p1.player &&
+    effectiveSlots.t2p2.player
+  );
+  const allRatings = r.t1p1 != null && r.t1p2 != null && r.t2p1 != null && r.t2p2 != null;
+  const loadingResult = allSelected && ratingsLoading;
+  const showResult = allSelected && allRatings && !loadingResult;
+
+  const [ewp1, ewp2] = showResult
+    ? computeV3ExpectedWinProbability(
+        (r.t1p1! + r.t1p2!) / 2,
+        (r.t2p1! + r.t2p2!) / 2,
+      )
+    : [0.5, 0.5];
+
+  // ── Slot renderer ────────────────────────────────────────────────────────────
+  const renderSlot = (key: SlotKey, team: 1 | 2) => {
+    const slot = effectiveSlots[key];
+    const isLocked = key === lockedSlot && !!lockedPlayer;
+
+    if (slot.player) {
+      return (
+        <PlayerChip
+          player={slot.player}
+          rating={getRating(key)}
+          isYou={isLocked}
+          isLocked={isLocked}
+          team={team}
+          onRemove={() => clearSlot(key)}
+        />
+      );
+    }
+
+    if (playersLoading) {
+      return (
+        <div className="h-[52px] bg-[#0d1520] rounded-xl animate-pulse border border-[#687FA3]/10" />
+      );
+    }
+
+    return (
+      <SlotSearch
+        value={slot.search}
+        suggestions={suggMap[key]}
+        onChange={(v) => updateSlot(key, { search: v })}
+        onSelect={(p) => updateSlot(key, { player: p, search: "" })}
+        onClear={() => updateSlot(key, { search: "" })}
+      />
+    );
+  };
+
+  return (
+    <section className="bg-[#162032] border border-[#687FA3]/10 sm:rounded-3xl">
+      {/* Header */}
+      <div className="px-6 pt-5 pb-4 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xs font-black uppercase tracking-widest text-[#687FA3]">
+            Win Probability
+          </h2>
+          <p className="mt-0.5 text-[10px] text-slate-600">
+            Who has the edge before a ball is hit?
+          </p>
+        </div>
+        <span className="shrink-0 text-[9px] font-mono text-[#687FA3]/40 bg-[#687FA3]/5 border border-[#687FA3]/10 px-2 py-1 rounded-full">
+          {FORMULA_NAME}
+        </span>
+      </div>
+
+      <div className="px-4 pb-6 space-y-4">
+        {/* Team columns */}
+        <div className="grid grid-cols-[1fr_28px_1fr] items-center gap-2">
+          {/* Team 1 */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 px-0.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-sky-500">
+                Team 1
+              </span>
+            </div>
+            {renderSlot("t1p1", 1)}
+            {renderSlot("t1p2", 1)}
+          </div>
+
+          {/* VS */}
+          <div className="flex flex-col items-center justify-center gap-1 self-stretch pt-5">
+            <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
+            <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">
+              VS
+            </span>
+            <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
+          </div>
+
+          {/* Team 2 */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 px-0.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-amber-500">
+                Team 2
+              </span>
+            </div>
+            {renderSlot("t2p1", 2)}
+            {renderSlot("t2p2", 2)}
+          </div>
+        </div>
+
+        {/* Result */}
+        <div className="space-y-2 pt-1">
+          {/* Probability bar */}
+          <div className="relative h-11 rounded-xl overflow-hidden bg-[#0d1520]">
+            {loadingResult ? (
+              <div className="absolute inset-0 animate-pulse bg-[#1a2540]" />
+            ) : showResult ? (
+              <>
+                {/* Team 1 fill */}
+                <div
+                  className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-sky-700 to-sky-400 transition-all duration-700 ease-out"
+                  style={{ width: `${ewp1 * 100}%` }}
+                />
+                {/* Team 2 fill */}
+                <div
+                  className="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-amber-700 to-amber-400 transition-all duration-700 ease-out"
+                  style={{ width: `${ewp2 * 100}%` }}
+                />
+                {/* Thin divider at meeting point */}
+                <div
+                  className="absolute top-0 bottom-0 w-px bg-[#162032]/60 transition-all duration-700 ease-out"
+                  style={{ left: `${ewp1 * 100}%` }}
+                />
+                {/* Labels */}
+                <div className="absolute inset-0 flex items-center justify-between px-4">
+                  <span className="text-sm font-black tabular-nums text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">
+                    {(ewp1 * 100).toFixed(1)}%
+                  </span>
+                  <span className="text-sm font-black tabular-nums text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">
+                    {(ewp2 * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[11px] text-[#687FA3]/40 font-medium">
+                  {allSelected ? "Fetching ratings…" : "Select all 4 players to calculate"}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Favored label row */}
+          {showResult && (
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-1.5">
+                {ewp1 > ewp2 && (
+                  <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
+                    Favored
+                  </span>
+                )}
+                {ewp1 <= ewp2 && (
+                  <span className="text-[10px] text-sky-500/60 font-semibold tabular-nums">
+                    {(ewp1 * 100).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {ewp2 > ewp1 && (
+                  <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
+                    Favored
+                  </span>
+                )}
+                {ewp2 <= ewp1 && (
+                  <span className="text-[10px] text-amber-500/60 font-semibold tabular-nums">
+                    {(ewp2 * 100).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
