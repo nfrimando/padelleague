@@ -92,7 +92,7 @@ Always include the person's name in the subject line (e.g. `"New Player Claim: $
 
 **Dark mode only** — no conditional `dark:` classes, no `bg-white` or `text-black`. All UI assumes a dark background. Use slate/zinc/neutral grays, muted text, subtle borders.
 
-**Mobile** — content extends edge-to-edge with `px-4`. No horizontal scroll. Sticky/fixed elements must account for safe-area insets (`safe-area-inset-*`) on iOS. Calendar falls back to an agenda list; cards stack vertically.
+**Responsive — all screens** — every UI feature must work on mobile (375px+) and desktop. Always use responsive Tailwind breakpoints (`sm:`, `md:`) instead of fixed multi-column layouts. Multi-column grids must collapse: use `flex flex-col sm:grid` or `grid-cols-1 sm:grid-cols-2` patterns so content stacks on mobile. Content extends edge-to-edge with `px-4`. No horizontal scroll. Sticky/fixed elements must account for safe-area insets (`safe-area-inset-*`) on iOS. Calendar falls back to an agenda list; cards stack vertically.
 
 **No layout jumps** — use loading overlays on mounted containers, not unmounting.
 
