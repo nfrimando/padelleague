@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     );
   }
 
-  notifyNewMemberApplication({ name, nickname, email, contact }).catch((err) =>
+  await notifyNewMemberApplication({ name, nickname, email, contact }).catch((err) =>
     console.error("[email] notifyNewMemberApplication failed:", err),
   );
 
