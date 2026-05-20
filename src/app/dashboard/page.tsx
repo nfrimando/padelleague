@@ -17,6 +17,7 @@ import { usePlayers } from "@/lib/usePlayers";
 import { useDashboardStats } from "@/lib/useDashboardStats";
 import HeroSection from "./HeroSection";
 import ProgressionSection from "./ProgressionSection";
+import SimilarPlayersSection from "./SimilarPlayersSection";
 import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
 import ViewAsSelector from "./ViewAsSelector";
@@ -402,6 +403,7 @@ export default function DashboardPage() {
               <>
                 <LockedSection skeletonRows={4} />
                 <LockedSection skeletonRows={2} />
+                <LockedSection skeletonRows={2} />
                 <LockedSection skeletonRows={3} />
               </>
             ) : (
@@ -414,6 +416,11 @@ export default function DashboardPage() {
                   currentStreak={stats.currentStreak}
                   playerId={String(displayPlayer.player_id)}
                   loading={isLoading}
+                />
+
+                <SimilarPlayersSection
+                  playerId={displayPlayer.player_id}
+                  currentPlayerRating={latestRating}
                 />
 
                 <RivalriesSection
