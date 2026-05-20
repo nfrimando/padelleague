@@ -2,48 +2,7 @@
 
 # Padel League PH
 
-A Next.js web app for a competitive padel league in the Philippines. Built by players for players — members can view matches, stats, ratings, and leaderboards. New members express interest to join; existing members register for events set up by organizers.
-
-## Architecture
-
-This is a **monorepo** using Next.js App Router — there is no separate backend server. The "backend" lives inside the same repo as Next.js API routes under `src/app/api/`. The frontend is React/Next.js client components under `src/app/` and `src/components/`.
-
-```
-src/
-├── app/
-│   ├── api/                  # Backend: Next.js route handlers (server-side only)
-│   │   ├── admin/            # Admin-only endpoints (auth-gated)
-│   │   ├── events/           # Event registration endpoints
-│   │   ├── membership/       # Membership application endpoint
-│   │   ├── payments/         # PayMongo payment flow + webhook
-│   │   ├── players/          # Player profile claim endpoint
-│   │   └── ratings/          # v3 rating calculation endpoint
-│   ├── admin/                # Admin panel page
-│   ├── dashboard/            # Authenticated player dashboard
-│   ├── events/               # Events listing + registration pages
-│   ├── join/                 # New member application page
-│   ├── leaderboard/          # Leaderboard (server-rendered)
-│   ├── matches/              # Match history + calendar page
-│   ├── players/              # Player search + profile pages
-│   └── register/             # Event registration + payment success
-├── components/               # Reusable React components
-│   └── admin/                # Admin-specific tab components
-└── lib/                      # Shared utilities, hooks, and domain logic
-    ├── ratings/v3/           # v3 ELO-inspired rating algorithm
-    └── ...                   # Hooks (useMatches, usePlayers, etc.), types, utils
-```
-
-## Tech Stack
-
-| Layer      | Technology                      |
-| ---------- | ------------------------------- |
-| Framework  | Next.js 16 (App Router)         |
-| Language   | TypeScript                      |
-| Styling    | Tailwind CSS v4                 |
-| Database   | Supabase (PostgreSQL)           |
-| Auth       | Supabase Auth (Google OAuth)    |
-| Deployment | Vercel                          |
-| Testing    | Vitest (unit), Playwright (E2E) |
+A Next.js web app for a competitive padel league in the Philippines. Members can view matches, stats, ratings, and leaderboards. New members express interest to join; existing members register for events set up by organizers.
 
 ## Data Model
 
@@ -57,8 +16,6 @@ Core tables: `players`, `matches`, `match_teams`, `match_sets`, `match_player_ra
 
 ## Rating System
 
-Rating system is calculated using an independent formula intended to be version controlled. Ideally plugged and played.
-
 V3 is an ELO-inspired algorithm in `src/lib/ratings/v3/calculate.ts`:
 
 1. **Expected win probability (EWP)** — from average team ratings using ELO formula
@@ -69,7 +26,7 @@ V3 is an ELO-inspired algorithm in `src/lib/ratings/v3/calculate.ts`:
 
 This rewards dominant wins (6-0 6-0) over squeaky wins (7-6 7-6).
 
-## Routing and Page Patterns
+## Routes
 
 - `/` — public homepage with live stats and recent matches
 - `/players` — player search (random subset shown; user can search/reroll)
@@ -77,14 +34,13 @@ This rewards dominant wins (6-0 6-0) over squeaky wins (7-6 7-6).
 - `/leaderboard` — server-rendered; filtered by event and match type
 - `/matches` — match list + calendar view
 - `/events` — all events grouped by status
-- `/events/register` — event registration (same as `/register`)
 - `/dashboard` — authenticated player dashboard
 - `/join` — new member application or profile claim
 - `/admin` — admin panel (gated by `admin_users` table)
 
-## Component Reuse
+## Reuse First
 
-Reuse these before adding new variants:
+**Components** — use these before adding new variants:
 
 - `MatchCard` — renders a single match with teams, score, and badges
 - `PlayerCard` — player avatar, name, rating badge, optional sparkline
@@ -94,83 +50,60 @@ Reuse these before adding new variants:
 - `SiteHeader` — sticky nav; accepts `rightSlot` for context-specific actions
 - `PlayerSearchBox` — search input with dropdown suggestions
 
-## Shared Hooks and Domain Logic
+**Hooks** — use these before writing new fetch logic:
 
-Prefer existing hooks before writing new fetch logic:
-
-**Players:**
-
+Players:
 - `src/lib/usePlayers.ts` — list of players (supports `onlyActivePlayers`, `orderByName`, custom `select`)
 - `src/lib/usePlayerSearch.ts` — client-side filter by name/nickname
 - `src/lib/usePlayerMatchCounts.ts` — match counts + latest rating via `get_player_summary` RPC
 - `src/lib/usePlayerMatches.ts` — all matches for a player with rating history
 
-**Matches:**
-
+Matches:
 - `src/lib/useMatches.ts` — paginated match list with optional date range
 - `src/lib/matches.ts` — `filterMatchesByEventAndType`, `getEventsFromMatches`, `ALL_MATCH_FILTER`
 - `src/lib/matchAssembly.ts` — `assembleMatchesWithTeamsAndSets`, `buildPreMatchRatingLookup`, `groupByMatchId`
 
-**Events:**
-
+Events:
 - `src/lib/useEventMap.ts` — shared event id→label lookup (cached in memory, avoid duplicate fetches)
 - `src/lib/useMatchEvents.ts` — event options derived from matches (for filter dropdowns)
 
-**Admin:**
-
+Admin:
 - `src/lib/useLoadedMatchDetails.ts` — loads full match details including pre-ratings for admin tools
 - `src/lib/useMatchRatingPreview.ts` — previews rating impact from set scores before completing a match
 - `src/lib/useScheduledMatches.ts` — list of scheduled matches for admin complete/update tabs
 
-## URL State
+## Coding Principles
 
-- Filter state (season/event, match type) is persisted in query params: `?event=X&type=Y`
-- Use `searchParams.toString()` as the single source of truth — avoid mixing `searchParams.get()` reads with effect dependencies
-- Do not set eager default filters that overwrite explicit URL params on initial load
-- When linking to another player on `/players`, preserve existing query params and only replace `playerId`
+**Scope** — keep changes minimal and focused. No unrelated refactors, no speculative abstractions.
 
-## UX Conventions
+**Safety** — always null-safe with Supabase data (`data?.field ?? null`). After edits, verify there are no TypeScript errors.
 
-- Avoid layout jumps when data loads — use loading overlays on mounted containers, not unmounting
-- Hover/focus styles only — no loud badges unless explicitly requested
-- Keep clickable affordances subtle with keyboard-visible focus rings
-- _Important_: In mobile, UI is allowed (and even preferred) to hug edge of screen with appropriate padding.
-- Mobile: calendar falls back to an agenda list; cards stack vertically
+**Admin routes** — always use `getAuthorizedAdminClient` from `src/app/api/admin/_lib/auth.ts` for admin endpoints.
 
-## Dark Mode
+**Email notifications** — always `await` and chain `.catch()`. Never fire-and-forget. Pattern:
+```ts
+await notifyXxx(...).catch((err) => console.error("[email] ...", err));
+```
+Always include the person's name in the subject line (e.g. `"New Player Claim: ${name}"`) to prevent Gmail threading separate notifications.
 
-The app is **dark mode only** — do not add light mode variants or conditional `dark:` classes. All new UI must assume a dark background and use colors consistent with the existing dark palette (slate/zinc/neutral grays, muted text, subtle borders). Never use `bg-white`, `text-black`, or any explicitly light color without a `dark:` override.
+**URL state** — filter state lives in query params (`?event=X&type=Y`). Use `searchParams.toString()` as the single source of truth. Don't set eager defaults that overwrite explicit URL params on load. When linking to another player on `/players`, preserve existing params and only replace `playerId`.
 
-## Mobile Layout
+## UI Principles
 
-- Cards and content sections should extend edge-to-edge on mobile — use `px-4` (or tighter) on the container itself rather than wrapping in a centered column with large margins.
-- Avoid horizontal scroll; let content reflow or truncate instead.
-- Sticky/fixed elements (headers, bottom bars) must account for safe-area insets (`safe-area-inset-*`) on iOS.
+**Dark mode only** — no conditional `dark:` classes, no `bg-white` or `text-black`. All UI assumes a dark background. Use slate/zinc/neutral grays, muted text, subtle borders.
 
-## Coding Standards
+**Mobile** — content extends edge-to-edge with `px-4`. No horizontal scroll. Sticky/fixed elements must account for safe-area insets (`safe-area-inset-*`) on iOS. Calendar falls back to an agenda list; cards stack vertically.
 
-- Follow existing TypeScript and Tailwind style throughout
-- Keep changes minimal and scoped — avoid unrelated refactors
-- Preserve null-safe handling for all Supabase data (`data?.field ?? null`)
-- After edits, verify there are no TypeScript/compile errors
-- Admin API routes use `getAuthorizedAdminClient` from `src/app/api/admin/_lib/auth.ts` — always go through this for admin endpoints
-- **Email notifications:** Always include the claimant or applicant's name in the email `subject` line (e.g. `"New Player Claim: ${name}"`). This prevents Gmail from threading separate notifications into the same conversation.
-- **Email call sites:** Always `await` email notification calls and chain `.catch()` for error logging — never fire-and-forget. Pattern: `await notifyXxx(...).catch((err) => console.error("[email] ...", err));`. Fire-and-forget (no `await`) silently drops errors and can cause missed sends.
+**No layout jumps** — use loading overlays on mounted containers, not unmounting.
 
-## Known Technical Debt (Future Work)
-
-- No shared data cache — all hooks fire independent Supabase queries (React Query / SWR would fix this)
-- Types are manually defined — Supabase type generation (`supabase gen types typescript`) would replace the `as unknown` casts
-- URL state in `players/page.tsx` uses ~80 lines of manual `useEffect` sync — `nuqs` would clean this up
-- `admin/page.tsx` uses prop drilling — a React context would improve this
-- `src/lib/` is flat — a feature-based folder structure (`src/features/`) is planned
+**Subtle affordances** — hover/focus styles only. No loud badges unless explicitly requested. Keyboard-visible focus rings.
 
 ## Commands
 
 ```bash
-npm run dev          # Start local dev server (http://localhost:3000)
-npm run build        # Production build
-npm run lint         # ESLint
+npm run dev      # Start local dev server (http://localhost:3000)
+npm run build    # Production build
+npm run lint     # ESLint
 ```
 
 ## Next.js Note

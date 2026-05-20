@@ -1,13 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { getEventsFromMatches } from "@/lib/matches";
+import { useMemo } from "react";
 import { useEventMap } from "@/lib/useEventMap";
-
-type MatchEventRow = {
-  event_id: number | null;
-};
 
 export type EventOption = {
   id: number;
@@ -15,64 +9,27 @@ export type EventOption = {
 };
 
 export function useMatchEvents(enabled = true) {
-  const [eventIds, setEventIds] = useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { eventMap, loading: eventsLoading } = useEventMap(enabled);
+  const { eventMap, events, loading } = useEventMap(enabled);
 
-  useEffect(() => {
-    if (!enabled) {
-      setEventIds([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadEvents() {
-      setLoading(true);
-      setError(null);
-
-      const { data, error: fetchError } = await supabase
-        .from("matches")
-        .select("event_id")
-        .not("event_id", "is", null)
-        .order("event_id", { ascending: true });
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (fetchError) {
-        setEventIds([]);
-        setError(fetchError.message || "Failed to load filters.");
-      } else {
-        setEventIds(getEventsFromMatches((data || []) as MatchEventRow[]));
-      }
-
-      setLoading(false);
-    }
-
-    void loadEvents();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [enabled]);
-
-  const events: EventOption[] = useMemo(
+  const eventOptions: EventOption[] = useMemo(
     () =>
-      eventIds.map((id) => ({
-        id,
-        label: eventMap[id] ?? `Event ${id}`,
-      })),
-    [eventIds, eventMap],
+      events
+        .map((row) => {
+          const id =
+            typeof row.event_id === "number"
+              ? row.event_id
+              : Number(row.event_id);
+          return Number.isInteger(id) && id > 0
+            ? { id, label: eventMap[id] ?? `Event ${id}` }
+            : null;
+        })
+        .filter((e): e is EventOption => e !== null),
+    [events, eventMap],
   );
 
   return {
-    events,
-    loading: loading || eventsLoading,
-    error,
+    events: eventOptions,
+    loading,
+    error: null as string | null,
   };
 }

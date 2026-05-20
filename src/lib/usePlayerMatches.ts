@@ -19,10 +19,6 @@ type RatingHistoryPoint = {
 
 const RATING_HISTORY_POINTS = 6;
 
-type MatchTeamIdRow = {
-  match_id: number;
-};
-
 type MatchRatingRow = {
   match_id: number;
   player_id: string | number;
@@ -51,13 +47,14 @@ export function usePlayerMatches(playerId: string | null) {
       setLoading(true);
 
       try {
-        const { data: teamsData, error: teamsError } = await supabase
+        // Phase 1: lightweight lookup to find which matches this player was in
+        const { data: playerTeamsData, error: playerTeamsError } = await supabase
           .from("match_teams")
           .select("match_id")
           .or(`player_1_id.eq.${playerId},player_2_id.eq.${playerId}`);
 
-        if (teamsError) {
-          console.error("Error fetching teams:", teamsError);
+        if (playerTeamsError) {
+          console.error("Error fetching teams:", playerTeamsError);
           if (!isCancelled) {
             setMatches([]);
             setLatestRating(null);
@@ -66,8 +63,9 @@ export function usePlayerMatches(playerId: string | null) {
           return;
         }
 
-        const typedTeamsData = (teamsData || []) as MatchTeamIdRow[];
-        if (typedTeamsData.length === 0) {
+        const matchIds = (playerTeamsData || []).map((t) => t.match_id);
+
+        if (matchIds.length === 0) {
           if (!isCancelled) {
             setMatches([]);
             setLatestRating(null);
@@ -76,14 +74,35 @@ export function usePlayerMatches(playerId: string | null) {
           return;
         }
 
-        const matchIds = typedTeamsData.map((team) => team.match_id);
-
-        const { data: matchesData, error: matchesError } = await supabase
-          .from("matches")
-          .select("*")
-          .in("match_id", matchIds)
-          .order("date_local", { ascending: false, nullsFirst: false })
-          .order("time_local", { ascending: false });
+        // Phase 2: fetch all remaining data in parallel
+        const [
+          { data: matchesData, error: matchesError },
+          { data: allTeamsData, error: allTeamsError },
+          { data: matchSetsData, error: matchSetsError },
+          { data: matchRatingsData, error: matchRatingsError },
+        ] = await Promise.all([
+          supabase
+            .from("matches")
+            .select("*")
+            .in("match_id", matchIds)
+            .order("date_local", { ascending: false, nullsFirst: false })
+            .order("time_local", { ascending: false }),
+          supabase
+            .from("match_teams")
+            .select(
+              "*, player_1:player_1_id(player_id,name,nickname,image_link), player_2:player_2_id(player_id,name,nickname,image_link)",
+            )
+            .in("match_id", matchIds),
+          supabase
+            .from("match_sets")
+            .select("*")
+            .in("match_id", matchIds)
+            .order("set_number", { ascending: true }),
+          supabase
+            .from("match_player_ratings")
+            .select("match_id, player_id, rating_pre, rating_post, formula_name")
+            .in("match_id", matchIds),
+        ]);
 
         if (matchesError) {
           console.error("Error fetching matches:", matchesError);
@@ -95,39 +114,12 @@ export function usePlayerMatches(playerId: string | null) {
           return;
         }
 
-        const { data: allTeamsData, error: allTeamsError } = await supabase
-          .from("match_teams")
-          .select(
-            "*, player_1:player_1_id(player_id,name,nickname,image_link), player_2:player_2_id(player_id,name,nickname,image_link)",
-          )
-          .in("match_id", matchIds);
-
         if (allTeamsError) {
           console.error("Error fetching teams:", allTeamsError);
-          if (!isCancelled) {
-            setMatches([]);
-            setLatestRating(null);
-            setRatingHistory([]);
-          }
-          return;
         }
-
-        const { data: matchSetsData, error: matchSetsError } = await supabase
-          .from("match_sets")
-          .select("*")
-          .in("match_id", matchIds)
-          .order("set_number", { ascending: true });
-
         if (matchSetsError) {
           console.error("Error fetching match sets:", matchSetsError);
         }
-
-        const { data: matchRatingsData, error: matchRatingsError } =
-          await supabase
-            .from("match_player_ratings")
-            .select("match_id, player_id, rating_pre, rating_post, formula_name")
-            .in("match_id", matchIds);
-
         if (matchRatingsError) {
           console.error("Error fetching match player ratings:", matchRatingsError);
         }
