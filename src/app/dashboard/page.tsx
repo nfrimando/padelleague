@@ -23,6 +23,7 @@ import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
 import ViewAsSelector from "./ViewAsSelector";
 import DashboardBanner from "./DashboardBanner";
+import PredictionsTab from "./PredictionsTab";
 import type { User } from "@supabase/supabase-js";
 import type { Event, Player } from "@/lib/types";
 
@@ -85,6 +86,7 @@ export default function DashboardPage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [payingSignupId, setPayingSignupId] = useState<string | null>(null);
   const [paymentJustCompleted, setPaymentJustCompleted] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "peers" | "favorites" | "predictions">("overview");
 
   // Admin-only: player to view as (null = view as self)
   const [viewAsPlayer, setViewAsPlayer] = useState<Player | null>(null);
@@ -277,6 +279,11 @@ export default function DashboardPage() {
   const pendingPaymentSignup =
     heroSignups.find((s) => s.status === "pending_payment") ?? null;
 
+  // Reset to overview when payment is pending
+  useEffect(() => {
+    if (pendingPaymentSignup) setActiveTab("overview");
+  }, [pendingPaymentSignup]);
+
   // ── Loading / redirect states ─────────────────────────────────────────────
   if (user === undefined) {
     return (
@@ -377,68 +384,112 @@ export default function DashboardPage() {
                 onPayNow={(id) => setPayingSignupId(id)}
               />
             )}
-            <HeroSection
-              player={displayPlayer}
-              avatarUrl={isViewingAs ? undefined : avatarUrl}
-              currentRating={latestRating}
-              stats={{
-                totalMatches: stats.totalMatches,
-                wins: stats.wins,
-                losses: stats.losses,
-                winRate: stats.winRate,
-              }}
-              signups={heroSignups}
-              openEvents={heroOpenEvents}
-              eventMap={eventMap}
-              matchEventIds={matchEventIds}
-              onRegister={(eventId) => void handleSignup(eventId)}
-              registering={payLoading}
-              loading={isLoading}
-              isViewingAs={isViewingAs}
-              payingSignupId={payingSignupId}
-              onPayingSignupIdChange={setPayingSignupId}
-              onRefreshSignups={() => void load()}
-            />
 
-            {pendingPaymentSignup ? (
+            {/* ── Tab bar ── */}
+            <div className="flex bg-[#0d1520] border border-[#687FA3]/10 sm:rounded-2xl p-1">
+              {(
+                [
+                  { id: "overview", label: "Overview" },
+                  { id: "peers", label: "Peers" },
+                  { id: "favorites", label: "Favorites" },
+                  { id: "predictions", label: "Predictions" },
+                ] as const
+              ).map(({ id, label }) => {
+                const isDisabled =
+                  !!pendingPaymentSignup && id !== "overview" && id !== "predictions";
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => setActiveTab(id)}
+                    className={[
+                      "flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors",
+                      activeTab === id
+                        ? "bg-[#1a2540] text-white"
+                        : isDisabled
+                          ? "text-[#687FA3]/30 cursor-not-allowed"
+                          : "text-[#687FA3] hover:text-white",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Tab: Overview ── */}
+            {activeTab === "overview" && (
               <>
-                <LockedSection skeletonRows={4} />
-                <LockedSection skeletonRows={2} />
-                <LockedSection skeletonRows={2} />
-                <LockedSection skeletonRows={3} />
-              </>
-            ) : (
-              <>
-                <ProgressionSection
-                  chartData={stats.chartData}
+                <HeroSection
+                  player={displayPlayer}
+                  avatarUrl={isViewingAs ? undefined : avatarUrl}
                   currentRating={latestRating}
-                  peakRating={stats.peakRating}
-                  ratingLast5Delta={stats.ratingLast5Delta}
-                  currentStreak={stats.currentStreak}
-                  playerId={String(displayPlayer.player_id)}
+                  stats={{
+                    totalMatches: stats.totalMatches,
+                    wins: stats.wins,
+                    losses: stats.losses,
+                    winRate: stats.winRate,
+                  }}
+                  signups={heroSignups}
+                  openEvents={heroOpenEvents}
+                  eventMap={eventMap}
+                  matchEventIds={matchEventIds}
+                  onRegister={(eventId) => void handleSignup(eventId)}
+                  registering={payLoading}
                   loading={isLoading}
+                  isViewingAs={isViewingAs}
+                  payingSignupId={payingSignupId}
+                  onPayingSignupIdChange={setPayingSignupId}
+                  onRefreshSignups={() => void load()}
                 />
+                {pendingPaymentSignup ? (
+                  <LockedSection skeletonRows={4} />
+                ) : (
+                  <ProgressionSection
+                    chartData={stats.chartData}
+                    currentRating={latestRating}
+                    peakRating={stats.peakRating}
+                    ratingLast5Delta={stats.ratingLast5Delta}
+                    currentStreak={stats.currentStreak}
+                    playerId={String(displayPlayer.player_id)}
+                    loading={isLoading}
+                  />
+                )}
+              </>
+            )}
 
+            {/* ── Tab: Peers ── */}
+            {activeTab === "peers" && (
+              <>
                 <SimilarPlayersSection
                   playerId={displayPlayer.player_id}
                   currentPlayerRating={latestRating}
                 />
-
                 <WinProbabilityCalculator
                   lockedPlayer={displayPlayer}
                   lockedPlayerRating={latestRating}
                 />
+              </>
+            )}
 
+            {/* ── Tab: Favorites ── */}
+            {activeTab === "favorites" && (
+              <>
                 <RivalriesSection
                   opponentStats={stats.opponentStats}
                   loading={isLoading}
                 />
-
                 <PartnersSection
                   partnerStats={stats.partnerStats}
                   loading={isLoading}
                 />
               </>
+            )}
+
+            {/* ── Tab: Predictions ── */}
+            {activeTab === "predictions" && user?.email && (
+              <PredictionsTab email={user.email} />
             )}
           </>
         ) : null}

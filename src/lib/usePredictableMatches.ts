@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { computeV3ExpectedWinProbability } from "@/lib/ratings/v3/calculate";
 
+export const PREDICT_DAYS_BACK = 3;
 export const PREDICT_DAYS_AHEAD = 2;
 
 export type PredictablePlayer = {
@@ -20,6 +21,7 @@ export type PredictableMatch = {
   time_local: string | null;
   venue: string | null;
   type: string | null;
+  status: string;
   team1Player1: PredictablePlayer;
   team1Player2: PredictablePlayer;
   team2Player1: PredictablePlayer;
@@ -46,17 +48,19 @@ export function usePredictableMatches() {
       setError(null);
 
       const today = new Date();
-      const cutoff = new Date(today);
-      cutoff.setDate(cutoff.getDate() + PREDICT_DAYS_AHEAD);
-      const cutoffStr = cutoff.toISOString().slice(0, 10);
-      const todayStr = today.toISOString().slice(0, 10);
+      const past = new Date(today);
+      past.setDate(past.getDate() - PREDICT_DAYS_BACK);
+      const future = new Date(today);
+      future.setDate(future.getDate() + PREDICT_DAYS_AHEAD);
+      const pastStr = past.toISOString().slice(0, 10);
+      const futureStr = future.toISOString().slice(0, 10);
 
       const { data: matchRows, error: matchErr } = await supabase
         .from("matches")
-        .select("match_id,date_local,time_local,venue,type")
-        .eq("status", "scheduled")
-        .gte("date_local", todayStr)
-        .lte("date_local", cutoffStr)
+        .select("match_id,date_local,time_local,venue,type,status")
+        .in("status", ["scheduled", "completed"])
+        .gte("date_local", pastStr)
+        .lte("date_local", futureStr)
         .order("date_local", { ascending: true })
         .order("time_local", { ascending: true });
 
@@ -73,6 +77,7 @@ export function usePredictableMatches() {
         time_local: string | null;
         venue: string | null;
         type: string | null;
+        status: string;
       }>;
 
       if (baseRows.length === 0) {
@@ -204,6 +209,7 @@ export function usePredictableMatches() {
           time_local: r.time_local,
           venue: r.venue,
           type: r.type,
+          status: r.status,
           team1Player1: t1p1,
           team1Player2: t1p2,
           team2Player1: t2p1,
@@ -213,7 +219,16 @@ export function usePredictableMatches() {
         });
       }
 
-      setMatches(enriched);
+      const key = (m: PredictableMatch) =>
+        `${m.date_local ?? ""}${m.time_local ?? ""}`;
+      const scheduled = enriched
+        .filter((m) => m.status === "scheduled")
+        .sort((a, b) => key(a).localeCompare(key(b)));
+      const completed = enriched
+        .filter((m) => m.status === "completed")
+        .sort((a, b) => key(b).localeCompare(key(a)));
+
+      setMatches([...scheduled, ...completed]);
       setLoading(false);
     }
 
