@@ -136,6 +136,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   <img
                     src={avatarUrl}
                     alt="Profile"
+                    referrerPolicy="no-referrer"
                     className="h-5 w-5 rounded-full border border-white/20 object-cover"
                   />
                 ) : (
@@ -251,6 +252,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                       <img
                         src={avatarUrl}
                         alt="Profile"
+                        referrerPolicy="no-referrer"
                         className="h-4 w-4 rounded-full border border-white/20 object-cover"
                       />
                     ) : null}
