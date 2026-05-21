@@ -113,6 +113,17 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
           <a href="/leaderboard" className={desktopLinkClass("/leaderboard")}>
             Leaderboard
           </a>
+          <a
+            href="/predict"
+            className={`hover:text-[#00C8DC] transition-colors inline-flex items-center gap-1 ${
+              currentPath === "/predict"
+                ? "text-white border-b-2 border-[#00C8DC] pb-1"
+                : "text-amber-400/80"
+            }`}
+          >
+            Predict
+            <span className="text-[8px] font-black tracking-widest text-amber-400/60">β</span>
+          </a>
         </div>
 
         <div className="flex items-center gap-4">
@@ -189,6 +200,13 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   {label}
                 </a>
               ))}
+              <a
+                href="/predict"
+                className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
+              >
+                Predict
+                <span className="text-[7px] font-black text-amber-400/60">β</span>
+              </a>
               {rightSlot}
             </div>
           ) : (
@@ -212,6 +230,13 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   {label}
                 </a>
               ))}
+              <a
+                href="/predict"
+                className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
+              >
+                Predict
+                <span className="text-[7px] font-black text-amber-400/60">β</span>
+              </a>
               {loading ? (
                 <div className="h-6 w-10 rounded-full bg-[#22304a] animate-pulse" />
               ) : user ? (
