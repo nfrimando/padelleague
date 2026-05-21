@@ -61,14 +61,14 @@ function PlayerRow({
   );
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 function formatDate(dateLocal: string | null, timeLocal: string | null): string {
   if (!dateLocal) return "";
-  const d = new Date(dateLocal + "T00:00:00");
-  const datePart = d.toLocaleDateString("en-PH", {
-    month: "short",
-    day: "numeric",
-    weekday: "short",
-  });
+  const [year, month, day] = dateLocal.split("-").map(Number);
+  const d = new Date(year, month - 1, day);
+  const datePart = `${WEEKDAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
   if (!timeLocal) return datePart;
   const [h, m] = timeLocal.split(":");
   const hour = Number(h);
