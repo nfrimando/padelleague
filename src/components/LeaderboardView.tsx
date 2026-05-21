@@ -216,7 +216,7 @@ export default function LeaderboardView({
 
         {/* Table */}
         <div className="overflow-x-auto rounded-xl border border-[#22304a] bg-[#0E1523]">
-          <table className="w-full min-w-[520px]">
+          <table className="w-full sm:min-w-[520px]">
             <thead>
               <tr className="border-b border-[#22304a]">
                 <th className="px-3 py-3 text-center text-[10px] font-bold uppercase tracking-[0.15em] text-[#687FA3] w-10">

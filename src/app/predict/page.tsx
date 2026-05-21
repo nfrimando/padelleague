@@ -9,9 +9,16 @@ import {
 import { usePredictions } from "@/lib/usePredictions";
 import { usePredictionCounts } from "@/lib/usePredictionCounts";
 import type { PredictableMatch } from "@/lib/usePredictableMatches";
+import dynamic from "next/dynamic";
 import { PredictMatchCard } from "./PredictMatchCard";
 import { ConfirmPredictionModal } from "./ConfirmPredictionModal";
 import EmailAuthForm from "@/components/EmailAuthForm";
+
+const PredictorLeaderboard = dynamic(
+  () =>
+    import("./PredictorLeaderboard").then((m) => m.PredictorLeaderboard),
+  { ssr: false },
+);
 import SiteHeader from "@/components/SiteHeader";
 import type { User } from "@supabase/supabase-js";
 
@@ -83,6 +90,9 @@ export default function PredictPage() {
     undefined,
   );
   const [pendingPick, setPendingPick] = useState<PendingPick | null>(null);
+  const [activeTab, setActiveTab] = useState<"predict" | "leaderboard">(
+    "predict",
+  );
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -220,59 +230,100 @@ export default function PredictPage() {
             </div>
           </div>
 
-          {/* Auth gate */}
-          {user === null && <SignInGate />}
+          {/* Mobile tab bar */}
+          <div className="flex lg:hidden bg-[#162032] border border-[#687FA3]/10 rounded-xl p-1 gap-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab("predict")}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                activeTab === "predict"
+                  ? "bg-[#1a2840] text-slate-200"
+                  : "text-[#687FA3] hover:text-slate-300"
+              }`}
+            >
+              Predict
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("leaderboard")}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                activeTab === "leaderboard"
+                  ? "bg-[#1a2840] text-slate-200"
+                  : "text-[#687FA3] hover:text-slate-300"
+              }`}
+            >
+              Leaderboard
+            </button>
+          </div>
 
-          {/* Loading */}
-          {isLoading && user !== null && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-72 bg-[#162032] border border-[#687FA3]/10 rounded-2xl animate-pulse"
-                />
-              ))}
+          {/* Body: predict panel + leaderboard sidebar */}
+          <div className="flex gap-6 items-start">
+            {/* Predict panel */}
+            <div
+              className={`flex-1 space-y-6 min-w-0 ${activeTab === "leaderboard" ? "hidden lg:block" : ""}`}
+            >
+              {/* Auth gate */}
+              {user === null && <SignInGate />}
+
+              {/* Loading */}
+              {isLoading && user !== null && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-72 bg-[#162032] border border-[#687FA3]/10 rounded-2xl animate-pulse"
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Error */}
+              {!isLoading && matchesError && (
+                <div className="bg-[#162032] border border-rose-500/20 rounded-2xl px-5 py-4">
+                  <p className="text-sm text-rose-400">{matchesError}</p>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!isLoading &&
+                !matchesError &&
+                matches.length === 0 &&
+                user !== null && (
+                  <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl px-6 py-10 text-center">
+                    <p className="text-sm font-semibold text-slate-300 mb-1">
+                      No upcoming matches
+                    </p>
+                    <p className="text-xs text-[#687FA3]">
+                      There are no fully-scheduled matches in the next{" "}
+                      {PREDICT_DAYS_AHEAD} days.
+                    </p>
+                  </div>
+                )}
+
+              {/* Match cards */}
+              {!isLoading && !matchesError && user !== null && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {matches.map((match) => (
+                    <PredictMatchCard
+                      key={match.match_id}
+                      match={match}
+                      existingPick={picks.get(match.match_id) ?? null}
+                      crowdCounts={crowdCounts.get(match.match_id) ?? null}
+                      canPredict={hasPlayerProfile === true}
+                      onPickRequest={(team) => handlePickRequest(match, team)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Error */}
-          {!isLoading && matchesError && (
-            <div className="bg-[#162032] border border-rose-500/20 rounded-2xl px-5 py-4">
-              <p className="text-sm text-rose-400">{matchesError}</p>
+            {/* Leaderboard sidebar */}
+            <div
+              className={`w-full lg:w-72 shrink-0 ${activeTab === "predict" ? "hidden lg:block" : ""}`}
+            >
+              <PredictorLeaderboard />
             </div>
-          )}
-
-          {/* Empty state */}
-          {!isLoading &&
-            !matchesError &&
-            matches.length === 0 &&
-            user !== null && (
-              <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl px-6 py-10 text-center">
-                <p className="text-sm font-semibold text-slate-300 mb-1">
-                  No upcoming matches
-                </p>
-                <p className="text-xs text-[#687FA3]">
-                  There are no fully-scheduled matches in the next{" "}
-                  {PREDICT_DAYS_AHEAD} days.
-                </p>
-              </div>
-            )}
-
-          {/* Match cards — responsive grid */}
-          {!isLoading && !matchesError && user !== null && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {matches.map((match) => (
-                <PredictMatchCard
-                  key={match.match_id}
-                  match={match}
-                  existingPick={picks.get(match.match_id) ?? null}
-                  crowdCounts={crowdCounts.get(match.match_id) ?? null}
-                  canPredict={hasPlayerProfile === true}
-                  onPickRequest={(team) => handlePickRequest(match, team)}
-                />
-              ))}
-            </div>
-          )}
+          </div>
         </div>
       </main>
 
