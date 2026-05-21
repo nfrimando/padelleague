@@ -39,7 +39,7 @@ export function ConfirmPredictionModal({ match, team, onConfirm, onCancel }: Pro
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className={`absolute inset-0 bg-black/60 backdrop-blur-sm ${!submitting ? "cursor-pointer" : ""}`}
         onClick={!submitting ? onCancel : undefined}
       />
       <div className="relative z-10 w-full max-w-sm bg-[#0E1523] border border-[#687FA3]/20 rounded-2xl shadow-2xl p-6">
