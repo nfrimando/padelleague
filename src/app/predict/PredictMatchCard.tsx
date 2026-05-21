@@ -400,7 +400,25 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
               Your pick: Team {pickedTeam} ✓
             </span>
           </div>
-        ) : match.status !== "scheduled" ? null : !canPredict ? (
+        ) : match.status !== "scheduled" ? (
+          match.winningTeam !== null ? (
+            <div
+              className={`rounded-xl px-4 py-2.5 flex items-center gap-2 ${
+                match.winningTeam === 1
+                  ? "bg-sky-500/10 border border-sky-500/20"
+                  : "bg-amber-500/10 border border-amber-500/20"
+              }`}
+            >
+              <span
+                className={`text-[10px] font-black uppercase tracking-widest ${
+                  match.winningTeam === 1 ? "text-sky-400" : "text-amber-400"
+                }`}
+              >
+                Team {match.winningTeam} won
+              </span>
+            </div>
+          ) : null
+        ) : !canPredict ? (
           <div className="flex flex-col items-center gap-2 py-1 text-center">
             <p className="text-[11px] text-[#687FA3]">
               Predictions are for league players only.
