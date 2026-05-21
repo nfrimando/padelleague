@@ -392,9 +392,10 @@ export default function DashboardPage() {
                   { id: "overview", label: "Overview" },
                   { id: "peers", label: "Peers" },
                   { id: "favorites", label: "Favorites" },
-                  { id: "predictions", label: "Predictions" },
+                  { id: "predictions", label: "Predictions", beta: true },
                 ] as const
-              ).map(({ id, label }) => {
+              ).map(({ id, label, ...rest }) => {
+                const isBeta = "beta" in rest && rest.beta === true;
                 const isDisabled =
                   !!pendingPaymentSignup && id !== "overview" && id !== "predictions";
                 return (
@@ -404,7 +405,7 @@ export default function DashboardPage() {
                     disabled={isDisabled}
                     onClick={() => setActiveTab(id)}
                     className={[
-                      "flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors",
+                      "flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors inline-flex items-center justify-center gap-1",
                       activeTab === id
                         ? "bg-[#1a2540] text-white"
                         : isDisabled
@@ -413,6 +414,9 @@ export default function DashboardPage() {
                     ].join(" ")}
                   >
                     {label}
+                    {isBeta && (
+                      <span className="text-[7px] font-black text-amber-400/60">β</span>
+                    )}
                   </button>
                 );
               })}

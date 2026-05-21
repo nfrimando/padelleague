@@ -183,6 +183,20 @@ export default function PredictPage() {
             </div>
           </div>
 
+          {/* Disclaimer */}
+          <div className="bg-amber-400/5 border border-amber-400/20 rounded-2xl px-5 py-4 flex gap-3">
+            <span className="text-amber-400 text-base shrink-0 mt-0.5">⚠</span>
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-black uppercase tracking-widest text-amber-400">
+                For fun only — no real money involved
+              </p>
+              <p className="text-xs text-[#687FA3] leading-relaxed">
+                This is a purely recreational predictions game. Points are virtual and have no
+                monetary value. No wagering, no payouts, no real stakes of any kind.
+              </p>
+            </div>
+          </div>
+
           {/* Auth gate */}
           {user === null && <SignInGate />}
 
