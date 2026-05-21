@@ -184,12 +184,29 @@ export function usePredictableMatches() {
       // Fetch sets for completed matches to determine the winner
       const completedIds = fullMatches.filter((r) => r.status === "completed").map((r) => r.match_id);
       const winnerMap = new Map<number, 1 | 2 | null>();
+      // key: `${matchId}_${playerId}` — pre-match rating for completed matches
+      const preRatingMap = new Map<string, number>();
       if (completedIds.length > 0) {
-        const { data: setRows } = await supabase
-          .from("match_sets")
-          .select("match_id,team_1_games,team_2_games")
-          .in("match_id", completedIds);
+        const [{ data: setRows }, { data: preRatingRows }] = await Promise.all([
+          supabase
+            .from("match_sets")
+            .select("match_id,team_1_games,team_2_games")
+            .in("match_id", completedIds),
+          supabase
+            .from("match_player_ratings")
+            .select("match_id,player_id,rating_pre,formula_name")
+            .in("match_id", completedIds),
+        ]);
         if (cancelled) return;
+        // Build pre-rating map, preferring v3 > v2 > other (process ascending priority so higher wins)
+        const priorityOf = (f: string | null) => (f === "v3" ? 2 : f === "v2" ? 1 : 0);
+        const sorted = [...(preRatingRows ?? [])].sort((a, b) => priorityOf(a.formula_name) - priorityOf(b.formula_name));
+        for (const row of sorted) {
+          const rating = Number(row.rating_pre);
+          if (Number.isFinite(rating)) {
+            preRatingMap.set(`${row.match_id}_${row.player_id}`, rating);
+          }
+        }
         {
           const setsByMatch = new Map<number, Array<{ team_1_games: number; team_2_games: number }>>();
           for (const s of setRows ?? []) {
@@ -212,11 +229,24 @@ export function usePredictableMatches() {
       const enriched: PredictableMatch[] = [];
       for (const r of fullMatches) {
         const t = teamMap.get(r.match_id)!;
-        const t1p1 = playerMap.get(t.t1p1!);
-        const t1p2 = playerMap.get(t.t1p2!);
-        const t2p1 = playerMap.get(t.t2p1!);
-        const t2p2 = playerMap.get(t.t2p2!);
-        if (!t1p1 || !t1p2 || !t2p1 || !t2p2) continue;
+        const isCompleted = r.status === "completed";
+
+        const withPreRating = (playerId: number, base: PredictablePlayer): PredictablePlayer => {
+          if (!isCompleted) return base;
+          const pre = preRatingMap.get(`${r.match_id}_${playerId}`);
+          return pre !== undefined ? { ...base, latest_rating: pre } : base;
+        };
+
+        const t1p1Base = playerMap.get(t.t1p1!);
+        const t1p2Base = playerMap.get(t.t1p2!);
+        const t2p1Base = playerMap.get(t.t2p1!);
+        const t2p2Base = playerMap.get(t.t2p2!);
+        if (!t1p1Base || !t1p2Base || !t2p1Base || !t2p2Base) continue;
+
+        const t1p1 = withPreRating(t.t1p1!, t1p1Base);
+        const t1p2 = withPreRating(t.t1p2!, t1p2Base);
+        const t2p1 = withPreRating(t.t2p1!, t2p1Base);
+        const t2p2 = withPreRating(t.t2p2!, t2p2Base);
 
         const r1 = t1p1.latest_rating;
         const r2 = t1p2.latest_rating;
