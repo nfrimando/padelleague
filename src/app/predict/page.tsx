@@ -12,6 +12,7 @@ import type { PredictableMatch } from "@/lib/usePredictableMatches";
 import { PredictMatchCard } from "./PredictMatchCard";
 import { ConfirmPredictionModal } from "./ConfirmPredictionModal";
 import EmailAuthForm from "@/components/EmailAuthForm";
+import SiteHeader from "@/components/SiteHeader";
 import type { User } from "@supabase/supabase-js";
 
 type PendingPick = {
@@ -190,40 +191,18 @@ export default function PredictPage() {
 
   return (
     <>
+      <SiteHeader />
       <main className="min-h-screen bg-[#0E1523]">
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
           {/* Page header */}
-          <div className="flex items-start gap-4">
-            <a
-              href="/"
-              className="shrink-0 mt-0.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60 hover:text-[#687FA3] transition-colors"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 12 12"
-                fill="none"
-                className="shrink-0"
-              >
-                <path
-                  d="M7.5 2L3.5 6L7.5 10"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Home
-            </a>
-            <div>
-              <h1 className="text-lg font-black uppercase tracking-widest text-slate-200">
-                Predict
-              </h1>
-              <p className="mt-1 text-xs text-[#687FA3]">
-                Pick the winner for matches in the next {PREDICT_DAYS_AHEAD}{" "}
-                days. Predictions are final once submitted.
-              </p>
-            </div>
+          <div>
+            <h1 className="text-lg font-black uppercase tracking-widest text-slate-200">
+              Predict
+            </h1>
+            <p className="mt-1 text-xs text-[#687FA3]">
+              Pick the winner for matches in the next {PREDICT_DAYS_AHEAD}{" "}
+              days. Predictions are final once submitted.
+            </p>
           </div>
 
           {/* Disclaimer */}
