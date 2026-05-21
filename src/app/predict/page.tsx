@@ -90,6 +90,8 @@ export default function PredictPage() {
     undefined,
   );
   const [pendingPick, setPendingPick] = useState<PendingPick | null>(null);
+  const [savingMatchIds, setSavingMatchIds] = useState<Set<number>>(new Set());
+  const [pickErrors, setPickErrors] = useState<Map<number, string>>(new Map());
   const [activeTab, setActiveTab] = useState<"predict" | "leaderboard">(
     "predict",
   );
@@ -149,54 +151,89 @@ export default function PredictPage() {
 
   const handlePickRequest = (match: PredictableMatch, team: 1 | 2) => {
     if (!user) return;
+    setPickErrors((prev) => {
+      if (!prev.has(match.match_id)) return prev;
+      const next = new Map(prev);
+      next.delete(match.match_id);
+      return next;
+    });
     setPendingPick({ match, team });
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     if (!pendingPick || !user) return;
-
     const { match, team } = pendingPick;
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    if (!accessToken)
-      throw new Error("Session expired. Please refresh and try again.");
+    const pickProbability =
+      team === 1 ? match.team1WinProbability : match.team2WinProbability;
 
-    const res = await fetch("/api/predictions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        matchId: match.match_id,
-        type: "winning_team",
-        prediction: team,
-        pickProbability:
-          team === 1 ? match.team1WinProbability : match.team2WinProbability,
-      }),
-    });
-
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({}));
-      throw new Error(
-        (payload as { error?: string }).error ?? "Failed to submit prediction.",
-      );
-    }
-
-    const { id } = await res.json();
-
+    // Optimistic update — close modal immediately
     setPicks((prev) => {
       const next = new Map(prev);
-      next.set(match.match_id, {
-        id,
-        prediction: team,
-        pickProbability:
-          team === 1 ? match.team1WinProbability : match.team2WinProbability,
-      });
+      next.set(match.match_id, { id: "", prediction: team, pickProbability });
       return next;
     });
-
+    setSavingMatchIds((prev) => new Set([...prev, match.match_id]));
     setPendingPick(null);
+
+    // Background handshake
+    void (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken)
+          throw new Error("Session expired. Please refresh and try again.");
+
+        const res = await fetch("/api/predictions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            matchId: match.match_id,
+            type: "winning_team",
+            prediction: team,
+            pickProbability,
+          }),
+        });
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(
+            (payload as { error?: string }).error ??
+              "Failed to submit prediction.",
+          );
+        }
+
+        const { id } = (await res.json()) as { id: string };
+        setPicks((prev) => {
+          const next = new Map(prev);
+          next.set(match.match_id, { id, prediction: team, pickProbability });
+          return next;
+        });
+      } catch (err) {
+        // Rollback optimistic pick and surface error on the card
+        setPicks((prev) => {
+          const next = new Map(prev);
+          next.delete(match.match_id);
+          return next;
+        });
+        setPickErrors((prev) => {
+          const next = new Map(prev);
+          next.set(
+            match.match_id,
+            err instanceof Error ? err.message : "Failed to save pick. Try again.",
+          );
+          return next;
+        });
+      } finally {
+        setSavingMatchIds((prev) => {
+          const next = new Set(prev);
+          next.delete(match.match_id);
+          return next;
+        });
+      }
+    })();
   };
 
   return (
@@ -268,7 +305,7 @@ export default function PredictPage() {
               {/* Loading */}
               {isLoading && user !== null && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[1, 2, 3].map((i) => (
+                  {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
                       className="h-72 bg-[#162032] border border-[#687FA3]/10 rounded-2xl animate-pulse"
@@ -311,6 +348,8 @@ export default function PredictPage() {
                       crowdCounts={crowdCounts.get(match.match_id) ?? null}
                       canPredict={hasPlayerProfile === true}
                       onPickRequest={(team) => handlePickRequest(match, team)}
+                      isSaving={savingMatchIds.has(match.match_id)}
+                      pickError={pickErrors.get(match.match_id) ?? null}
                     />
                   ))}
                 </div>

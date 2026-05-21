@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Info } from "lucide-react";
+import { Info, Loader2 } from "lucide-react";
 import type { PredictableMatch } from "@/lib/usePredictableMatches";
 import type { UserPick } from "@/lib/usePredictions";
 import type { MatchPredictionCounts } from "@/lib/usePredictionCounts";
@@ -18,6 +18,8 @@ type Props = {
   crowdCounts: MatchPredictionCounts | null;
   canPredict: boolean;
   onPickRequest: (team: 1 | 2) => void;
+  isSaving?: boolean;
+  pickError?: string | null;
   result?: PredictionResult | null;
 };
 
@@ -151,7 +153,7 @@ function CrowdBar({
   );
 }
 
-export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict, onPickRequest, result }: Props) {
+export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict, onPickRequest, isSaving = false, pickError = null, result }: Props) {
   const { team1WinProbability, team2WinProbability } = match;
   const ewp1Pct = (team1WinProbability * 100).toFixed(1);
   const ewp2Pct = (team2WinProbability * 100).toFixed(1);
@@ -403,18 +405,25 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
           <div className="space-y-2.5">
             <div className="flex items-center justify-center">
               <span
-                className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${
                   pickedTeam === 1
                     ? "text-sky-400 bg-sky-400/10 border-sky-400/30"
                     : "text-amber-400 bg-amber-400/10 border-amber-400/30"
                 }`}
               >
-                Your pick: Team {pickedTeam} ✓
+                Your pick: Team {pickedTeam}
+                {isSaving ? (
+                  <Loader2 size={9} className="animate-spin" />
+                ) : (
+                  " ✓"
+                )}
               </span>
             </div>
-            <p className="text-center text-[10px] text-[#687FA3]/50 italic">
-              Crowd sentiment will be displayed post match
-            </p>
+            {!isSaving && (
+              <p className="text-center text-[10px] text-[#687FA3]/50 italic">
+                Crowd sentiment will be displayed post match
+              </p>
+            )}
           </div>
         ) : pickedTeam !== null ? (
           <div className="flex items-center justify-center gap-2 py-2">
@@ -459,6 +468,10 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
             </a>
           </div>
         ) : (
+          <div className="space-y-2">
+            {pickError && (
+              <p className="text-[10px] text-rose-400 text-center">{pickError}</p>
+            )}
           <div className="flex gap-2">
             <button
               type="button"
@@ -474,6 +487,7 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
             >
               Pick Team 2
             </button>
+          </div>
           </div>
         )}
       </div>
