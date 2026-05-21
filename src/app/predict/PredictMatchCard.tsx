@@ -397,8 +397,25 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
         )}
 
         {/* Crowd prediction (after picking) or pick buttons or no-profile CTA */}
-        {pickedTeam !== null && crowdCounts !== null ? (
+        {pickedTeam !== null && crowdCounts !== null && match.status !== "scheduled" ? (
           <CrowdBar pickedTeam={pickedTeam} crowdCounts={crowdCounts} />
+        ) : pickedTeam !== null && match.status === "scheduled" ? (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-center">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                  pickedTeam === 1
+                    ? "text-sky-400 bg-sky-400/10 border-sky-400/30"
+                    : "text-amber-400 bg-amber-400/10 border-amber-400/30"
+                }`}
+              >
+                Your pick: Team {pickedTeam} ✓
+              </span>
+            </div>
+            <p className="text-center text-[10px] text-[#687FA3]/50 italic">
+              Crowd sentiment will be displayed post match
+            </p>
+          </div>
         ) : pickedTeam !== null ? (
           <div className="flex items-center justify-center gap-2 py-2">
             <span
