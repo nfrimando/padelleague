@@ -10,6 +10,7 @@ import {
 import { calculateRatings } from "@/lib/ratingCalculator";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
+import { resolveMatchPredictions } from "@/lib/predictions/resolveMatchPredictions";
 
 type MatchStatus = "scheduled" | "completed" | "forfeit" | "cancelled";
 
@@ -687,6 +688,9 @@ export async function PATCH(
         winnerTeam: calculation.winnerTeam as 1 | 2,
       }).catch((err) => console.error("[email] notifyMatchCompleted failed:", err));
     }
+
+    await resolveMatchPredictions(supabase, matchId, { force: false })
+      .catch((err) => console.error("[predictions] auto-resolve failed:", err));
 
     return NextResponse.json(
       {
