@@ -84,7 +84,7 @@ export function useUserPredictionHistory(email: string | null) {
 
       if (predictions.length === 0) {
         setEntries([]);
-        setStats({ totalPredictions: 0, totalRewards: 0 });
+        setStats({ totalPredictions: 0, totalRewards: 0, predictionsWithResults: 0, correctPredictions: 0 });
         setLoading(false);
         return;
       }
