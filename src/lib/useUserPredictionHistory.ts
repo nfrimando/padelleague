@@ -18,6 +18,8 @@ export type PredictionHistoryEntry = {
 export type PredictionHistoryStats = {
   totalPredictions: number;
   totalRewards: number;
+  predictionsWithResults: number;
+  correctPredictions: number;
 };
 
 type PlayerSummaryRow = {
@@ -37,13 +39,15 @@ export function useUserPredictionHistory(email: string | null) {
   const [stats, setStats] = useState<PredictionHistoryStats>({
     totalPredictions: 0,
     totalRewards: 0,
+    predictionsWithResults: 0,
+    correctPredictions: 0,
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!email) {
       setEntries([]);
-      setStats({ totalPredictions: 0, totalRewards: 0 });
+      setStats({ totalPredictions: 0, totalRewards: 0, predictionsWithResults: 0, correctPredictions: 0 });
       return;
     }
 
@@ -141,7 +145,7 @@ export function useUserPredictionHistory(email: string | null) {
 
       if (allPlayerIds.length === 0) {
         setEntries([]);
-        setStats({ totalPredictions: predictions.length, totalRewards: 0 });
+        setStats({ totalPredictions: predictions.length, totalRewards: 0, predictionsWithResults: 0, correctPredictions: 0 });
         setLoading(false);
         return;
       }
@@ -180,6 +184,8 @@ export function useUserPredictionHistory(email: string | null) {
       // Assemble entries — use stored pick_probability for historical win prob bar
       const assembled: PredictionHistoryEntry[] = [];
       let totalRewards = 0;
+      let predictionsWithResults = 0;
+      let correctPredictions = 0;
 
       for (const pred of predictions) {
         const matchInfo = matchInfoMap.get(pred.match_id);
@@ -197,7 +203,11 @@ export function useUserPredictionHistory(email: string | null) {
         const team2WinProbability = pred.prediction === 2 ? p : 1 - p;
 
         const result = pred.prediction_results?.[0] ?? null;
-        if (result) totalRewards += result.points_awarded;
+        if (result) {
+          totalRewards += result.points_awarded;
+          predictionsWithResults++;
+          if (result.was_correct) correctPredictions++;
+        }
 
         assembled.push({
           prediction_id: pred.id,
@@ -235,7 +245,7 @@ export function useUserPredictionHistory(email: string | null) {
         .sort((a, b) => matchKey(b).localeCompare(matchKey(a)));
 
       setEntries([...scheduledEntries, ...completedEntries]);
-      setStats({ totalPredictions: predictions.length, totalRewards });
+      setStats({ totalPredictions: predictions.length, totalRewards, predictionsWithResults, correctPredictions });
       setLoading(false);
     })();
 

@@ -386,40 +386,44 @@ export default function DashboardPage() {
             )}
 
             {/* ── Tab bar ── */}
-            <div className="flex bg-[#0d1520] border border-[#687FA3]/10 sm:rounded-2xl p-1">
-              {(
-                [
-                  { id: "overview", label: "Overview" },
-                  { id: "peers", label: "Peers" },
-                  { id: "favorites", label: "Favorites" },
-                  { id: "predictions", label: "Predictions", beta: true },
-                ] as const
-              ).map(({ id, label, ...rest }) => {
-                const isBeta = "beta" in rest && rest.beta === true;
-                const isDisabled =
-                  !!pendingPaymentSignup && id !== "overview" && id !== "predictions";
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    disabled={isDisabled}
-                    onClick={() => setActiveTab(id)}
-                    className={[
-                      "flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors inline-flex items-center justify-center gap-1",
-                      activeTab === id
-                        ? "bg-[#1a2540] text-white"
-                        : isDisabled
-                          ? "text-[#687FA3]/30 cursor-not-allowed"
-                          : "text-[#687FA3] hover:text-white",
-                    ].join(" ")}
-                  >
-                    {label}
-                    {isBeta && (
-                      <span className="text-[7px] font-black text-amber-400/60">β</span>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="sticky top-[60px] z-40 bg-[#0E1523] pt-2">
+              <div className="overflow-x-auto bg-[#0d1520] border border-[#687FA3]/10 sm:rounded-2xl p-1">
+                <div className="flex">
+                  {(
+                    [
+                      { id: "overview", label: "Overview" },
+                      { id: "peers", label: "Peers" },
+                      { id: "favorites", label: "Favorites" },
+                      { id: "predictions", label: "Predictions", beta: true },
+                    ] as const
+                  ).map(({ id, label, ...rest }) => {
+                    const isBeta = "beta" in rest && rest.beta === true;
+                    const isDisabled =
+                      !!pendingPaymentSignup && id !== "overview" && id !== "predictions";
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => setActiveTab(id)}
+                        className={[
+                          "flex-1 min-w-fit py-2 px-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors inline-flex items-center justify-center gap-1 whitespace-nowrap",
+                          activeTab === id
+                            ? "bg-[#1a2540] text-white"
+                            : isDisabled
+                              ? "text-[#687FA3]/30 cursor-not-allowed"
+                              : "text-[#687FA3] hover:text-white",
+                        ].join(" ")}
+                      >
+                        {label}
+                        {isBeta && (
+                          <span className="text-[7px] font-black text-amber-400/60">β</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* ── Tab: Overview ── */}

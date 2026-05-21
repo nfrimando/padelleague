@@ -84,7 +84,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
   return (
     <nav className="sticky top-0 z-50 bg-[#0E1523]/95 backdrop-blur-xl border-b border-[#162032] py-3">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex justify-between items-center">
-        <a href="/" className="flex items-center gap-3">
+        <a href="/" className="flex items-center gap-3 flex-shrink-0">
           <div className="bg-[#00C8DC] p-1.5 rounded-md shadow-[0_0_15px_rgba(0,200,220,0.4)]">
             <div className="border border-[#0E1523] p-0.5 rounded-sm">
               <Zap className="text-[#0E1523] w-5 h-5" fill="currentColor" />
@@ -126,7 +126,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
           </a>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 min-w-0">
           <div className="hidden md:flex items-center gap-4">
             {loading ? (
               <div className="h-8 w-28 rounded-full bg-[#22304a] animate-pulse" />
@@ -180,87 +180,91 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
           </div>
 
           {rightSlot ? (
-            <div className="flex md:hidden items-center gap-4 font-bold text-[10px] uppercase tracking-[0.15em]">
-              {(
-                [
-                  ["/matches", "Matches"],
-                  ["/players", "Players"],
-                  ["/leaderboard", "Standings"],
-                ] as const
-              ).map(([href, label]) => (
+            <div className="flex md:hidden overflow-x-auto min-w-0">
+              <div className="flex items-center gap-4 font-bold text-[10px] uppercase tracking-[0.15em] w-max">
+                {(
+                  [
+                    ["/matches", "Matches"],
+                    ["/players", "Players"],
+                    ["/leaderboard", "Standings"],
+                  ] as const
+                ).map(([href, label]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    className={
+                      currentPath === href
+                        ? "text-[#00C8DC]"
+                        : "text-white/75 hover:text-[#00C8DC] transition-colors"
+                    }
+                  >
+                    {label}
+                  </a>
+                ))}
                 <a
-                  key={href}
-                  href={href}
-                  className={
-                    currentPath === href
-                      ? "text-[#00C8DC]"
-                      : "text-white/75 hover:text-[#00C8DC] transition-colors"
-                  }
+                  href="/predict"
+                  className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
                 >
-                  {label}
+                  Predict
+                  <span className="text-[7px] font-black text-amber-400/60">β</span>
                 </a>
-              ))}
-              <a
-                href="/predict"
-                className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
-              >
-                Predict
-                <span className="text-[7px] font-black text-amber-400/60">β</span>
-              </a>
-              {rightSlot}
+                {rightSlot}
+              </div>
             </div>
           ) : (
-            <div className="flex md:hidden gap-5 font-bold text-[11px] uppercase tracking-[0.12em]">
-              {(
-                [
-                  ["/matches", "Matches"],
-                  ["/players", "Players"],
-                  ["/leaderboard", "Standings"],
-                ] as const
-              ).map(([href, label]) => (
+            <div className="flex md:hidden overflow-x-auto min-w-0">
+              <div className="flex gap-5 font-bold text-[11px] uppercase tracking-[0.12em] w-max">
+                {(
+                  [
+                    ["/matches", "Matches"],
+                    ["/players", "Players"],
+                    ["/leaderboard", "Standings"],
+                  ] as const
+                ).map(([href, label]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    className={
+                      currentPath === href
+                        ? "text-[#00C8DC]"
+                        : "text-white/75 hover:text-[#00C8DC] transition-colors"
+                    }
+                  >
+                    {label}
+                  </a>
+                ))}
                 <a
-                  key={href}
-                  href={href}
-                  className={
-                    currentPath === href
-                      ? "text-[#00C8DC]"
-                      : "text-white/75 hover:text-[#00C8DC] transition-colors"
-                  }
+                  href="/predict"
+                  className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
                 >
-                  {label}
+                  Predict
+                  <span className="text-[7px] font-black text-amber-400/60">β</span>
                 </a>
-              ))}
-              <a
-                href="/predict"
-                className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
-              >
-                Predict
-                <span className="text-[7px] font-black text-amber-400/60">β</span>
-              </a>
-              {loading ? (
-                <div className="h-6 w-10 rounded-full bg-[#22304a] animate-pulse" />
-              ) : user ? (
-                <a
-                  href="/dashboard"
-                  className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
-                >
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt="Profile"
-                      className="h-4 w-4 rounded-full border border-white/20 object-cover"
-                    />
-                  ) : null}
-                  Me
-                </a>
-              ) : (
-                <a
-                  href="/join"
-                  className="text-[#00C8DC] hover:text-white transition-colors"
-                >
-                  Sign In
-                </a>
-              )}
+                {loading ? (
+                  <div className="h-6 w-10 rounded-full bg-[#22304a] animate-pulse" />
+                ) : user ? (
+                  <a
+                    href="/dashboard"
+                    className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
+                  >
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt="Profile"
+                        className="h-4 w-4 rounded-full border border-white/20 object-cover"
+                      />
+                    ) : null}
+                    Me
+                  </a>
+                ) : (
+                  <a
+                    href="/join"
+                    className="text-[#00C8DC] hover:text-white transition-colors"
+                  >
+                    Sign In
+                  </a>
+                )}
+              </div>
             </div>
           )}
         </div>
