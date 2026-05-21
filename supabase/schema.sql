@@ -128,6 +128,32 @@ CREATE TABLE public.signups_players (
   CONSTRAINT signups_players_pkey PRIMARY KEY (id),
   CONSTRAINT signups_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
 );
+CREATE TABLE public.prediction_results (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_pick_id uuid NOT NULL,
+  reward_system_version text NOT NULL,
+  prediction_model_version text NOT NULL,
+  was_correct boolean NOT NULL,
+  points_awarded numeric NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT prediction_results_pkey PRIMARY KEY (id),
+  CONSTRAINT prediction_results_user_pick_id_fkey FOREIGN KEY (user_pick_id) REFERENCES public.predictions(id)
+);
+CREATE TABLE public.predictions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  email text NOT NULL,
+  player_id bigint,
+  match_id bigint,
+  type text NOT NULL DEFAULT 'winning_team'::text,
+  prediction smallint NOT NULL CHECK (prediction = ANY (ARRAY[1, 2])),
+  pick_probability numeric NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT predictions_pkey PRIMARY KEY (id),
+  CONSTRAINT predictions_unique_pick UNIQUE (email, match_id, type),
+  CONSTRAINT predictions_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(match_id),
+  CONSTRAINT predictions_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
+);
 CREATE TABLE public.teams (
   team_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
