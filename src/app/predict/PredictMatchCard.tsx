@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Info } from "lucide-react";
 import type { PredictableMatch } from "@/lib/usePredictableMatches";
 import type { UserPick } from "@/lib/usePredictions";
 import type { MatchPredictionCounts } from "@/lib/usePredictionCounts";
+import { getPickReward, REWARD_SAMPLES } from "./rewardDisplay";
 
 type Props = {
   match: PredictableMatch;
@@ -149,6 +151,12 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
 
   const pickedTeam = existingPick?.prediction ?? null;
 
+  const [showRewardInfo, setShowRewardInfo] = useState(false);
+
+  const team1Reward = getPickReward(team1WinProbability);
+  const team2Reward = getPickReward(team2WinProbability);
+  const rewardsAvailable = team1Reward !== null && team2Reward !== null;
+
   const FORMULA_NAME = "v3";
 
   return (
@@ -249,16 +257,28 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
 
         {/* Win probability bar */}
         <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-black uppercase tracking-widest text-[#687FA3]/60">
-              Win Probability
-            </span>
-            <span
-              title="Win probabilities are based on ratings at the time of your prediction. If other matches occur before this one, ratings may shift and actual odds may differ."
-              className="text-[#687FA3]/40 hover:text-[#687FA3]/70 transition-colors cursor-help"
-            >
-              <Info size={10} />
-            </span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#687FA3]/60">
+                Win Probability
+              </span>
+              <span
+                title="Win probabilities are based on ratings at the time of your prediction. If other matches occur before this one, ratings may shift and actual odds may differ."
+                className="text-[#687FA3]/40 hover:text-[#687FA3]/70 transition-colors cursor-help"
+              >
+                <Info size={10} />
+              </span>
+            </div>
+            {rewardsAvailable && (
+              <button
+                type="button"
+                onClick={() => setShowRewardInfo((v) => !v)}
+                className="text-[#687FA3]/40 hover:text-[#687FA3]/70 transition-colors"
+                aria-label="How rewards work"
+              >
+                <Info size={10} />
+              </button>
+            )}
           </div>
           <div className="relative h-9 rounded-xl overflow-hidden bg-[#0d1520]">
             <div
@@ -282,6 +302,41 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
               </span>
             </div>
           </div>
+          {rewardsAvailable && (
+            <div className="flex justify-between px-1">
+              <span className="text-[10px] tabular-nums font-bold text-sky-400/70">
+                +{team1Reward!.toFixed(0)} pts if correct
+              </span>
+              <span className="text-[10px] tabular-nums font-bold text-amber-400/70">
+                +{team2Reward!.toFixed(0)} pts if correct
+              </span>
+            </div>
+          )}
+          {rewardsAvailable && showRewardInfo && (
+            <div className="bg-[#0d1520] border border-[#687FA3]/10 rounded-xl p-3 space-y-2">
+              <p className="text-[9px] font-black uppercase tracking-widest text-[#687FA3]/50">How Rewards Work</p>
+              <p className="text-[10px] text-[#687FA3]/70 leading-relaxed">
+                Correct picks earn more points for picking the underdog. The lower the odds, the higher the reward. Wrong picks earn 0.
+              </p>
+              <div className="space-y-1 pt-1 border-t border-[#687FA3]/10">
+                <div className="flex justify-between">
+                  <span className="text-[9px] font-black uppercase text-[#687FA3]/40">Win Prob</span>
+                  <span className="text-[9px] font-black uppercase text-[#687FA3]/40">Points</span>
+                </div>
+                {REWARD_SAMPLES.map(({ prob, label }) => {
+                  const pts = getPickReward(prob);
+                  return pts !== null ? (
+                    <div key={label} className="flex justify-between">
+                      <span className="text-[10px] tabular-nums text-slate-400">{label}</span>
+                      <span className="text-[10px] tabular-nums text-slate-300 font-bold">
+                        +{pts.toFixed(0)} pts
+                      </span>
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Crowd prediction (after picking) or pick buttons or no-profile CTA */}
