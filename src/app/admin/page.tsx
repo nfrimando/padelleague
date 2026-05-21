@@ -43,7 +43,7 @@ const NAV_GROUPS: {
       { value: "COMPLETE_MATCH", label: "Complete Match" },
       { value: "UPDATE_MATCH", label: "Update Match" },
       { value: "REVISE_SCORE", label: "Revise Score", danger: true },
-      { value: "RESOLVE_PREDICTIONS", label: "Resolve Predictions", disabled: true },
+      { value: "RESOLVE_PREDICTIONS", label: "Resolve Predictions", danger: true },
     ],
   },
   {

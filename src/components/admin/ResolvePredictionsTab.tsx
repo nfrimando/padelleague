@@ -69,7 +69,11 @@ export function ResolvePredictionsTab() {
 
       const res = await fetch(`/api/admin/resolve-predictions/${selectedMatchId}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ force: true }),
       });
 
       const payload = await res.json().catch(() => ({}));
@@ -95,12 +99,18 @@ export function ResolvePredictionsTab() {
   }
 
   return (
-    <div className="max-w-sm space-y-5">
+    <div className="space-y-6 max-w-sm">
       <div>
-        <h2 className="text-base font-bold text-slate-100 mb-1">Resolve Predictions</h2>
-        <p className="text-xs text-slate-500">
-          After a match is completed, resolve all pending predictions and award points.
+        <h2 className="text-lg font-semibold text-slate-100">Resolve Predictions</h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          Force re-score all predictions for a completed match.
         </p>
+      </div>
+
+      <div className="rounded-md border border-rose-800/40 bg-rose-900/20 px-3 py-2 text-sm text-rose-300">
+        <span className="font-semibold">Danger zone.</span> This will delete all existing
+        prediction results for the selected match and recalculate from scratch. Use this
+        to correct rewards after a score revision.
       </div>
 
       <div>
@@ -143,7 +153,7 @@ export function ResolvePredictionsTab() {
           </p>
           {result.skipped > 0 && (
             <p className="text-xs text-slate-400 mt-0.5">
-              {result.skipped} already resolved — skipped.
+              {result.skipped} had no prior result.
             </p>
           )}
         </div>
@@ -153,9 +163,9 @@ export function ResolvePredictionsTab() {
         type="button"
         onClick={() => void handleResolve()}
         disabled={!selectedMatchId || resolving}
-        className="w-full rounded-lg bg-[#00C8DC] px-4 py-2.5 text-sm font-bold text-slate-900 hover:bg-[#00b8cc] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-full rounded-lg bg-rose-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
       >
-        {resolving ? "Resolving…" : "Resolve Predictions"}
+        {resolving ? "Resolving…" : "Force Re-resolve Predictions"}
       </button>
     </div>
   );
