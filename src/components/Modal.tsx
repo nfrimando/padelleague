@@ -54,7 +54,7 @@ export function Modal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div
-        className="fixed inset-0 bg-black/60"
+        className="fixed inset-0 bg-black/60 cursor-pointer"
         onClick={onClose}
         aria-hidden="true"
       />

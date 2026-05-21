@@ -98,6 +98,8 @@ Always include the person's name in the subject line (e.g. `"New Player Claim: $
 
 **Subtle affordances** — hover/focus styles only. No loud badges unless explicitly requested. Keyboard-visible focus rings.
 
+**Cursor affordances** — every interactive element must signal clickability. `<button>` elements get `cursor: pointer` globally via CSS. For non-button clickable elements (`div`, `span`, etc. with `onClick`), always add `cursor-pointer`. For modal backdrops that close on click, always add `cursor-pointer`. For disabled buttons, always add `cursor-not-allowed` (use `disabled:cursor-not-allowed` on the button itself).
+
 ## Commands
 
 ```bash
