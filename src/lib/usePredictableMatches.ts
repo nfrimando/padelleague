@@ -28,6 +28,7 @@ export type PredictableMatch = {
   team2Player2: PredictablePlayer;
   team1WinProbability: number;
   team2WinProbability: number;
+  winningTeam: 1 | 2 | null;
 };
 
 type PlayerSummaryRow = {
@@ -180,6 +181,34 @@ export function usePredictableMatches() {
         }
       }
 
+      // Fetch sets for completed matches to determine the winner
+      const completedIds = fullMatches.filter((r) => r.status === "completed").map((r) => r.match_id);
+      const winnerMap = new Map<number, 1 | 2 | null>();
+      if (completedIds.length > 0) {
+        const { data: setRows } = await supabase
+          .from("match_sets")
+          .select("match_id,team_1_games,team_2_games")
+          .in("match_id", completedIds);
+        if (cancelled) return;
+        {
+          const setsByMatch = new Map<number, Array<{ team_1_games: number; team_2_games: number }>>();
+          for (const s of setRows ?? []) {
+            const arr = setsByMatch.get(s.match_id) ?? [];
+            arr.push({ team_1_games: s.team_1_games, team_2_games: s.team_2_games });
+            setsByMatch.set(s.match_id, arr);
+          }
+          for (const id of completedIds) {
+            const sets = setsByMatch.get(id) ?? [];
+            let t1 = 0, t2 = 0;
+            for (const s of sets) {
+              if (s.team_1_games > s.team_2_games) t1++;
+              else if (s.team_2_games > s.team_1_games) t2++;
+            }
+            winnerMap.set(id, t1 > t2 ? 1 : t2 > t1 ? 2 : null);
+          }
+        }
+      }
+
       const enriched: PredictableMatch[] = [];
       for (const r of fullMatches) {
         const t = teamMap.get(r.match_id)!;
@@ -216,6 +245,7 @@ export function usePredictableMatches() {
           team2Player2: t2p2,
           team1WinProbability,
           team2WinProbability,
+          winningTeam: winnerMap.get(r.match_id) ?? null,
         });
       }
 

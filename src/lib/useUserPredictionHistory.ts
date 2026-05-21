@@ -214,6 +214,7 @@ export function useUserPredictionHistory(email: string | null) {
             team2Player2: t2p2,
             team1WinProbability,
             team2WinProbability,
+            winningTeam: null,
           },
           existingPick: {
             id: pred.id,
