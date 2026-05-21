@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { usePredictableMatches, PREDICT_DAYS_AHEAD } from "@/lib/usePredictableMatches";
+import {
+  usePredictableMatches,
+  PREDICT_DAYS_AHEAD,
+} from "@/lib/usePredictableMatches";
 import { usePredictions } from "@/lib/usePredictions";
 import { usePredictionCounts } from "@/lib/usePredictionCounts";
 import type { PredictableMatch } from "@/lib/usePredictableMatches";
@@ -19,10 +22,22 @@ type PendingPick = {
 function GoogleIcon() {
   return (
     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        fill="#EA4335"
+      />
     </svg>
   );
 }
@@ -63,16 +78,20 @@ function SignInGate() {
 
 export default function PredictPage() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [hasPlayerProfile, setHasPlayerProfile] = useState<boolean | undefined>(undefined);
+  const [hasPlayerProfile, setHasPlayerProfile] = useState<boolean | undefined>(
+    undefined,
+  );
   const [pendingPick, setPendingPick] = useState<PendingPick | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_e, session) => {
+        setUser(session?.user ?? null);
+      },
+    );
     return () => listener.subscription.unsubscribe();
   }, []);
 
@@ -92,16 +111,23 @@ export default function PredictPage() {
       if (!cancelled) setHasPlayerProfile(data !== null);
     }
     void check();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user?.email]);
 
-  const { matches, loading: matchesLoading, error: matchesError } = usePredictableMatches();
+  const {
+    matches,
+    loading: matchesLoading,
+    error: matchesError,
+  } = usePredictableMatches();
 
   const matchIds = useMemo(() => matches.map((m) => m.match_id), [matches]);
-  const { picks, setPicks, loading: picksLoading } = usePredictions(
-    user?.email ?? null,
-    matchIds,
-  );
+  const {
+    picks,
+    setPicks,
+    loading: picksLoading,
+  } = usePredictions(user?.email ?? null, matchIds);
   const { counts: crowdCounts } = usePredictionCounts(matchIds);
 
   const isLoading =
@@ -121,7 +147,8 @@ export default function PredictPage() {
     const { match, team } = pendingPick;
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
-    if (!accessToken) throw new Error("Session expired. Please refresh and try again.");
+    if (!accessToken)
+      throw new Error("Session expired. Please refresh and try again.");
 
     const res = await fetch("/api/predictions", {
       method: "POST",
@@ -133,13 +160,16 @@ export default function PredictPage() {
         matchId: match.match_id,
         type: "winning_team",
         prediction: team,
-        pickProbability: team === 1 ? match.team1WinProbability : match.team2WinProbability,
+        pickProbability:
+          team === 1 ? match.team1WinProbability : match.team2WinProbability,
       }),
     });
 
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
-      throw new Error((payload as { error?: string }).error ?? "Failed to submit prediction.");
+      throw new Error(
+        (payload as { error?: string }).error ?? "Failed to submit prediction.",
+      );
     }
 
     const { id } = await res.json();
@@ -149,7 +179,8 @@ export default function PredictPage() {
       next.set(match.match_id, {
         id,
         prediction: team,
-        pickProbability: team === 1 ? match.team1WinProbability : match.team2WinProbability,
+        pickProbability:
+          team === 1 ? match.team1WinProbability : match.team2WinProbability,
       });
       return next;
     });
@@ -167,8 +198,20 @@ export default function PredictPage() {
               href="/"
               className="shrink-0 mt-0.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60 hover:text-[#687FA3] transition-colors"
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
-                <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                className="shrink-0"
+              >
+                <path
+                  d="M7.5 2L3.5 6L7.5 10"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
               Home
             </a>
@@ -177,8 +220,8 @@ export default function PredictPage() {
                 Predict
               </h1>
               <p className="mt-1 text-xs text-[#687FA3]">
-                Pick the winner for matches in the next {PREDICT_DAYS_AHEAD} days. Predictions are
-                final once submitted.
+                Pick the winner for matches in the next {PREDICT_DAYS_AHEAD}{" "}
+                days. Predictions are final once submitted.
               </p>
             </div>
           </div>
@@ -191,8 +234,9 @@ export default function PredictPage() {
                 For fun only — no real money involved
               </p>
               <p className="text-xs text-[#687FA3] leading-relaxed">
-                This is a purely recreational predictions game. Points are virtual and have no
-                monetary value. No wagering, no payouts, no real stakes of any kind.
+                This is a purely recreational predictions game. Points are
+                virtual and have no monetary value. No wagering, no payouts --
+                except bragging rights.
               </p>
             </div>
           </div>
@@ -220,14 +264,20 @@ export default function PredictPage() {
           )}
 
           {/* Empty state */}
-          {!isLoading && !matchesError && matches.length === 0 && user !== null && (
-            <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl px-6 py-10 text-center">
-              <p className="text-sm font-semibold text-slate-300 mb-1">No upcoming matches</p>
-              <p className="text-xs text-[#687FA3]">
-                There are no fully-scheduled matches in the next {PREDICT_DAYS_AHEAD} days.
-              </p>
-            </div>
-          )}
+          {!isLoading &&
+            !matchesError &&
+            matches.length === 0 &&
+            user !== null && (
+              <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl px-6 py-10 text-center">
+                <p className="text-sm font-semibold text-slate-300 mb-1">
+                  No upcoming matches
+                </p>
+                <p className="text-xs text-[#687FA3]">
+                  There are no fully-scheduled matches in the next{" "}
+                  {PREDICT_DAYS_AHEAD} days.
+                </p>
+              </div>
+            )}
 
           {/* Match cards — responsive grid */}
           {!isLoading && !matchesError && user !== null && (
