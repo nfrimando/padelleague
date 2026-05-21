@@ -34,7 +34,7 @@ type TabValue =
 
 const NAV_GROUPS: {
   label: string;
-  items: { value: TabValue; label: string; danger?: boolean }[];
+  items: { value: TabValue; label: string; danger?: boolean; disabled?: boolean }[];
 }[] = [
   {
     label: "Matches",
@@ -43,7 +43,7 @@ const NAV_GROUPS: {
       { value: "COMPLETE_MATCH", label: "Complete Match" },
       { value: "UPDATE_MATCH", label: "Update Match" },
       { value: "REVISE_SCORE", label: "Revise Score", danger: true },
-      { value: "RESOLVE_PREDICTIONS", label: "Resolve Predictions" },
+      { value: "RESOLVE_PREDICTIONS", label: "Resolve Predictions", disabled: true },
     ],
   },
   {
@@ -369,23 +369,32 @@ function AdminPageContent() {
                   {group.items.map((item) => {
                     const active = activeTab === item.value;
                     const danger = item.danger === true;
+                    const disabled = item.disabled === true;
                     return (
                       <button
                         key={item.value}
                         type="button"
-                        onClick={() => setActiveTab(item.value)}
+                        disabled={disabled}
+                        onClick={() => !disabled && setActiveTab(item.value)}
                         className={`w-full text-left text-sm px-4 py-2 transition-colors border-l-2 ${
-                          active
-                            ? "border-[#00C8DC] bg-[#00C8DC]/10 text-[#00C8DC] font-medium"
-                            : danger
-                              ? "border-transparent text-rose-600 dark:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-700 dark:hover:text-rose-400"
-                              : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                          disabled
+                            ? "border-transparent text-slate-500 dark:text-slate-600 cursor-not-allowed"
+                            : active
+                              ? "border-[#00C8DC] bg-[#00C8DC]/10 text-[#00C8DC] font-medium"
+                              : danger
+                                ? "border-transparent text-rose-600 dark:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-700 dark:hover:text-rose-400"
+                                : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
                         }`}
                       >
-                        {danger && !active && (
-                          <span className="mr-1">⚠</span>
+                        <span className={disabled ? "opacity-50" : undefined}>
+                          {danger && !active && <span className="mr-1">⚠</span>}
+                          {item.label}
+                        </span>
+                        {disabled && (
+                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-600">
+                            Coming Soon
+                          </span>
                         )}
-                        {item.label}
                       </button>
                     );
                   })}
@@ -413,21 +422,26 @@ function AdminPageContent() {
                 {ALL_TABS.map((tab) => {
                   const active = activeTab === tab.value;
                   const danger = tab.danger === true;
+                  const disabled = tab.disabled === true;
                   return (
                     <button
                       key={tab.value}
                       type="button"
-                      onClick={() => setActiveTab(tab.value)}
+                      disabled={disabled}
+                      onClick={() => !disabled && setActiveTab(tab.value)}
                       className={`px-3 py-1.5 text-sm rounded-md whitespace-nowrap transition-colors ${
-                        active
-                          ? "bg-[#00C8DC]/10 text-[#00C8DC] font-medium"
-                          : danger
-                            ? "text-rose-600 dark:text-rose-500 hover:text-rose-700 dark:hover:text-rose-400"
-                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                        disabled
+                          ? "text-slate-500 dark:text-slate-600 cursor-not-allowed opacity-50"
+                          : active
+                            ? "bg-[#00C8DC]/10 text-[#00C8DC] font-medium"
+                            : danger
+                              ? "text-rose-600 dark:text-rose-500 hover:text-rose-700 dark:hover:text-rose-400"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                       }`}
                     >
                       {danger && !active && <span className="mr-0.5">⚠</span>}
                       {tab.label}
+                      {disabled && <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide">Soon</span>}
                     </button>
                   );
                 })}
