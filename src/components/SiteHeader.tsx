@@ -113,6 +113,9 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
           <a href="/leaderboard" className={desktopLinkClass("/leaderboard")}>
             Leaderboard
           </a>
+          <a href="/predict" className={desktopLinkClass("/predict")}>
+            Predict
+          </a>
         </div>
 
         <div className="flex items-center gap-4">
@@ -175,6 +178,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   ["/matches", "Matches"],
                   ["/players", "Players"],
                   ["/leaderboard", "Standings"],
+                  ["/predict", "Predict"],
                 ] as const
               ).map(([href, label]) => (
                 <a
@@ -198,6 +202,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   ["/matches", "Matches"],
                   ["/players", "Players"],
                   ["/leaderboard", "Standings"],
+                  ["/predict", "Predict"],
                 ] as const
               ).map(([href, label]) => (
                 <a
