@@ -27,19 +27,21 @@ function PlayerRow({
   imageLink,
   rating,
   team,
+  playerId,
 }: {
   name: string;
   nickname: string | null;
   imageLink: string | null;
   rating: number | null;
   team: 1 | 2;
+  playerId: number;
 }) {
   const hasImg = !!(imageLink && imageLink !== "null");
   const src = hasImg ? imageLink! : "/default-avatar.webp";
   const ringCls = team === 1 ? "ring-sky-500/40" : "ring-amber-500/40";
 
   return (
-    <div className="flex items-center gap-2.5">
+    <a href={`/players/${playerId}`} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
       <img
         src={src}
         alt={name}
@@ -55,7 +57,7 @@ function PlayerRow({
           </div>
         )}
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -156,6 +158,7 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
   const team1Favored = team1WinProbability > team2WinProbability;
 
   const pickedTeam = existingPick?.prediction ?? null;
+  const isCompletedNoVote = match.status !== "scheduled" && pickedTeam === null;
 
   const [showRewardInfo, setShowRewardInfo] = useState(false);
 
@@ -163,10 +166,8 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
   const team2Reward = getPickReward(team2WinProbability);
   const rewardsAvailable = team1Reward !== null && team2Reward !== null;
 
-  const FORMULA_NAME = "v3";
-
   return (
-    <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl overflow-hidden">
+    <div className={`bg-[#162032] border border-[#687FA3]/10 rounded-2xl overflow-hidden${isCompletedNoVote ? " opacity-70" : ""}`}>
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
         <div>
@@ -182,9 +183,15 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
             </p>
           )}
         </div>
-        <span className="shrink-0 text-[9px] font-mono text-[#687FA3]/40 bg-[#687FA3]/5 border border-[#687FA3]/10 px-2 py-1 rounded-full">
-          {FORMULA_NAME}
-        </span>
+        {match.status !== "scheduled" ? (
+          <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-[#687FA3]/50 bg-[#687FA3]/5 border border-[#687FA3]/15 px-2 py-1 rounded-full">
+            Completed
+          </span>
+        ) : (
+          <span className="shrink-0 text-[9px] font-mono text-[#687FA3]/40 bg-[#687FA3]/5 border border-[#687FA3]/10 px-2 py-1 rounded-full">
+            v3
+          </span>
+        )}
       </div>
 
       <div className="px-4 pb-4 space-y-4">
@@ -209,6 +216,7 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
               imageLink={match.team1Player1.image_link}
               rating={match.team1Player1.latest_rating}
               team={1}
+              playerId={match.team1Player1.player_id}
             />
             <PlayerRow
               name={match.team1Player2.name}
@@ -216,6 +224,7 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
               imageLink={match.team1Player2.image_link}
               rating={match.team1Player2.latest_rating}
               team={1}
+              playerId={match.team1Player2.player_id}
             />
           </div>
 
@@ -250,6 +259,7 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
               imageLink={match.team2Player1.image_link}
               rating={match.team2Player1.latest_rating}
               team={2}
+              playerId={match.team2Player1.player_id}
             />
             <PlayerRow
               name={match.team2Player2.name}
@@ -257,6 +267,7 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
               imageLink={match.team2Player2.image_link}
               rating={match.team2Player2.latest_rating}
               team={2}
+              playerId={match.team2Player2.player_id}
             />
           </div>
         </div>
