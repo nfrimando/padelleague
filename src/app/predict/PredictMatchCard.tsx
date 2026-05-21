@@ -7,12 +7,18 @@ import type { UserPick } from "@/lib/usePredictions";
 import type { MatchPredictionCounts } from "@/lib/usePredictionCounts";
 import { getPickReward, REWARD_SAMPLES } from "./rewardDisplay";
 
+type PredictionResult = {
+  was_correct: boolean;
+  points_awarded: number;
+};
+
 type Props = {
   match: PredictableMatch;
   existingPick: UserPick | null;
   crowdCounts: MatchPredictionCounts | null;
   canPredict: boolean;
   onPickRequest: (team: 1 | 2) => void;
+  result?: PredictionResult | null;
 };
 
 function PlayerRow({
@@ -143,7 +149,7 @@ function CrowdBar({
   );
 }
 
-export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict, onPickRequest }: Props) {
+export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict, onPickRequest, result }: Props) {
   const { team1WinProbability, team2WinProbability } = match;
   const ewp1Pct = (team1WinProbability * 100).toFixed(1);
   const ewp2Pct = (team2WinProbability * 100).toFixed(1);
@@ -339,6 +345,46 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
           )}
         </div>
 
+        {/* Result banner — only rendered when prop is explicitly passed (dashboard view) */}
+        {result !== undefined && (
+          <div
+            className={`rounded-xl px-4 py-2.5 flex items-center justify-between ${
+              result === null
+                ? "bg-[#687FA3]/5 border border-[#687FA3]/10"
+                : result.was_correct
+                  ? "bg-emerald-500/10 border border-emerald-500/20"
+                  : "bg-rose-500/10 border border-rose-500/20"
+            }`}
+          >
+            <span
+              className={`text-[10px] font-black uppercase tracking-widest ${
+                result === null
+                  ? "text-[#687FA3]/50"
+                  : result.was_correct
+                    ? "text-emerald-400"
+                    : "text-rose-400"
+              }`}
+            >
+              {result === null ? "Pending result" : result.was_correct ? "Correct" : "Wrong"}
+            </span>
+            <span
+              className={`text-sm font-black tabular-nums ${
+                result === null
+                  ? "text-[#687FA3]/30"
+                  : result.was_correct
+                    ? "text-emerald-400"
+                    : "text-rose-400/50"
+              }`}
+            >
+              {result === null
+                ? "—"
+                : result.was_correct
+                  ? `+${result.points_awarded % 1 === 0 ? result.points_awarded.toFixed(0) : result.points_awarded.toFixed(1)} pts`
+                  : "0 pts"}
+            </span>
+          </div>
+        )}
+
         {/* Crowd prediction (after picking) or pick buttons or no-profile CTA */}
         {pickedTeam !== null && crowdCounts !== null ? (
           <CrowdBar pickedTeam={pickedTeam} crowdCounts={crowdCounts} />
@@ -354,7 +400,7 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
               Your pick: Team {pickedTeam} ✓
             </span>
           </div>
-        ) : !canPredict ? (
+        ) : match.status !== "scheduled" ? null : !canPredict ? (
           <div className="flex flex-col items-center gap-2 py-1 text-center">
             <p className="text-[11px] text-[#687FA3]">
               Predictions are for league players only.
