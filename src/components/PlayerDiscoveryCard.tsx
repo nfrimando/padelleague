@@ -40,38 +40,36 @@ export default function PlayerDiscoveryCard({
       href={href}
       className="group flex flex-col gap-3 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 p-4 transition-all duration-200 hover:bg-slate-800/70 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/80"
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2 sm:gap-3">
         <img
           src={imageSrc || "/default-avatar.webp"}
           alt={player.name || "Player"}
-          className="h-16 w-16 shrink-0 rounded-xl object-cover ring-1 ring-white/10"
+          className="h-12 w-12 sm:h-16 sm:w-16 shrink-0 rounded-xl object-cover ring-1 ring-white/10"
         />
-        <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold leading-snug text-slate-100 line-clamp-2">
-              {hasName ? player.name : "-"}
-            </div>
-            {hasNickname && (
-              <div className="mt-0.5 text-[11px] text-slate-400 truncate">
-                {player.nickname}
-              </div>
-            )}
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold leading-snug text-slate-100 line-clamp-2">
+            {hasName ? player.name : "-"}
           </div>
-          <div className="shrink-0 text-right">
-            <div className="text-[10px] uppercase tracking-widest text-slate-500">
-              Rating
+          {hasNickname && (
+            <div className="mt-0.5 text-[11px] text-slate-400 truncate">
+              {player.nickname}
             </div>
-            <div className="mt-0.5 text-base font-bold tabular-nums text-sky-300">
+          )}
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-widest text-slate-500">
+              Rating
+            </span>
+            <span className="text-sm font-bold tabular-nums text-sky-300">
               {!loadingLifetimeMatches ? (
                 cardRating != null ? (
                   cardRating.toFixed(2)
                 ) : (
-                  <span className="text-slate-500 text-xs font-normal">No Rating</span>
+                  <span className="text-slate-500 text-xs font-normal">—</span>
                 )
               ) : (
-                <span className="inline-block h-5 w-12 rounded bg-slate-700/60 animate-pulse" />
+                <span className="inline-block h-4 w-10 rounded bg-slate-700/60 animate-pulse" />
               )}
-            </div>
+            </span>
           </div>
         </div>
       </div>

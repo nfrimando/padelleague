@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import EventCard from "@/components/EventCard";
 import { Event } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
 
 type Section = {
   key: string;
@@ -31,6 +32,7 @@ function buildSections(events: Event[]): Section[] {
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [acceptedEventIds, setAcceptedEventIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,14 +44,29 @@ export default function EventsPage() {
       setError(null);
 
       try {
-        const res = await fetch("/api/events");
-        const json = (await res.json()) as {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+
+        const [eventsRes, mySignupsRes] = await Promise.all([
+          fetch("/api/events"),
+          accessToken
+            ? fetch("/api/events/my-signups", {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              })
+            : Promise.resolve(null),
+        ]);
+
+        const json = (await eventsRes.json()) as {
           error?: string;
           events?: Event[];
         };
 
+        const signupsJson = mySignupsRes
+          ? ((await mySignupsRes.json()) as { acceptedEventIds?: number[] })
+          : null;
+
         if (!cancelled) {
-          if (!res.ok) {
+          if (!eventsRes.ok) {
             setError(json.error ?? "Failed to load events.");
           } else {
             // Defensive: sort by start_date descending in case API changes or SSR mismatch
@@ -59,6 +76,9 @@ export default function EventsPage() {
               return bDate - aDate;
             });
             setEvents(sorted);
+          }
+          if (signupsJson?.acceptedEventIds) {
+            setAcceptedEventIds(new Set(signupsJson.acceptedEventIds));
           }
           setLoading(false);
         }
@@ -127,7 +147,11 @@ export default function EventsPage() {
                 </h2>
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {section.events.map((event) => (
-                    <EventCard key={event.event_id} event={event} />
+                    <EventCard
+                      key={event.event_id}
+                      event={event}
+                      isAccepted={acceptedEventIds.has(event.event_id)}
+                    />
                   ))}
                 </div>
               </section>

@@ -5,6 +5,7 @@ import { Event } from "@/lib/types";
 
 type Props = {
   event: Event;
+  isAccepted?: boolean;
 };
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -50,7 +51,7 @@ const STATUS_STYLES: Record<Event["status"], { badge: string; label: string }> =
     },
   };
 
-export default function EventCard({ event }: Props) {
+export default function EventCard({ event, isAccepted = false }: Props) {
   const statusStyle = STATUS_STYLES[event.status];
   const isOpen = event.registration_status === "open";
   const dateRange = formatDateRange(event.start_date, event.end_date);
@@ -120,6 +121,15 @@ export default function EventCard({ event }: Props) {
             <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
               Event completed
             </span>
+          ) : isAccepted && event.url_link ? (
+            <a
+              href={event.url_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700 px-5 py-2 text-sm font-medium text-emerald-400 hover:border-emerald-500 hover:text-emerald-300 transition-colors cursor-pointer"
+            >
+              See details →
+            </a>
           ) : (
             <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
               Registration closed

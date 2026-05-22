@@ -76,6 +76,14 @@ export function formatMatchDateRelative(dateString: string | null): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+export function countryToFlag(iso: string): string {
+  return iso
+    .toUpperCase()
+    .split("")
+    .map((c) => String.fromCodePoint(127397 + c.charCodeAt(0)))
+    .join("");
+}
+
 export const formatMatchTime = (timeString: string | null) => {
   if (!timeString) return "";
 

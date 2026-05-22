@@ -13,6 +13,7 @@ CREATE TABLE public.events (
   event_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   name text,
   event_type text NOT NULL DEFAULT 'league_season'::text,
+  registration_fee numeric NOT NULL DEFAULT 1000,
   registration_status text NOT NULL DEFAULT 'closed'::text CHECK (registration_status = ANY (ARRAY['open'::text, 'closed'::text])),
   status text NOT NULL DEFAULT 'upcoming'::text CHECK (status = ANY (ARRAY['upcoming'::text, 'ongoing'::text, 'completed'::text])),
   start_date date,
@@ -20,8 +21,11 @@ CREATE TABLE public.events (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   deleted_at timestamp with time zone,
+  requires_payment boolean NOT NULL DEFAULT true,
   image_url text,
   description text,
+  payment_instructions text,
+  url_link text,
   CONSTRAINT events_pkey PRIMARY KEY (event_id)
 );
 CREATE TABLE public.match_player_ratings (
@@ -76,6 +80,38 @@ CREATE TABLE public.matches (
   youtube_link text,
   CONSTRAINT matches_pkey PRIMARY KEY (match_id)
 );
+CREATE TABLE public.payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  signup_id uuid NOT NULL,
+  player_id bigint,
+  event_id bigint NOT NULL,
+  amount numeric NOT NULL,
+  currency text NOT NULL DEFAULT 'PHP'::text,
+  method text NOT NULL CHECK (method = ANY (ARRAY['paymongo'::text, 'cash'::text, 'bank_transfer'::text, 'gcash'::text, 'other'::text])),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'paid'::text, 'failed'::text, 'refunded'::text])),
+  reference_number text,
+  notes text,
+  paid_at timestamp with time zone,
+  recorded_by text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT payments_pkey PRIMARY KEY (id),
+  CONSTRAINT payments_signup_id_fkey FOREIGN KEY (signup_id) REFERENCES public.signups_events(id),
+  CONSTRAINT payments_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id),
+  CONSTRAINT payments_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(event_id)
+);
+CREATE TABLE public.payments_paymongo (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  payment_id uuid NOT NULL,
+  link_id text,
+  link_url text,
+  paymongo_payment_id text,
+  webhook_data jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT payments_paymongo_pkey PRIMARY KEY (id),
+  CONSTRAINT payments_paymongo_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id)
+);
 CREATE TABLE public.player_claims (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id bigint NOT NULL,
@@ -98,35 +134,12 @@ CREATE TABLE public.players (
   initial_rating numeric CHECK (initial_rating IS NULL OR initial_rating >= 0::numeric),
   email text,
   is_profile_complete boolean NOT NULL DEFAULT false,
+  phone_country_code character varying,
+  phone_number character varying,
+  country character varying,
+  is_public boolean NOT NULL DEFAULT false,
+  is_notifications_subscribed boolean NOT NULL DEFAULT false,
   CONSTRAINT players_pkey PRIMARY KEY (player_id)
-);
-CREATE TABLE public.signups_events (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  player_id bigint,
-  event_id bigint NOT NULL,
-  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['registered'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  applicant_name text,
-  applicant_contact text,
-  applicant_email text,
-  CONSTRAINT signups_events_pkey PRIMARY KEY (id),
-  CONSTRAINT signups_events_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(event_id),
-  CONSTRAINT signups_events_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
-);
-CREATE TABLE public.signups_players (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  player_id bigint,
-  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['registered'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
-  applicant_name text,
-  applicant_nickname text,
-  applicant_contact text,
-  applicant_email text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  notes text,
-  CONSTRAINT signups_players_pkey PRIMARY KEY (id),
-  CONSTRAINT signups_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
 );
 CREATE TABLE public.prediction_results (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -150,9 +163,36 @@ CREATE TABLE public.predictions (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT predictions_pkey PRIMARY KEY (id),
-  CONSTRAINT predictions_unique_pick UNIQUE (email, match_id, type),
   CONSTRAINT predictions_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(match_id),
   CONSTRAINT predictions_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
+);
+CREATE TABLE public.signups_events (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  player_id bigint,
+  event_id bigint NOT NULL,
+  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['applied'::text, 'pending_payment'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  applicant_name text,
+  applicant_contact text,
+  applicant_email text,
+  CONSTRAINT signups_events_pkey PRIMARY KEY (id),
+  CONSTRAINT signups_events_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(event_id),
+  CONSTRAINT signups_events_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
+);
+CREATE TABLE public.signups_players (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  player_id bigint,
+  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['registered'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
+  applicant_name text,
+  applicant_nickname text,
+  applicant_contact text,
+  applicant_email text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  notes text,
+  CONSTRAINT signups_players_pkey PRIMARY KEY (id),
+  CONSTRAINT signups_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
 );
 CREATE TABLE public.teams (
   team_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -167,4 +207,10 @@ CREATE TABLE public.teams (
   CONSTRAINT teams_pkey PRIMARY KEY (team_id),
   CONSTRAINT teams_captain_player_id_fkey FOREIGN KEY (captain_player_id) REFERENCES public.players(player_id),
   CONSTRAINT teams_co_captain_player_id_fkey FOREIGN KEY (co_captain_player_id) REFERENCES public.players(player_id)
+);
+CREATE TABLE public.webhook_events (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  event_type text NOT NULL,
+  processed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT webhook_events_pkey PRIMARY KEY (id)
 );

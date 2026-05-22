@@ -16,6 +16,12 @@ export type Player = {
   latest_match_date?: string | null;
   email?: string | null;
   is_profile_complete?: boolean;
+  phone_country_code?: string | null;
+  phone_number?: string | null;
+  country?: string | null;
+  is_public?: boolean;
+  is_notifications_subscribed?: boolean;
+  preferred_side?: "left" | "right" | "both" | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -32,6 +38,7 @@ export type Event = {
   description?: string | null;
   registration_fee?: number | null;
   payment_instructions?: string | null;
+  url_link?: string | null;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;

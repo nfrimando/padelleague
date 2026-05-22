@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight, Pencil, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { countryToFlag } from "@/lib/utils";
+import { COUNTRY_LIST } from "@/lib/countries";
+import EditProfileModal from "@/components/EditProfileModal";
 import type { Event, Player } from "@/lib/types";
 import type { DashboardStats } from "@/lib/useDashboardStats";
 
@@ -38,6 +41,8 @@ type Props = {
   payingSignupId: string | null;
   onPayingSignupIdChange: (id: string | null) => void;
   onRefreshSignups: () => void;
+  showEditProfile?: boolean;
+  onPlayerSaved?: (player: Player) => void;
 };
 
 function eventDisplayName(
@@ -143,10 +148,39 @@ export default function HeroSection({
   payingSignupId,
   onPayingSignupIdChange,
   onRefreshSignups,
+  showEditProfile = false,
+  onPlayerSaved,
 }: Props) {
   const [payOnlineLoading, setPayOnlineLoading] = useState(false);
   const [payOnlineError, setPayOnlineError] = useState<string | null>(null);
   const [showGCashModal, setShowGCashModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [localImgSrc, setLocalImgSrc] = useState<string | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleAvatarUpload(file: File) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/players/avatar", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const json = await res.json();
+      if (json.imageUrl) setLocalImgSrc(json.imageUrl);
+    } catch (err) {
+      console.error("[avatar] upload failed", err);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   useEffect(() => {
     setPayOnlineError(null);
@@ -166,7 +200,7 @@ export default function HeroSection({
         ? Number(player.latest_rating).toFixed(2)
         : null;
 
-  const imgSrc = avatarUrl ?? player.image_link ?? null;
+  const imgSrc = localImgSrc ?? player.image_link ?? avatarUrl ?? null;
   const initials = player.name
     ? player.name
         .split(" ")
@@ -182,7 +216,7 @@ export default function HeroSection({
     openEvents.length > 0;
 
   const payingSignup = payingSignupId
-    ? signups.find((s) => s.id === payingSignupId) ?? null
+    ? (signups.find((s) => s.id === payingSignupId) ?? null)
     : null;
 
   async function handlePayOnline() {
@@ -233,7 +267,82 @@ export default function HeroSection({
       {/* ── Player identity row ── */}
       <div className="px-6 pt-6 pb-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
         <div className="shrink-0">
-          {imgSrc ? (
+          {!isViewingAs ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleAvatarUpload(file);
+                  e.target.value = "";
+                }}
+              />
+              <div
+                className="relative group cursor-pointer w-16 h-16"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {imgSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imgSrc}
+                    alt={player.name}
+                    className="w-16 h-16 rounded-full border-2 border-[#00C8DC]/30 shadow-lg object-cover"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-[#1a2540] border border-[#687FA3]/20 flex items-center justify-center">
+                    <span className="text-xl font-black text-[#687FA3]">
+                      {initials}
+                    </span>
+                  </div>
+                )}
+                <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  {uploading ? (
+                    <svg
+                      className="w-6 h-6 text-white animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="w-6 h-6 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : imgSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imgSrc}
@@ -256,8 +365,46 @@ export default function HeroSection({
           <h1 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter leading-none truncate">
             {player.name}
           </h1>
-          {player.nickname && (
-            <p className="text-[#687FA3] text-sm mt-1">&ldquo;{player.nickname}&rdquo;</p>
+          <p className="text-[#687FA3] text-sm mt-1 flex items-center gap-1.5 flex-wrap">
+            {player.nickname && (
+              <span>&ldquo;{player.nickname}&rdquo;</span>
+            )}
+            {player.nickname && (
+              <span className="text-[#687FA3]/40">·</span>
+            )}
+            {player.preferred_side ? (
+              <span>
+                {player.preferred_side.charAt(0).toUpperCase() +
+                  player.preferred_side.slice(1)}{" "}
+                side
+              </span>
+            ) : (
+              <span className="text-xs">
+                Preferred Side:{" "}
+                <span className="text-red-400">Not set</span>
+              </span>
+            )}
+          </p>
+          {(player.country || (player.phone_country_code && player.phone_number)) && (
+            <p className="text-[#687FA3] text-xs mt-1.5 flex items-center gap-1.5 flex-wrap">
+              {player.country && (
+                <span>
+                  {countryToFlag(player.country)}{" "}
+                  {COUNTRY_LIST.find((c) => c.code === player.country)?.name ??
+                    player.country}
+                </span>
+              )}
+              {player.country &&
+                player.phone_country_code &&
+                player.phone_number && (
+                  <span className="text-[#687FA3]/40">·</span>
+                )}
+              {player.phone_country_code && player.phone_number && (
+                <span>
+                  {player.phone_country_code} {player.phone_number}
+                </span>
+              )}
+            </p>
           )}
         </div>
 
@@ -295,14 +442,8 @@ export default function HeroSection({
           label="Matches"
           value={loading ? "…" : String(stats.totalMatches)}
         />
-        <StatPill
-          label="Wins"
-          value={loading ? "…" : String(stats.wins)}
-        />
-        <StatPill
-          label="Losses"
-          value={loading ? "…" : String(stats.losses)}
-        />
+        <StatPill label="Wins" value={loading ? "…" : String(stats.wins)} />
+        <StatPill label="Losses" value={loading ? "…" : String(stats.losses)} />
         <StatPill
           label="Win Rate"
           value={loading ? "…" : `${stats.winRate}%`}
@@ -318,7 +459,10 @@ export default function HeroSection({
           </p>
 
           {loading ? (
-            <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <div
+              className="flex gap-2 overflow-x-auto"
+              style={{ scrollbarWidth: "none" }}
+            >
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
@@ -388,7 +532,9 @@ export default function HeroSection({
                     className="shrink-0 flex items-center gap-2 bg-[#00C8DC]/5 border border-[#00C8DC]/20 rounded-full pl-3 pr-2 py-1.5"
                   >
                     <span className="text-xs font-bold text-white/80 whitespace-nowrap">
-                      {eventMap[event.event_id] ?? event.name ?? `Event ${event.event_id}`}
+                      {eventMap[event.event_id] ??
+                        event.name ??
+                        `Event ${event.event_id}`}
                     </span>
                     {!player.is_profile_complete ? (
                       <span className="text-amber-400/70 text-[9px] font-black uppercase whitespace-nowrap">
@@ -416,11 +562,16 @@ export default function HeroSection({
                         Payment Required
                       </p>
                       <p className="font-bold text-white text-sm">
-                        {eventDisplayName(payingSignup.event_id, eventMap, payingSignup.event)}
+                        {eventDisplayName(
+                          payingSignup.event_id,
+                          eventMap,
+                          payingSignup.event,
+                        )}
                       </p>
                       {payingSignup.event?.registration_fee != null && (
                         <p className="text-orange-200/80 text-xs mt-0.5">
-                          Fee: ₱{payingSignup.event.registration_fee.toLocaleString()}
+                          Fee: ₱
+                          {payingSignup.event.registration_fee.toLocaleString()}
                         </p>
                       )}
                     </div>
@@ -484,15 +635,40 @@ export default function HeroSection({
         </div>
       )}
 
-      {/* ── Profile link ── */}
-      <div className="border-t border-[#687FA3]/10 px-6 py-3 flex justify-end">
+      {/* ── Profile link + edit ── */}
+      <div className="border-t border-[#687FA3]/10 px-6 py-3 flex items-center justify-between">
+        {showEditProfile ? (
+          <button
+            type="button"
+            onClick={() => setEditModalOpen(true)}
+            className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors cursor-pointer"
+          >
+            <Pencil size={11} />
+            Edit Profile
+          </button>
+        ) : (
+          <span />
+        )}
         <Link
           href={`/players/${encodeURIComponent(String(player.player_id))}`}
           className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors"
         >
-          Full profile <ChevronRight size={12} />
+          Public profile <ChevronRight size={12} />
         </Link>
       </div>
+
+      {/* ── Edit profile modal ── */}
+      {showEditProfile && (
+        <EditProfileModal
+          player={player}
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          onSaved={(updated) => {
+            setEditModalOpen(false);
+            onPlayerSaved?.(updated);
+          }}
+        />
+      )}
 
       {/* ── GCash payment modal ── */}
       {showGCashModal && (
@@ -508,7 +684,9 @@ export default function HeroSection({
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-400 mb-1">
                   Cash / GCash Payment
                 </p>
-                <p className="text-sm font-bold text-white">Send payment to Robin</p>
+                <p className="text-sm font-bold text-white">
+                  Send payment to Robin
+                </p>
               </div>
               <button
                 type="button"

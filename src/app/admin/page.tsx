@@ -13,7 +13,6 @@ import { ScheduleMatchTab } from "@/components/admin/ScheduleMatchTab";
 import { UpdateMatchTab } from "@/components/admin/UpdateMatchTab";
 import { ReviseScoreTab } from "@/components/admin/ReviseScoreTab";
 import { CreateEventTab } from "@/components/admin/CreateEventTab";
-import { ResolvePredictionsTab } from "@/components/admin/ResolvePredictionsTab";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 import { useMatchEvents } from "@/lib/useMatchEvents";
@@ -29,8 +28,7 @@ type TabValue =
   | "SCHEDULE_MATCH"
   | "COMPLETE_MATCH"
   | "UPDATE_MATCH"
-  | "REVISE_SCORE"
-  | "RESOLVE_PREDICTIONS";
+  | "REVISE_SCORE";
 
 const NAV_GROUPS: {
   label: string;
@@ -43,7 +41,6 @@ const NAV_GROUPS: {
       { value: "COMPLETE_MATCH", label: "Complete Match" },
       { value: "UPDATE_MATCH", label: "Update Match" },
       { value: "REVISE_SCORE", label: "Revise Score", danger: true },
-      { value: "RESOLVE_PREDICTIONS", label: "Resolve Predictions", danger: true },
     ],
   },
   {
@@ -469,8 +466,6 @@ function AdminPageContent() {
                   <CreateEventTab />
                 ) : activeTab === "EVENTS" ? (
                   <EventsTab enabled={activeTab === "EVENTS" && isAdmin} />
-                ) : activeTab === "RESOLVE_PREDICTIONS" ? (
-                  <ResolvePredictionsTab />
                 ) : null}
               </AdminDataProvider>
             </main>
