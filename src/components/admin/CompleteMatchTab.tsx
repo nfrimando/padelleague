@@ -12,6 +12,16 @@ const labelCls =
   "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
 const inputCls =
   "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
+const tableThCls =
+  "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide text-left py-1 pr-3";
+
+type CompletionResult = {
+  matchId: number;
+  winnerTeam: 1 | 2;
+  setsWon: { team1: number; team2: number };
+  ratings: Array<{ player_id: number }>;
+  message: string;
+};
 
 function resolvePlayerName(
   id: number | null,
@@ -63,9 +73,8 @@ export function CompleteMatchTab() {
   const [completeMatchError, setCompleteMatchError] = useState<string | null>(
     null,
   );
-  const [completeMatchSuccess, setCompleteMatchSuccess] = useState<
-    string | null
-  >(null);
+  const [completionResult, setCompletionResult] =
+    useState<CompletionResult | null>(null);
   const [completeMatchCalculated, setCompleteMatchCalculated] = useState(false);
 
   const matchId = completeTarget ? String(completeTarget.match_id) : "";
@@ -109,7 +118,7 @@ export function CompleteMatchTab() {
     setUpdateSet3Team2("");
     setCompleteMatchCalculated(false);
     setCompleteMatchError(null);
-    setCompleteMatchSuccess(null);
+    setCompletionResult(null);
   };
 
   const openModal = (match: ScheduledMatchOption) => {
@@ -126,7 +135,7 @@ export function CompleteMatchTab() {
 
   const handleCalculateOutcome = () => {
     setCompleteMatchError(null);
-    setCompleteMatchSuccess(null);
+    setCompletionResult(null);
 
     if (!loadedMatchDetails) {
       setCompleteMatchCalculated(false);
@@ -149,7 +158,7 @@ export function CompleteMatchTab() {
   const handleCompleteMatch = async () => {
     setCompletingMatch(true);
     setCompleteMatchError(null);
-    setCompleteMatchSuccess(null);
+    setCompletionResult(null);
 
     try {
       if (!completeMatchCalculated) {
@@ -240,10 +249,9 @@ export function CompleteMatchTab() {
         body: JSON.stringify({ status: "completed", sets }),
       });
 
-      const result = (await response.json()) as {
+      const result = (await response.json()) as CompletionResult & {
         error?: string;
         details?: string[];
-        message?: string;
       };
 
       if (!response.ok) {
@@ -255,9 +263,7 @@ export function CompleteMatchTab() {
         return;
       }
 
-      setCompleteMatchSuccess(
-        result.message || "Match completed successfully.",
-      );
+      setCompletionResult(result);
       refreshScheduledMatches();
     } catch {
       setCompleteMatchError("Unexpected error while completing match.");
@@ -530,12 +536,12 @@ export function CompleteMatchTab() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left">
-                        <th className={`${labelCls} py-1 pr-3`}>Player</th>
-                        <th className={`${labelCls} py-1 pr-3`}>Team</th>
-                        <th className={`${labelCls} py-1 pr-3`}>Before</th>
-                        <th className={`${labelCls} py-1 pr-3`}>After</th>
-                        <th className={`${labelCls} py-1`}>Delta</th>
+                      <tr>
+                        <th className={tableThCls}>Player</th>
+                        <th className={tableThCls}>Team</th>
+                        <th className={tableThCls}>Before</th>
+                        <th className={tableThCls}>After</th>
+                        <th className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide text-left py-1">Delta</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -579,9 +585,42 @@ export function CompleteMatchTab() {
               {completeMatchError}
             </div>
           )}
-          {completeMatchSuccess && (
-            <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-              {completeMatchSuccess}
+
+          {/* Completion handshake */}
+          {completionResult && (
+            <div className="rounded-lg border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 p-4 space-y-3">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                Match #{completionResult.matchId} completed — Team{" "}
+                {completionResult.winnerTeam} wins (
+                {completionResult.setsWon.team1}–
+                {completionResult.setsWon.team2} sets)
+              </p>
+              <ul className="space-y-1.5">
+                <li className="flex items-center gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                  <span className="shrink-0 text-emerald-500 dark:text-emerald-400"><IconCheck /></span>
+                  <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-44 shrink-0">matches</code>
+                  <span className="text-slate-500 dark:text-slate-400">status → completed</span>
+                </li>
+                <li className="flex items-center gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                  <span className="shrink-0 text-emerald-500 dark:text-emerald-400"><IconCheck /></span>
+                  <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-44 shrink-0">match_sets</code>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {completionResult.setsWon.team1 + completionResult.setsWon.team2} sets recorded
+                  </span>
+                </li>
+                <li className="flex items-center gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                  <span className="shrink-0 text-emerald-500 dark:text-emerald-400"><IconCheck /></span>
+                  <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-44 shrink-0">match_player_ratings</code>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {completionResult.ratings.length} ratings updated
+                  </span>
+                </li>
+                <li className="flex items-center gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                  <span className="shrink-0 text-emerald-500 dark:text-emerald-400"><IconCheck /></span>
+                  <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-44 shrink-0">prediction_results</code>
+                  <span className="text-slate-500 dark:text-slate-400">auto-resolved</span>
+                </li>
+              </ul>
             </div>
           )}
 

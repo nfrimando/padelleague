@@ -12,12 +12,16 @@ import SiteHeader from "@/components/SiteHeader";
 import MatchCard from "@/components/MatchCard";
 import MatchFiltersCard from "@/components/MatchFiltersCard";
 import RatingSparkline from "@/components/RatingSparkline";
+import ImageLightbox from "@/components/ImageLightbox";
 import { formatEventOptionLabel } from "@/lib/eventLabels";
 import { ALL_MATCH_FILTER, getEventsFromMatches } from "@/lib/matches";
 import { useEventMap } from "@/lib/useEventMap";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerProfileStats } from "@/lib/usePlayerProfileStats";
 import { useMatchSetsLoader } from "@/lib/useMatchSetsLoader";
+import { supabase } from "@/lib/supabase";
+import { countryToFlag } from "@/lib/utils";
+import { COUNTRY_LIST } from "@/lib/countries";
 import type { MatchWithTeams } from "@/lib/types";
 
 const PAGE_SIZE = 15;
@@ -61,6 +65,15 @@ function PlayerProfilePageContent() {
   const [selectedTypeFilter, setSelectedTypeFilter] =
     useState<string>(ALL_MATCH_FILTER);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [viewerIsMember, setViewerIsMember] = useState(false);
+  const [avatarLightboxOpen, setAvatarLightboxOpen] = useState(false);
+  const [playerOverlay, setPlayerOverlay] = useState<{
+    country: string | null;
+    phone_country_code: string | null;
+    phone_number: string | null;
+    is_public: boolean;
+    preferred_side: "left" | "right" | "both" | null;
+  } | null>(null);
 
   const { players, loading: loadingPlayers } = usePlayers({
     onlyActivePlayers: true,
@@ -68,6 +81,13 @@ function PlayerProfilePageContent() {
   const selectedPlayer = useMemo(
     () => players.find((p) => String(p.player_id) === playerId) ?? null,
     [players, playerId],
+  );
+  const effectivePlayer = useMemo(
+    () =>
+      selectedPlayer && playerOverlay
+        ? { ...selectedPlayer, ...playerOverlay }
+        : selectedPlayer,
+    [selectedPlayer, playerOverlay],
   );
 
   const {
@@ -122,6 +142,32 @@ function PlayerProfilePageContent() {
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [eventFilter, selectedTypeFilter, playerId]);
+
+  // Check if the current viewer is a league member (has a players row)
+  useEffect(() => {
+    void supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user?.email) return;
+      const { data } = await supabase
+        .from("players")
+        .select("player_id")
+        .eq("email", session.user.email)
+        .maybeSingle();
+      if (data) setViewerIsMember(true);
+    });
+  }, []);
+
+  // Fetch profile fields not included in the active_players view
+  useEffect(() => {
+    if (!playerId) return;
+    void supabase
+      .from("players")
+      .select("country, phone_country_code, phone_number, is_public, preferred_side")
+      .eq("player_id", playerId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setPlayerOverlay(data as typeof playerOverlay);
+      });
+  }, [playerId]);
 
   // ── Filtering ──────────────────────────────────────────────────────────────
 
@@ -314,7 +360,7 @@ function PlayerProfilePageContent() {
     );
   }
 
-  if (!selectedPlayer) {
+  if (!selectedPlayer || !effectivePlayer) {
     return (
       <div className="min-h-screen bg-[#0E1523] flex flex-col items-center justify-center gap-4 px-4">
         <h1 className="text-xl font-black text-white">Player not found</h1>
@@ -331,8 +377,8 @@ function PlayerProfilePageContent() {
     );
   }
 
-  const initials = selectedPlayer.name
-    ? selectedPlayer.name
+  const initials = effectivePlayer.name
+    ? effectivePlayer.name
         .split(" ")
         .slice(0, 2)
         .map((w) => w[0])
@@ -340,11 +386,18 @@ function PlayerProfilePageContent() {
         .toUpperCase()
     : "?";
 
+  const canSeePrivateDetails =
+    viewerIsMember || (effectivePlayer.is_public ?? false);
+
+  const countryEntry = effectivePlayer.country
+    ? COUNTRY_LIST.find((c) => c.code === effectivePlayer.country) ?? null
+    : null;
+
   const displayRating =
     latestRating !== null
       ? latestRating.toFixed(2)
-      : selectedPlayer.latest_rating != null
-        ? Number(selectedPlayer.latest_rating).toFixed(2)
+      : effectivePlayer.latest_rating != null
+        ? Number(effectivePlayer.latest_rating).toFixed(2)
         : null;
 
   return (
@@ -365,13 +418,28 @@ function PlayerProfilePageContent() {
           {/* Player identity */}
           <div className="px-6 pt-6 pb-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             <div className="shrink-0">
-              {selectedPlayer.image_link ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={selectedPlayer.image_link}
-                  alt={selectedPlayer.name}
-                  className="w-16 h-16 rounded-full border-2 border-[#00C8DC]/30 shadow-lg object-cover"
-                />
+              {canSeePrivateDetails && effectivePlayer.image_link ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarLightboxOpen(true)}
+                    className="cursor-zoom-in block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00C8DC]/60"
+                    aria-label="View enlarged photo"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={effectivePlayer.image_link}
+                      alt={effectivePlayer.name}
+                      className="w-16 h-16 rounded-full border-2 border-[#00C8DC]/30 shadow-lg object-cover"
+                    />
+                  </button>
+                  <ImageLightbox
+                    isOpen={avatarLightboxOpen}
+                    onClose={() => setAvatarLightboxOpen(false)}
+                    src={effectivePlayer.image_link}
+                    alt={effectivePlayer.name}
+                  />
+                </>
               ) : (
                 <div className="w-16 h-16 rounded-full bg-[#1a2540] border border-[#687FA3]/20 flex items-center justify-center">
                   <span className="text-xl font-black text-[#687FA3]">
@@ -386,11 +454,26 @@ function PlayerProfilePageContent() {
                 Player Profile
               </p>
               <h1 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter leading-none truncate text-white">
-                {selectedPlayer.name}
+                {effectivePlayer.name}
               </h1>
-              {selectedPlayer.nickname && (
-                <p className="text-[#687FA3] text-sm mt-1">
-                  &ldquo;{selectedPlayer.nickname}&rdquo;
+              {(effectivePlayer.nickname ||
+                (canSeePrivateDetails && effectivePlayer.preferred_side)) && (
+                <p className="text-[#687FA3] text-sm mt-1 flex items-center gap-1.5 flex-wrap">
+                  {effectivePlayer.nickname && (
+                    <span>&ldquo;{effectivePlayer.nickname}&rdquo;</span>
+                  )}
+                  {effectivePlayer.nickname &&
+                    canSeePrivateDetails &&
+                    effectivePlayer.preferred_side && (
+                      <span className="text-[#687FA3]/40">·</span>
+                    )}
+                  {canSeePrivateDetails && effectivePlayer.preferred_side && (
+                    <span>
+                      {effectivePlayer.preferred_side.charAt(0).toUpperCase() +
+                        effectivePlayer.preferred_side.slice(1)}{" "}
+                      side
+                    </span>
+                  )}
                 </p>
               )}
             </div>
@@ -446,6 +529,33 @@ function PlayerProfilePageContent() {
               ) : null}
             </div>
           )}
+
+          {/* Country + phone (gated by privacy) */}
+          {canSeePrivateDetails &&
+            (countryEntry ||
+              (effectivePlayer.phone_country_code && effectivePlayer.phone_number)) && (
+              <div className="border-t border-[#687FA3]/10 px-6 py-3 flex items-center gap-3 flex-wrap">
+                {countryEntry && (
+                  <span className="text-xs text-[#687FA3] flex items-center gap-1.5">
+                    <span>{countryToFlag(countryEntry.code)}</span>
+                    <span>{countryEntry.name}</span>
+                  </span>
+                )}
+                {countryEntry && effectivePlayer.phone_country_code && effectivePlayer.phone_number && (
+                  <span className="text-[#687FA3]/40 text-xs">·</span>
+                )}
+                {effectivePlayer.phone_country_code && effectivePlayer.phone_number && (
+                  <a
+                    href={`https://wa.me/${effectivePlayer.phone_country_code.replace("+", "")}${effectivePlayer.phone_number}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-[#687FA3] hover:text-[#00C8DC] transition-colors cursor-pointer"
+                  >
+                    {effectivePlayer.phone_country_code} {effectivePlayer.phone_number}
+                  </a>
+                )}
+              </div>
+            )}
         </div>
 
         {/* ── Partners section ── */}
@@ -555,7 +665,7 @@ function PlayerProfilePageContent() {
                   <MatchCard
                     key={match.match_id}
                     match={match}
-                    highlightPlayerId={selectedPlayer.player_id}
+                    highlightPlayerId={effectivePlayer.player_id}
                     seasonLabel={
                       match.event_id != null
                         ? (eventMap[match.event_id] ?? undefined)

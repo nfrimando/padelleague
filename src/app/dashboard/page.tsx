@@ -450,6 +450,8 @@ export default function DashboardPage() {
                   payingSignupId={payingSignupId}
                   onPayingSignupIdChange={setPayingSignupId}
                   onRefreshSignups={() => void load()}
+                  showEditProfile={!isViewingAs}
+                  onPlayerSaved={(updated) => setPlayer(updated)}
                 />
                 {pendingPaymentSignup ? (
                   <LockedSection skeletonRows={4} />

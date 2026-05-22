@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   formatMatchDate,
@@ -7,6 +8,7 @@ import {
   seasonBadgeFromEvent,
 } from "@/lib/utils";
 import { MatchWithTeams } from "@/lib/types";
+import ImageLightbox from "./ImageLightbox";
 
 interface MatchCardProps {
   match: MatchWithTeams;
@@ -50,15 +52,32 @@ function PlayerAvatar({
 }: {
   player: MatchWithTeams["teams"][number]["player_1"] | undefined;
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const name = player?.nickname || player?.name || "?";
 
   if (player?.image_link) {
     return (
-      <img
-        src={player.image_link}
-        alt={name}
-        className="h-5 w-5 rounded-full object-cover border border-[#687FA3]/40 sm:h-5 sm:w-5"
-      />
+      <>
+        <button
+          type="button"
+          onClick={() => setLightboxOpen(true)}
+          className="cursor-zoom-in focus:outline-none"
+          aria-label={`View photo of ${name}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={player.image_link}
+            alt={name}
+            className="h-5 w-5 rounded-full object-cover border border-[#687FA3]/40 sm:h-5 sm:w-5"
+          />
+        </button>
+        <ImageLightbox
+          isOpen={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          src={player.image_link}
+          alt={name}
+        />
+      </>
     );
   }
 
