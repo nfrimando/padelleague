@@ -5,6 +5,7 @@ type PlayerInfo = {
   name: string | null;
   nickname: string | null;
   email: string | null;
+  is_notifications_subscribed?: boolean | null;
 };
 
 type MatchCompletedData = {
@@ -161,6 +162,7 @@ export async function notifyMatchCompleted(data: MatchCompletedData): Promise<vo
 
   for (const { player, team } of allPlayers) {
     if (!player.email) continue;
+    if (player.is_notifications_subscribed === false) continue;
 
     const rating = data.ratings.find((r) => r.player_id === player.player_id);
     if (!rating) {

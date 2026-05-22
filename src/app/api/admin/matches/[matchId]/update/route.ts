@@ -646,7 +646,7 @@ export async function PATCH(
 
     const { data: playerRows } = await supabase
       .from("players")
-      .select("player_id,name,nickname,email")
+      .select("player_id,name,nickname,email,is_notifications_subscribed")
       .in("player_id", playerIds);
 
     if (playerRows && playerRows.length === 4) {
@@ -656,6 +656,7 @@ export async function PATCH(
         name: (byId.get(id)?.name as string | null) ?? null,
         nickname: (byId.get(id)?.nickname as string | null) ?? null,
         email: (byId.get(id)?.email as string | null) ?? null,
+        is_notifications_subscribed: (byId.get(id)?.is_notifications_subscribed as boolean | null) ?? null,
       });
 
       const finalDateLocal =

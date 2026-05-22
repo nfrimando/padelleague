@@ -183,13 +183,20 @@ async function sendCorrectPredictionEmails(
 
   const { data: playerRows } = await supabase
     .from("players")
-    .select("player_id,name,nickname")
+    .select("player_id,name,nickname,is_notifications_subscribed")
     .in("player_id", allPlayerIds);
 
   const playerMap = new Map(
     (playerRows ?? []).map((p) => [
       p.player_id as number,
       (p.nickname ?? p.name ?? "Unknown") as string,
+    ]),
+  );
+
+  const playerNotifMap = new Map(
+    (playerRows ?? []).map((p) => [
+      p.player_id as number,
+      p.is_notifications_subscribed as boolean | null,
     ]),
   );
 
@@ -213,6 +220,7 @@ async function sendCorrectPredictionEmails(
 
   for (const pick of correctPicks) {
     if (!pick.email) continue;
+    if (pick.player_id != null && playerNotifMap.get(pick.player_id) === false) continue;
     const recipientName =
       pick.player_id != null ? (playerMap.get(pick.player_id) ?? pick.email) : pick.email;
     const pointsAwarded = pointsMap.get(pick.id) ?? 0;
