@@ -1,5 +1,6 @@
 import { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { calculateV1PredictionReward } from "@/lib/rewards/v1/calculate";
+import { computeV3ExpectedWinProbability } from "@/lib/ratings/v3/calculate";
 import { notifyPredictionCorrect } from "@/lib/email/notifications/predictionCorrect";
 
 const REWARD_SYSTEM_VERSION = "v1";
@@ -72,15 +73,62 @@ export async function resolveMatchPredictions(
 
   if (pending.length === 0) return { resolved: 0, skipped: skippedCount };
 
+  // Derive win probabilities from pre-match ratings so reward matches what the UI displayed.
+  // Falls back to stored pick_probability if pre-match rating data is incomplete.
+  let team1Probability: number | null = null;
+  let team2Probability: number | null = null;
+  {
+    const [{ data: teamRows }, { data: preRatingRows }] = await Promise.all([
+      supabase
+        .from("match_teams")
+        .select("team_number,player_1_id,player_2_id")
+        .eq("match_id", matchId),
+      supabase
+        .from("match_player_ratings")
+        .select("player_id,rating_pre,formula_name")
+        .eq("match_id", matchId),
+    ]);
+
+    const team1 = (teamRows ?? []).find((t) => t.team_number === 1);
+    const team2 = (teamRows ?? []).find((t) => t.team_number === 2);
+
+    if (team1 && team2) {
+      // Build player → pre-rating map, preferring v3 > v2 > other
+      const priorityOf = (f: string | null) => (f === "v3" ? 2 : f === "v2" ? 1 : 0);
+      const sorted = [...(preRatingRows ?? [])].sort((a, b) => priorityOf(a.formula_name) - priorityOf(b.formula_name));
+      const preRating = new Map<number, number>();
+      for (const row of sorted) {
+        const rating = Number(row.rating_pre);
+        if (Number.isFinite(rating)) preRating.set(Number(row.player_id), rating);
+      }
+
+      const r1 = preRating.get(team1.player_1_id);
+      const r2 = preRating.get(team1.player_2_id);
+      const r3 = preRating.get(team2.player_1_id);
+      const r4 = preRating.get(team2.player_2_id);
+
+      if (r1 != null && r2 != null && r3 != null && r4 != null) {
+        [team1Probability, team2Probability] = computeV3ExpectedWinProbability(
+          (r1 + r2) / 2,
+          (r3 + r4) / 2,
+        );
+      }
+    }
+  }
+
   const resultsToInsert = pending.map((pick) => {
     const wasCorrect = pick.prediction === winnerTeam;
+    const preMatchProb =
+      pick.prediction === 1 ? team1Probability : team2Probability;
+    const predictedTeamWinProbability =
+      preMatchProb != null ? preMatchProb : Number(pick.pick_probability);
     return {
       user_pick_id: pick.id,
       reward_system_version: REWARD_SYSTEM_VERSION,
       prediction_model_version: PREDICTION_MODEL_VERSION,
       was_correct: wasCorrect,
       points_awarded: calculateV1PredictionReward({
-        predictedTeamWinProbability: Number(pick.pick_probability),
+        predictedTeamWinProbability,
         wasCorrect,
       }),
     };

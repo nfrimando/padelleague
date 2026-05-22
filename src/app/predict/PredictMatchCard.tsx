@@ -166,7 +166,8 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
 
   const team1Reward = getPickReward(team1WinProbability);
   const team2Reward = getPickReward(team2WinProbability);
-  const rewardsAvailable = team1Reward !== null && team2Reward !== null;
+  // Hide "pts if correct" when the result banner is shown — the actual earned amount is already there.
+  const rewardsAvailable = team1Reward !== null && team2Reward !== null && result === undefined;
 
   return (
     <div className={`bg-[#162032] border border-[#687FA3]/10 rounded-2xl overflow-hidden${isCompletedNoVote ? " opacity-70" : ""}`}>
