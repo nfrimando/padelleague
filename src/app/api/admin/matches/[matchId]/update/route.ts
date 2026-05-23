@@ -28,6 +28,7 @@ type UpdateMatchRequest = {
   type?: string | null;
   youtubeLink?: string | null;
   sets?: SetScoreInput[];
+  forfeitWinnerTeam?: 1 | 2;
 };
 
 type MatchSnapshot = {
@@ -171,6 +172,12 @@ function validatePayload(payload: unknown): ValidationResult {
     }
   }
 
+  if (status === "forfeit") {
+    if (payload.forfeitWinnerTeam !== 1 && payload.forfeitWinnerTeam !== 2) {
+      errors.push("forfeitWinnerTeam must be 1 or 2 when status is forfeit.");
+    }
+  }
+
   if (errors.length > 0 || !status) {
     return { valid: false, errors };
   }
@@ -208,6 +215,7 @@ function validatePayload(payload: unknown): ValidationResult {
             : typeof payload.youtubeLink === "string"
               ? payload.youtubeLink.trim()
               : undefined,
+      forfeitWinnerTeam: status === "forfeit" ? (payload.forfeitWinnerTeam as 1 | 2) : undefined,
     },
   };
 }
@@ -712,7 +720,7 @@ export async function PATCH(
     .from("matches")
     .update({
       ...matchUpdates,
-      winner_team: null,
+      winner_team: validation.value.forfeitWinnerTeam ?? null,
     })
     .eq("match_id", matchId)
     .select("match_id")

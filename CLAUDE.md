@@ -86,6 +86,13 @@ await notifyXxx(...).catch((err) => console.error("[email] ...", err));
 ```
 Always include the person's name in the subject line (e.g. `"New Player Claim: ${name}"`) to prevent Gmail threading separate notifications.
 
+Every transactional email sent to players must:
+1. **Anti-threading subject** — include a unique detail in the subject (player name, match date, opponent names, or similar) so Gmail/Outlook never collapses separate notifications into the same thread.
+2. **Unsubscribe footer** — always render a subtle, low-contrast one-liner at the bottom of the email body: `You're receiving this because you're a Padel League PH member. <a href="...">Unsubscribe</a>` linking to the player's unsubscribe URL (token-based, no auth required).
+3. **Respect preferences** — before sending, check the player's notification preferences (stored in `player_notification_preferences` or equivalent). Skip the send if the player has opted out of that notification category.
+
+**Edit Profile — notification preferences** — the `EditProfileModal` must include a section for email notification preferences (e.g. match results, rating updates, event reminders). Persist preference changes to the DB and read them back on open. New players default to all notifications enabled.
+
 **URL state** — filter state lives in query params (`?event=X&type=Y`). Use `searchParams.toString()` as the single source of truth. Don't set eager defaults that overwrite explicit URL params on load. When linking to another player on `/players`, preserve existing params and only replace `playerId`.
 
 ## UI Principles

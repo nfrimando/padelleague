@@ -1,3 +1,10 @@
+// ─── Notification preferences ─────────────────────────────────────────────────
+
+export type NotifType = "match_results" | "predictions";
+
+// Map of notif_type → subscribed. Missing key means subscribed (default true).
+export type PlayerNotificationPreferences = Partial<Record<NotifType, boolean>>;
+
 // ─── Core entities ─────────────────────────────────────────────────────────────
 
 // player_id is a bigint integer in the DB but is treated as number | string

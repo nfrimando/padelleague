@@ -91,7 +91,7 @@ export async function POST(request: Request) {
   // Verify the match exists and is scheduled
   const { data: match, error: matchErr } = await serviceClient
     .from("matches")
-    .select("status")
+    .select("status,date_local,time_local")
     .eq("match_id", matchId)
     .maybeSingle();
 
@@ -106,6 +106,19 @@ export async function POST(request: Request) {
       { error: "Predictions can only be placed on scheduled matches." },
       { status: 409 },
     );
+  }
+
+  // Block predictions once the match start time (Philippines time, UTC+8) has passed
+  if (match.date_local && match.time_local) {
+    const matchTimePH = new Date(
+      `${match.date_local}T${match.time_local}+08:00`,
+    );
+    if (new Date() >= matchTimePH) {
+      return NextResponse.json(
+        { error: "This match is already underway. Predictions are closed." },
+        { status: 409 },
+      );
+    }
   }
 
   const { data: inserted, error: insertErr } = await serviceClient

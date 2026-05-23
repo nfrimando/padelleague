@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { computeV3ExpectedWinProbability } from "@/lib/ratings/v3/calculate";
 
 export const PREDICT_DAYS_BACK = 3;
-export const PREDICT_DAYS_AHEAD = 2;
+export const PREDICT_DAYS_AHEAD = 5;
 
 export type PredictablePlayer = {
   player_id: number;
@@ -58,8 +58,8 @@ export function usePredictableMatches() {
 
       const { data: matchRows, error: matchErr } = await supabase
         .from("matches")
-        .select("match_id,date_local,time_local,venue,type,status")
-        .in("status", ["scheduled", "completed"])
+        .select("match_id,date_local,time_local,venue,type,status,winner_team")
+        .in("status", ["scheduled", "completed", "forfeit"])
         .gte("date_local", pastStr)
         .lte("date_local", futureStr)
         .order("date_local", { ascending: true })
@@ -79,6 +79,7 @@ export function usePredictableMatches() {
         venue: string | null;
         type: string | null;
         status: string;
+        winner_team: number | null;
       }>;
 
       if (baseRows.length === 0) {
@@ -183,6 +184,7 @@ export function usePredictableMatches() {
 
       // Fetch sets for completed matches to determine the winner
       const completedIds = fullMatches.filter((r) => r.status === "completed").map((r) => r.match_id);
+      const forfeitMatches = fullMatches.filter((r) => r.status === "forfeit");
       const winnerMap = new Map<number, 1 | 2 | null>();
       // key: `${matchId}_${playerId}` — pre-match rating for completed matches
       const preRatingMap = new Map<string, number>();
@@ -224,6 +226,12 @@ export function usePredictableMatches() {
             winnerMap.set(id, t1 > t2 ? 1 : t2 > t1 ? 2 : null);
           }
         }
+      }
+
+      // Forfeit matches: winner comes from winner_team on the match row (no sets)
+      for (const r of forfeitMatches) {
+        const wt = r.winner_team;
+        winnerMap.set(r.match_id, wt === 1 || wt === 2 ? wt : null);
       }
 
       const enriched: PredictableMatch[] = [];
@@ -284,11 +292,11 @@ export function usePredictableMatches() {
       const scheduled = enriched
         .filter((m) => m.status === "scheduled")
         .sort((a, b) => key(a).localeCompare(key(b)));
-      const completed = enriched
-        .filter((m) => m.status === "completed")
+      const done = enriched
+        .filter((m) => m.status !== "scheduled")
         .sort((a, b) => key(b).localeCompare(key(a)));
 
-      setMatches([...scheduled, ...completed]);
+      setMatches([...scheduled, ...done]);
       setLoading(false);
     }
 

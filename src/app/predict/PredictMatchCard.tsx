@@ -159,6 +159,7 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
   const ewp2Pct = (team2WinProbability * 100).toFixed(1);
   const team1Favored = team1WinProbability > team2WinProbability;
 
+  const isForfeit = match.status === "forfeit";
   const pickedTeam = existingPick?.prediction ?? null;
   const isCompletedNoVote = match.status !== "scheduled" && pickedTeam === null;
 
@@ -166,11 +167,11 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
 
   const team1Reward = getPickReward(team1WinProbability);
   const team2Reward = getPickReward(team2WinProbability);
-  // Hide "pts if correct" when the result banner is shown — the actual earned amount is already there.
-  const rewardsAvailable = team1Reward !== null && team2Reward !== null && result === undefined;
+  // Hide "pts if correct" when the result banner is shown or this is a forfeit (no rewards granted).
+  const rewardsAvailable = team1Reward !== null && team2Reward !== null && result === undefined && !isForfeit;
 
   return (
-    <div className={`bg-[#162032] border border-[#687FA3]/10 rounded-2xl overflow-hidden${isCompletedNoVote ? " opacity-70" : ""}`}>
+    <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
         <div>
@@ -187,8 +188,8 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
           )}
         </div>
         {match.status !== "scheduled" ? (
-          <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-[#687FA3]/50 bg-[#687FA3]/5 border border-[#687FA3]/15 px-2 py-1 rounded-full">
-            Completed
+          <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${isForfeit ? "text-rose-400/70 bg-rose-400/5 border border-rose-400/15" : "text-[#687FA3]/50 bg-[#687FA3]/5 border border-[#687FA3]/15"}`}>
+            {isForfeit ? "Forfeit" : "Completed"}
           </span>
         ) : (
           <span className="shrink-0 text-[9px] font-mono text-[#687FA3]/40 bg-[#687FA3]/5 border border-[#687FA3]/10 px-2 py-1 rounded-full">
@@ -400,7 +401,31 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
         )}
 
         {/* Crowd prediction (after picking) or pick buttons or no-profile CTA */}
-        {pickedTeam !== null && crowdCounts !== null && match.status !== "scheduled" ? (
+        {isForfeit ? (
+          <>
+            {pickedTeam !== null && (
+              <div className="flex items-center justify-center gap-2 py-1">
+                <span
+                  className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                    pickedTeam === 1
+                      ? "text-sky-400 bg-sky-400/10 border-sky-400/30"
+                      : "text-amber-400 bg-amber-400/10 border-amber-400/30"
+                  }`}
+                >
+                  Your pick: Team {pickedTeam}
+                </span>
+              </div>
+            )}
+            <div className="rounded-xl px-4 py-2.5 flex items-center justify-between bg-[#687FA3]/5 border border-[#687FA3]/15">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60">
+                Forfeited Match
+              </span>
+              <span className="text-[10px] text-[#687FA3]/40">
+                No rewards granted
+              </span>
+            </div>
+          </>
+        ) : pickedTeam !== null && crowdCounts !== null && match.status !== "scheduled" ? (
           <CrowdBar pickedTeam={pickedTeam} crowdCounts={crowdCounts} />
         ) : pickedTeam !== null && match.status === "scheduled" ? (
           <div className="space-y-2.5">

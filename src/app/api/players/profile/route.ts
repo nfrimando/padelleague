@@ -3,6 +3,10 @@ import {
   getServerUserClient,
   getServerServiceClient,
 } from "@/app/api/_lib/supabase";
+import type { NotifType, PlayerNotificationPreferences } from "@/lib/types";
+import { fetchPlayerPrefs, setPlayerPref } from "@/lib/notificationPreferences";
+
+const VALID_NOTIF_TYPES: NotifType[] = ["match_results", "predictions"];
 
 type ProfileUpdateBody = {
   nickname?: string;
@@ -12,6 +16,7 @@ type ProfileUpdateBody = {
   is_public?: boolean;
   is_notifications_subscribed?: boolean;
   preferred_side?: "left" | "right" | "both" | null;
+  notification_preferences?: Partial<Record<NotifType, boolean>>;
 };
 
 export async function PATCH(request: NextRequest) {
@@ -120,7 +125,31 @@ export async function PATCH(request: NextRequest) {
     updates.preferred_side = body.preferred_side;
   }
 
-  if (Object.keys(updates).length === 0) {
+  // Validate notification_preferences if present
+  let notifPrefsToSave: Partial<Record<NotifType, boolean>> | undefined;
+  if (body.notification_preferences !== undefined) {
+    if (typeof body.notification_preferences !== "object" || body.notification_preferences === null) {
+      return NextResponse.json(
+        { error: "notification_preferences must be an object" },
+        { status: 400 },
+      );
+    }
+    notifPrefsToSave = {};
+    for (const type of VALID_NOTIF_TYPES) {
+      const val = body.notification_preferences[type];
+      if (val !== undefined) {
+        if (typeof val !== "boolean") {
+          return NextResponse.json(
+            { error: `notification_preferences.${type} must be a boolean` },
+            { status: 400 },
+          );
+        }
+        notifPrefsToSave[type] = val;
+      }
+    }
+  }
+
+  if (Object.keys(updates).length === 0 && !notifPrefsToSave) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
@@ -136,17 +165,41 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Player not found" }, { status: 404 });
   }
 
-  const { data: updated, error: updateError } = await serviceClient
-    .from("players")
-    .update(updates)
-    .eq("player_id", existing.player_id)
-    .select("*")
-    .single();
+  const playerId = existing.player_id as number;
 
-  if (updateError) {
-    console.error("[profile] update error", updateError);
-    return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
+  let updated;
+  if (Object.keys(updates).length > 0) {
+    const { data, error: updateError } = await serviceClient
+      .from("players")
+      .update(updates)
+      .eq("player_id", playerId)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      console.error("[profile] update error", updateError);
+      return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
+    }
+    updated = data;
+  } else {
+    const { data } = await serviceClient
+      .from("players")
+      .select("*")
+      .eq("player_id", playerId)
+      .single();
+    updated = data;
   }
 
-  return NextResponse.json({ player: updated });
+  if (notifPrefsToSave) {
+    for (const [type, val] of Object.entries(notifPrefsToSave) as [NotifType, boolean][]) {
+      await setPlayerPref(serviceClient, playerId, type, val);
+    }
+  }
+
+  const notification_preferences: PlayerNotificationPreferences = await fetchPlayerPrefs(
+    serviceClient,
+    playerId,
+  );
+
+  return NextResponse.json({ player: updated, notification_preferences });
 }

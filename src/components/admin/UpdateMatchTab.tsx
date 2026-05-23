@@ -117,6 +117,10 @@ export function UpdateMatchTab() {
     null,
   );
 
+  // Forfeit confirmation modal state
+  const [forfeitModalOpen, setForfeitModalOpen] = useState(false);
+  const [forfeitWinnerTeam, setForfeitWinnerTeam] = useState<1 | 2 | null>(null);
+
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<MatchListRow | null>(null);
   const [deletingMatch, setDeletingMatch] = useState(false);
@@ -314,7 +318,13 @@ export function UpdateMatchTab() {
     setUpdateMatchSuccess(null);
   };
 
-  const handleUpdateMatch = async () => {
+  const handleUpdateMatch = async (confirmedForfeitWinner?: 1 | 2) => {
+    if (updateMatchStatus === "forfeit" && confirmedForfeitWinner === undefined) {
+      setForfeitWinnerTeam(null);
+      setForfeitModalOpen(true);
+      return;
+    }
+
     setUpdatingMatch(true);
     setUpdateMatchError(null);
     setUpdateMatchSuccess(null);
@@ -428,6 +438,10 @@ export function UpdateMatchTab() {
       payload.type = updateMatchType.trim() || null;
       payload.youtubeLink = updateMatchYoutubeLink.trim() || null;
 
+      if (updateMatchStatus === "forfeit" && confirmedForfeitWinner != null) {
+        payload.forfeitWinnerTeam = confirmedForfeitWinner;
+      }
+
       const response = await fetch(`/api/admin/matches/${parsedId}/update`, {
         method: "PATCH",
         headers: {
@@ -453,6 +467,7 @@ export function UpdateMatchTab() {
       }
 
       setUpdateMatchSuccess(result.message || "Match updated successfully.");
+      setForfeitModalOpen(false);
       setListRefreshKey((k) => k + 1);
     } catch {
       setUpdateMatchError("Unexpected error while updating match.");
@@ -506,6 +521,9 @@ export function UpdateMatchTab() {
       setDeletingMatch(false);
     }
   };
+
+  const forfeitTeam1Name = `${resolvePlayerName(Number(resolvedTeam1P1) || null, playerNameById)} & ${resolvePlayerName(Number(resolvedTeam1P2) || null, playerNameById)}`;
+  const forfeitTeam2Name = `${resolvePlayerName(Number(resolvedTeam2P1) || null, playerNameById)} & ${resolvePlayerName(Number(resolvedTeam2P2) || null, playerNameById)}`;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -961,7 +979,7 @@ export function UpdateMatchTab() {
           <div className="flex gap-3 pt-1">
             <button
               type="button"
-              onClick={() => void handleUpdateMatch()}
+              onClick={() => void handleUpdateMatch(undefined)}
               disabled={updatingMatch || loadingDetails}
               className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
@@ -972,6 +990,79 @@ export function UpdateMatchTab() {
               onClick={closeEditModal}
               disabled={updatingMatch}
               className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Forfeit confirmation modal */}
+      <Modal
+        isOpen={forfeitModalOpen}
+        onClose={() => setForfeitModalOpen(false)}
+        title="Confirm Forfeit"
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div className="rounded-md border border-amber-800/40 bg-amber-900/20 px-3 py-2.5 text-sm text-amber-300 space-y-1">
+            <p className="font-semibold">What happens when confirmed:</p>
+            <ul className="text-xs text-amber-200/80 space-y-0.5 list-disc list-inside">
+              <li>Winning team gets a leaderboard win (2–0 sets)</li>
+              <li>No ratings will be recalculated</li>
+              <li>Predictions will not be resolved — no rewards granted</li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
+              Which team won?
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setForfeitWinnerTeam(1)}
+                className={`rounded-md border px-3 py-2.5 text-sm font-medium transition-colors text-left ${
+                  forfeitWinnerTeam === 1
+                    ? "border-sky-500/60 bg-sky-900/30 text-sky-300"
+                    : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600"
+                }`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-widest text-sky-500 block mb-0.5">Team 1</span>
+                {forfeitTeam1Name}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForfeitWinnerTeam(2)}
+                className={`rounded-md border px-3 py-2.5 text-sm font-medium transition-colors text-left ${
+                  forfeitWinnerTeam === 2
+                    ? "border-amber-500/60 bg-amber-900/30 text-amber-300"
+                    : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600"
+                }`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500 block mb-0.5">Team 2</span>
+                {forfeitTeam2Name}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (forfeitWinnerTeam == null) return;
+                void handleUpdateMatch(forfeitWinnerTeam);
+              }}
+              disabled={forfeitWinnerTeam == null || updatingMatch}
+              className="flex-1 rounded-md bg-amber-700 px-3 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {updatingMatch ? "Updating…" : "Confirm Forfeit"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setForfeitModalOpen(false)}
+              disabled={updatingMatch}
+              className="flex-1 rounded-md border border-slate-700 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-60 transition-colors"
             >
               Cancel
             </button>

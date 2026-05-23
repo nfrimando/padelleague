@@ -2,6 +2,7 @@ import { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { calculateV1PredictionReward } from "@/lib/rewards/v1/calculate";
 import { computeV3ExpectedWinProbability } from "@/lib/ratings/v3/calculate";
 import { notifyPredictionCorrect } from "@/lib/email/notifications/predictionCorrect";
+import { fetchPlayerPrefsMap } from "@/lib/notificationPreferences";
 
 const REWARD_SYSTEM_VERSION = "v1";
 const PREDICTION_MODEL_VERSION = "v3";
@@ -200,6 +201,8 @@ async function sendCorrectPredictionEmails(
     ]),
   );
 
+  const predictorPrefsMap = await fetchPlayerPrefsMap(supabase, predictorPlayerIds);
+
   const team1 = (teamRows ?? []).find((t) => t.team_number === 1);
   const team2 = (teamRows ?? []).find((t) => t.team_number === 2);
   const team1Players: [string, string] = [
@@ -221,11 +224,13 @@ async function sendCorrectPredictionEmails(
   for (const pick of correctPicks) {
     if (!pick.email) continue;
     if (pick.player_id != null && playerNotifMap.get(pick.player_id) === false) continue;
+    if (pick.player_id != null && predictorPrefsMap.get(pick.player_id)?.predictions === false) continue;
     const recipientName =
       pick.player_id != null ? (playerMap.get(pick.player_id) ?? pick.email) : pick.email;
     const pointsAwarded = pointsMap.get(pick.id) ?? 0;
 
     await notifyPredictionCorrect({
+      playerId: pick.player_id,
       recipientName,
       recipientEmail: pick.email,
       team1Players,

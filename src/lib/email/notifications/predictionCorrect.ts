@@ -1,6 +1,8 @@
 import { sendEmail } from "../send";
+import { buildUnsubscribeUrl } from "../unsubscribeToken";
 
 type PredictionCorrectData = {
+  playerId: number | null;
   recipientName: string;
   recipientEmail: string;
   team1Players: [string, string];
@@ -24,7 +26,13 @@ function buildEmailHtml({
   sets,
   pointsAwarded,
   predictionsUrl,
-}: PredictionCorrectData & { predictionsUrl: string }): string {
+  unsubscribePredictionsUrl,
+  unsubscribeAllUrl,
+}: PredictionCorrectData & {
+  predictionsUrl: string;
+  unsubscribePredictionsUrl: string | null;
+  unsubscribeAllUrl: string | null;
+}): string {
   const t1Name = `${team1Players[0]} & ${team1Players[1]}`;
   const t2Name = `${team2Players[0]} & ${team2Players[1]}`;
   const scoreLabel = buildScoreLabel(sets);
@@ -40,6 +48,15 @@ function buildEmailHtml({
         <td style="padding: 8px 0; font-weight: 600;">${dateLocal}${timeStr}</td>
       </tr>`);
   }
+
+  const unsubscribeFooter =
+    unsubscribePredictionsUrl && unsubscribeAllUrl
+      ? `<p style="margin-top: 8px; color: #aaa; font-size: 11px;">
+          <a href="${unsubscribePredictionsUrl}" style="color: #aaa;">Unsubscribe from prediction emails</a>
+          &nbsp;&middot;&nbsp;
+          <a href="${unsubscribeAllUrl}" style="color: #aaa;">Unsubscribe from all emails</a>
+        </p>`
+      : "";
 
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
@@ -86,18 +103,29 @@ function buildEmailHtml({
       <p style="margin-top: 32px; color: #aaa; font-size: 12px;">
         Padel League PH &mdash; notifications@padelsense.app
       </p>
+      ${unsubscribeFooter}
     </div>
   `;
 }
 
 export async function notifyPredictionCorrect(data: PredictionCorrectData): Promise<void> {
-  const { recipientName, recipientEmail } = data;
+  const { recipientName, recipientEmail, playerId } = data;
   const t1Name = `${data.team1Players[0]} & ${data.team1Players[1]}`;
   const t2Name = `${data.team2Players[0]} & ${data.team2Players[1]}`;
   const predictionsUrl = "https://www.padelph.com/predictions";
 
+  const unsubscribePredictionsUrl = playerId
+    ? buildUnsubscribeUrl(playerId, "predictions")
+    : null;
+  const unsubscribeAllUrl = playerId ? buildUnsubscribeUrl(playerId, "all") : null;
+
   const subject = `${recipientName} — You predicted right! (${t1Name} vs ${t2Name})`;
-  const html = buildEmailHtml({ ...data, predictionsUrl });
+  const html = buildEmailHtml({
+    ...data,
+    predictionsUrl,
+    unsubscribePredictionsUrl,
+    unsubscribeAllUrl,
+  });
 
   const result = await sendEmail({ to: recipientEmail, subject, html });
   if (!result.ok) {
