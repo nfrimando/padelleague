@@ -86,6 +86,8 @@ await notifyXxx(...).catch((err) => console.error("[email] ...", err));
 ```
 Always include the person's name in the subject line (e.g. `"New Player Claim: ${name}"`) to prevent Gmail threading separate notifications.
 
+**Email rate limit** — Resend enforces 2 requests/second. The `sendEmail` helper in `src/lib/email/send.ts` enforces a 1.5s minimum gap between sends using module-level state. Do **not** add per-notification delays — they live in `sendEmail` only. Never send emails in parallel (`Promise.all`) from within a single request.
+
 Every transactional email sent to players must:
 1. **Anti-threading subject** — include a unique detail in the subject (player name, match date, opponent names, or similar) so Gmail/Outlook never collapses separate notifications into the same thread.
 2. **Unsubscribe footer** — always render a subtle, low-contrast one-liner at the bottom of the email body: `You're receiving this because you're a Padel League PH member. <a href="...">Unsubscribe</a>` linking to the player's unsubscribe URL (token-based, no auth required).
