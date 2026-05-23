@@ -240,7 +240,7 @@ export default function EditProfileModal({
         {/* Country */}
         <div className="space-y-1.5">
           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
-            Country
+            Country (Nationality)
           </label>
           <select
             value={form.country}
