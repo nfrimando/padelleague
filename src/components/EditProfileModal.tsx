@@ -10,6 +10,7 @@ import type { Player } from "@/lib/types";
 
 type Props = {
   player: Player;
+  adminTargetPlayerId?: number;
   isOpen: boolean;
   onClose: () => void;
   onSaved: (player: Player) => void;
@@ -69,6 +70,7 @@ function Toggle({
 
 export default function EditProfileModal({
   player,
+  adminTargetPlayerId,
   isOpen,
   onClose,
   onSaved,
@@ -113,7 +115,10 @@ export default function EditProfileModal({
           data: { session },
         } = await supabase.auth.getSession();
         if (!session) return;
-        const res = await fetch("/api/players/notification-preferences", {
+        const notifUrl = adminTargetPlayerId
+          ? `/api/players/notification-preferences?player_id=${adminTargetPlayerId}`
+          : "/api/players/notification-preferences";
+        const res = await fetch(notifUrl, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
         if (!res.ok) return;
@@ -159,7 +164,10 @@ export default function EditProfileModal({
         return;
       }
 
-      const res = await fetch("/api/players/profile", {
+      const profileUrl = adminTargetPlayerId
+        ? `/api/players/profile?player_id=${adminTargetPlayerId}`
+        : "/api/players/profile";
+      const res = await fetch(profileUrl, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

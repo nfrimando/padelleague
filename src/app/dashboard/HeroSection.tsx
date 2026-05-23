@@ -43,6 +43,7 @@ type Props = {
   onPayingSignupIdChange: (id: string | null) => void;
   onRefreshSignups: () => void;
   showEditProfile?: boolean;
+  adminTargetPlayerId?: number;
   onPlayerSaved?: (player: Player) => void;
 };
 
@@ -160,6 +161,7 @@ export default function HeroSection({
   onPayingSignupIdChange,
   onRefreshSignups,
   showEditProfile = false,
+  adminTargetPlayerId,
   onPlayerSaved,
 }: Props) {
   const [payOnlineLoading, setPayOnlineLoading] = useState(false);
@@ -177,14 +179,17 @@ export default function HeroSection({
     void (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      const res = await fetch("/api/players/schedule-preferences", {
+      const schedUrl = adminTargetPlayerId
+        ? `/api/players/schedule-preferences?player_id=${adminTargetPlayerId}`
+        : "/api/players/schedule-preferences";
+      const res = await fetch(schedUrl, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) return;
       const json = (await res.json()) as { schedule?: { day_of_week: number; start_hour: number }[] };
       setHasSchedule((json.schedule ?? []).length > 0);
     })();
-  }, [showEditProfile, player.player_id]);
+  }, [showEditProfile, player.player_id, adminTargetPlayerId]);
 
   async function handleAvatarUpload(file: File) {
     const {
@@ -703,6 +708,7 @@ export default function HeroSection({
       {showEditProfile && (
         <EditProfileModal
           player={player}
+          adminTargetPlayerId={adminTargetPlayerId}
           isOpen={editModalOpen}
           onClose={() => setEditModalOpen(false)}
           onSaved={(updated) => {
@@ -716,6 +722,7 @@ export default function HeroSection({
       {showEditProfile && (
         <EditScheduleModal
           playerId={Number(player.player_id)}
+          adminTargetPlayerId={adminTargetPlayerId}
           isOpen={scheduleModalOpen}
           onClose={() => setScheduleModalOpen(false)}
           onSaved={() => { setScheduleModalOpen(false); setHasSchedule(true); }}

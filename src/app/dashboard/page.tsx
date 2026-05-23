@@ -450,7 +450,8 @@ export default function DashboardPage() {
                   payingSignupId={payingSignupId}
                   onPayingSignupIdChange={setPayingSignupId}
                   onRefreshSignups={() => void load()}
-                  showEditProfile={!isViewingAs}
+                  showEditProfile={!isViewingAs || isAdmin}
+                  adminTargetPlayerId={isViewingAs ? Number(displayPlayer.player_id) : undefined}
                   onPlayerSaved={(updated) => setPlayer(updated)}
                 />
                 {pendingPaymentSignup ? (

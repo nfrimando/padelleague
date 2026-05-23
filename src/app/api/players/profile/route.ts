@@ -165,7 +165,19 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Player not found" }, { status: 404 });
   }
 
-  const playerId = existing.player_id as number;
+  let playerId = existing.player_id as number;
+  const queryPlayerIdParam = request.nextUrl.searchParams.get("player_id");
+  if (queryPlayerIdParam) {
+    const requestedId = Number(queryPlayerIdParam);
+    if (requestedId && requestedId !== playerId) {
+      const { data: adminRow } = await serviceClient
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (adminRow) playerId = requestedId;
+    }
+  }
 
   let updated;
   if (Object.keys(updates).length > 0) {

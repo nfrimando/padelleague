@@ -23,12 +23,13 @@ function slotKey(day: number, hour: number): string {
 
 type Props = {
   playerId: number;
+  adminTargetPlayerId?: number;
   isOpen: boolean;
   onClose: () => void;
   onSaved?: () => void;
 };
 
-export default function EditScheduleModal({ isOpen, onClose, onSaved }: Props) {
+export default function EditScheduleModal({ isOpen, onClose, onSaved, adminTargetPlayerId }: Props) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -54,7 +55,10 @@ export default function EditScheduleModal({ isOpen, onClose, onSaved }: Props) {
           data: { session },
         } = await supabase.auth.getSession();
         if (!session) return;
-        const res = await fetch("/api/players/schedule-preferences", {
+        const schedUrl = adminTargetPlayerId
+          ? `/api/players/schedule-preferences?player_id=${adminTargetPlayerId}`
+          : "/api/players/schedule-preferences";
+        const res = await fetch(schedUrl, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
         if (!res.ok) return;
@@ -175,7 +179,10 @@ export default function EditScheduleModal({ isOpen, onClose, onSaved }: Props) {
         return { day_of_week: day, start_hour: hour };
       });
 
-      const res = await fetch("/api/players/schedule-preferences", {
+      const saveUrl = adminTargetPlayerId
+        ? `/api/players/schedule-preferences?player_id=${adminTargetPlayerId}`
+        : "/api/players/schedule-preferences";
+      const res = await fetch(saveUrl, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
