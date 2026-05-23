@@ -33,10 +33,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Player not found" }, { status: 404 });
   }
 
+  let targetPlayerId = player.player_id as number;
+  const queryPlayerIdParam = request.nextUrl.searchParams.get("player_id");
+  if (queryPlayerIdParam) {
+    const requestedId = Number(queryPlayerIdParam);
+    if (requestedId && requestedId !== targetPlayerId) {
+      const { data: adminRow } = await serviceClient
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (adminRow) targetPlayerId = requestedId;
+    }
+  }
+
   const { data: rows, error: fetchError } = await serviceClient
     .from("player_schedule_preferences")
     .select("day_of_week, start_hour")
-    .eq("player_id", player.player_id);
+    .eq("player_id", targetPlayerId);
 
   if (fetchError) {
     return NextResponse.json({ error: "Failed to fetch schedule" }, { status: 500 });
@@ -100,10 +114,24 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Player not found" }, { status: 404 });
   }
 
+  let targetPlayerId = player.player_id as number;
+  const queryPlayerIdParam = request.nextUrl.searchParams.get("player_id");
+  if (queryPlayerIdParam) {
+    const requestedId = Number(queryPlayerIdParam);
+    if (requestedId && requestedId !== targetPlayerId) {
+      const { data: adminRow } = await serviceClient
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (adminRow) targetPlayerId = requestedId;
+    }
+  }
+
   const { error: deleteError } = await serviceClient
     .from("player_schedule_preferences")
     .delete()
-    .eq("player_id", player.player_id);
+    .eq("player_id", targetPlayerId);
 
   if (deleteError) {
     return NextResponse.json({ error: "Failed to save schedule" }, { status: 500 });
@@ -111,7 +139,7 @@ export async function PUT(request: NextRequest) {
 
   if (slots.length > 0) {
     const rows = slots.map((s) => ({
-      player_id: player.player_id,
+      player_id: targetPlayerId,
       day_of_week: s.day_of_week,
       start_hour: s.start_hour,
     }));
@@ -128,7 +156,7 @@ export async function PUT(request: NextRequest) {
   const { data: saved } = await serviceClient
     .from("player_schedule_preferences")
     .select("day_of_week, start_hour")
-    .eq("player_id", player.player_id);
+    .eq("player_id", targetPlayerId);
 
   return NextResponse.json({ schedule: saved ?? [] });
 }

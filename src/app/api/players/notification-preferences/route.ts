@@ -32,6 +32,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Player not found" }, { status: 404 });
   }
 
-  const prefs = await fetchPlayerPrefs(serviceClient, player.player_id as number);
+  let targetPlayerId = player.player_id as number;
+  const queryPlayerIdParam = request.nextUrl.searchParams.get("player_id");
+  if (queryPlayerIdParam) {
+    const requestedId = Number(queryPlayerIdParam);
+    if (requestedId && requestedId !== targetPlayerId) {
+      const { data: adminRow } = await serviceClient
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (adminRow) targetPlayerId = requestedId;
+    }
+  }
+
+  const prefs = await fetchPlayerPrefs(serviceClient, targetPlayerId);
   return NextResponse.json({ notification_preferences: prefs });
 }
