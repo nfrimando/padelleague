@@ -23,7 +23,7 @@ export type LeaderboardEvent = {
   end_date: string | null;
 };
 
-type MatchRow = { match_id: number; winner_team: number | null; date_local: string | null; type: string | null };
+type MatchRow = { match_id: number; winner_team: number | null; status: string; date_local: string | null; type: string | null };
 type TeamRow = { match_id: number; team_number: number | null; player_1_id: number | null; player_2_id: number | null; sets_won: number | null };
 type RatingRow = { match_id: number; player_id: number | string; rating_pre: number | null; rating_post: number | null; formula_name: string | null };
 type PlayerRow = { player_id: number | string; name: string | null; nickname: string | null; image_link: string | null };
@@ -59,8 +59,8 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
 
   let matchQuery = db
     .from("matches")
-    .select("match_id, winner_team, date_local, type")
-    .eq("status", "completed")
+    .select("match_id, winner_team, status, date_local, type")
+    .in("status", ["completed", "forfeit"])
     .order("date_local", { ascending: true });
 
   if (eventId !== "ALL") {
@@ -100,9 +100,9 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
     teamSetsByMatch[team.match_id][team.team_number] = team.sets_won;
   }
 
-  const matchMeta: Record<number, { winner: number | null; date: string | null }> = {};
+  const matchMeta: Record<number, { winner: number | null; status: string; date: string | null }> = {};
   for (const m of matches) {
-    matchMeta[m.match_id] = { winner: m.winner_team, date: m.date_local };
+    matchMeta[m.match_id] = { winner: m.winner_team, status: m.status, date: m.date_local };
   }
 
   // player_id → [{ matchId, teamNumber, date }]
@@ -176,15 +176,25 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
 
       const ownTeamNumber = entry.teamNumber;
       if (ownTeamNumber == null) continue;
-      const ownSets = teamSetsByMatch[entry.matchId]?.[ownTeamNumber] ?? null;
-      const opponentTeamNumber = ownTeamNumber === 1 ? 2 : ownTeamNumber === 2 ? 1 : null;
-      const opponentSets =
-        opponentTeamNumber == null
-          ? null
-          : (teamSetsByMatch[entry.matchId]?.[opponentTeamNumber] ?? null);
 
-      if (ownSets != null) setsWon += ownSets;
-      if (opponentSets != null) setsLost += opponentSets;
+      if (matchMeta[entry.matchId]?.status === "forfeit") {
+        // Forfeit: winning team gets 2 sets won, losing team gets 2 sets lost
+        if (entry.teamNumber === winner) {
+          setsWon += 2;
+        } else {
+          setsLost += 2;
+        }
+      } else {
+        const ownSets = teamSetsByMatch[entry.matchId]?.[ownTeamNumber] ?? null;
+        const opponentTeamNumber = ownTeamNumber === 1 ? 2 : ownTeamNumber === 2 ? 1 : null;
+        const opponentSets =
+          opponentTeamNumber == null
+            ? null
+            : (teamSetsByMatch[entry.matchId]?.[opponentTeamNumber] ?? null);
+
+        if (ownSets != null) setsWon += ownSets;
+        if (opponentSets != null) setsLost += opponentSets;
+      }
     }
 
     // Sort filtered rating entries by date ascending so currentRating reflects the latest category match.

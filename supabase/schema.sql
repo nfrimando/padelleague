@@ -214,3 +214,10 @@ CREATE TABLE public.webhook_events (
   processed_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT webhook_events_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.player_notification_preferences (
+  player_id  bigint  NOT NULL REFERENCES public.players(player_id) ON DELETE CASCADE,
+  notif_type text    NOT NULL,
+  subscribed boolean NOT NULL DEFAULT true,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT player_notification_preferences_pkey PRIMARY KEY (player_id, notif_type)
+);

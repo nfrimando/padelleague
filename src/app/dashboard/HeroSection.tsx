@@ -113,10 +113,12 @@ function StatPill({
   label,
   value,
   highlight,
+  tooltip,
 }: {
   label: string;
   value: string;
   highlight?: boolean;
+  tooltip?: string;
 }) {
   return (
     <div className="flex flex-col items-center gap-0.5 py-4 px-2">
@@ -125,8 +127,16 @@ function StatPill({
       >
         {value}
       </span>
-      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
+      <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
         {label}
+        {tooltip && (
+          <span className="relative group/tip cursor-help">
+            <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-[#687FA3]/50 fill-current"><circle cx="6" cy="6" r="5.5" stroke="currentColor" strokeWidth="1" fill="none"/><text x="6" y="9" textAnchor="middle" fontSize="7" fontWeight="bold" fill="currentColor">i</text></svg>
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg bg-slate-800 border border-slate-700 px-2.5 py-2 text-[9px] font-normal normal-case tracking-normal text-slate-300 leading-relaxed opacity-0 group-hover/tip:opacity-100 transition-opacity z-20 text-center whitespace-normal">
+              {tooltip}
+            </span>
+          </span>
+        )}
       </span>
     </div>
   );
@@ -441,6 +451,7 @@ export default function HeroSection({
         <StatPill
           label="Matches"
           value={loading ? "…" : String(stats.totalMatches)}
+          tooltip="Only completed matches are counted. Forfeited and cancelled matches are excluded."
         />
         <StatPill label="Wins" value={loading ? "…" : String(stats.wins)} />
         <StatPill label="Losses" value={loading ? "…" : String(stats.losses)} />

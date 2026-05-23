@@ -335,9 +335,11 @@ export default function MatchCalendar({
                         (t) => t.team_number === 2,
                       );
                       const team1IsWinner =
-                        match.status === "completed" && match.winner_team === 1;
+                        (match.status === "completed" || match.status === "forfeit") &&
+                        match.winner_team === 1;
                       const team2IsWinner =
-                        match.status === "completed" && match.winner_team === 2;
+                        (match.status === "completed" || match.status === "forfeit") &&
+                        match.winner_team === 2;
 
                       return (
                         <div key={match.match_id}>
@@ -483,6 +485,10 @@ export default function MatchCalendar({
                           <span className="text-red-600 dark:text-red-400 font-semibold">
                             Cancelled
                           </span>
+                        ) : m.status === "forfeit" ? (
+                          <span className="text-rose-500 dark:text-rose-400 font-semibold">
+                            Forfeit
+                          </span>
                         ) : (
                           matchTopLine(m)
                         )}
@@ -490,7 +496,7 @@ export default function MatchCalendar({
                     </div>
                     <TeamPlayerLine
                       team={t1}
-                      isWinner={m.status === "completed" && m.winner_team === 1}
+                      isWinner={(m.status === "completed" || m.status === "forfeit") && m.winner_team === 1}
                       variant="desktop-text"
                       className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-100 truncate"
                     />
@@ -499,7 +505,7 @@ export default function MatchCalendar({
                     </div>
                     <TeamPlayerLine
                       team={t2}
-                      isWinner={m.status === "completed" && m.winner_team === 2}
+                      isWinner={(m.status === "completed" || m.status === "forfeit") && m.winner_team === 2}
                       variant="desktop-text"
                       className="text-[10px] font-medium leading-tight text-slate-800 dark:text-slate-100 truncate"
                     />

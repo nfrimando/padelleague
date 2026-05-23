@@ -95,6 +95,9 @@ export default function PredictPage() {
   const [activeTab, setActiveTab] = useState<"predict" | "leaderboard">(
     "predict",
   );
+  const [matchSubTab, setMatchSubTab] = useState<"upcoming" | "finished">(
+    "upcoming",
+  );
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -136,6 +139,16 @@ export default function PredictPage() {
   } = usePredictableMatches();
 
   const matchIds = useMemo(() => matches.map((m) => m.match_id), [matches]);
+  const upcomingMatches = useMemo(
+    () => matches.filter((m) => m.status === "scheduled"),
+    [matches],
+  );
+  const finishedMatches = useMemo(
+    () => matches.filter((m) => m.status !== "scheduled"),
+    [matches],
+  );
+  const displayedMatches =
+    matchSubTab === "upcoming" ? upcomingMatches : finishedMatches;
   const {
     picks,
     setPicks,
@@ -151,6 +164,25 @@ export default function PredictPage() {
 
   const handlePickRequest = (match: PredictableMatch, team: 1 | 2) => {
     if (!user) return;
+
+    // Block if current Philippines time (UTC+8) is past the match start time
+    if (match.date_local && match.time_local) {
+      const matchTimePH = new Date(
+        `${match.date_local}T${match.time_local}+08:00`,
+      );
+      if (new Date() >= matchTimePH) {
+        setPickErrors((prev) => {
+          const next = new Map(prev);
+          next.set(
+            match.match_id,
+            "This match is already underway. Predictions are closed.",
+          );
+          return next;
+        });
+        return;
+      }
+    }
+
     setPickErrors((prev) => {
       if (!prev.has(match.match_id)) return prev;
       const next = new Map(prev);
@@ -321,39 +353,79 @@ export default function PredictPage() {
                 </div>
               )}
 
+              {/* Upcoming / Finished subtabs */}
+              {!isLoading && !matchesError && user !== null && (
+                <div className="flex bg-[#162032] border border-[#687FA3]/10 rounded-xl p-1 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setMatchSubTab("upcoming")}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                      matchSubTab === "upcoming"
+                        ? "bg-[#1a2840] text-slate-200"
+                        : "text-[#687FA3] hover:text-slate-300"
+                    }`}
+                  >
+                    Upcoming
+                    {upcomingMatches.length > 0 && (
+                      <span className="ml-1 opacity-60">
+                        ({upcomingMatches.length})
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchSubTab("finished")}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                      matchSubTab === "finished"
+                        ? "bg-[#1a2840] text-slate-200"
+                        : "text-[#687FA3] hover:text-slate-300"
+                    }`}
+                  >
+                    Finished
+                    {finishedMatches.length > 0 && (
+                      <span className="ml-1 opacity-60">
+                        ({finishedMatches.length})
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* Empty state */}
-              {!isLoading &&
-                !matchesError &&
-                matches.length === 0 &&
-                user !== null && (
+              {!isLoading && !matchesError && user !== null &&
+                displayedMatches.length === 0 && (
                   <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl px-6 py-10 text-center">
                     <p className="text-sm font-semibold text-slate-300 mb-1">
-                      No upcoming matches
+                      {matchSubTab === "upcoming"
+                        ? "No upcoming matches"
+                        : "No finished matches"}
                     </p>
                     <p className="text-xs text-[#687FA3]">
-                      There are no fully-scheduled matches in the next{" "}
-                      {PREDICT_DAYS_AHEAD} days.
+                      {matchSubTab === "upcoming"
+                        ? `There are no fully-scheduled matches in the next ${PREDICT_DAYS_AHEAD} days.`
+                        : "No completed or forfeited matches in the recent window."}
                     </p>
                   </div>
                 )}
 
               {/* Match cards */}
-              {!isLoading && !matchesError && user !== null && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {matches.map((match) => (
-                    <PredictMatchCard
-                      key={match.match_id}
-                      match={match}
-                      existingPick={picks.get(match.match_id) ?? null}
-                      crowdCounts={crowdCounts.get(match.match_id) ?? null}
-                      canPredict={hasPlayerProfile === true}
-                      onPickRequest={(team) => handlePickRequest(match, team)}
-                      isSaving={savingMatchIds.has(match.match_id)}
-                      pickError={pickErrors.get(match.match_id) ?? null}
-                    />
-                  ))}
-                </div>
-              )}
+              {!isLoading && !matchesError && user !== null &&
+                displayedMatches.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {displayedMatches.map((match) => (
+                      <PredictMatchCard
+                        key={match.match_id}
+                        match={match}
+                        existingPick={picks.get(match.match_id) ?? null}
+                        crowdCounts={crowdCounts.get(match.match_id) ?? null}
+                        canPredict={hasPlayerProfile === true}
+                        onPickRequest={(team) => handlePickRequest(match, team)}
+                        isSaving={savingMatchIds.has(match.match_id)}
+                        pickError={pickErrors.get(match.match_id) ?? null}
+                      />
+                    ))}
+                  </div>
+                )}
             </div>
 
             {/* Leaderboard sidebar */}

@@ -22,6 +22,8 @@ type FormState = {
   country: string;
   is_public: boolean;
   is_notifications_subscribed: boolean;
+  notif_match_results: boolean;
+  notif_predictions: boolean;
   preferred_side: "left" | "right" | "both" | "";
 };
 
@@ -81,6 +83,8 @@ export default function EditProfileModal({
     country: player.country ?? "PH",
     is_public: player.is_public ?? false,
     is_notifications_subscribed: player.is_notifications_subscribed ?? false,
+    notif_match_results: true,
+    notif_predictions: true,
     preferred_side: player.preferred_side ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -88,7 +92,8 @@ export default function EditProfileModal({
 
   // Re-sync form when player prop changes (e.g. after a save)
   useEffect(() => {
-    setForm({
+    setForm((prev) => ({
+      ...prev,
       nickname: player.nickname ?? "",
       phone_country_code: player.phone_country_code ?? "+63",
       phone_number: player.phone_number ?? "",
@@ -96,8 +101,36 @@ export default function EditProfileModal({
       is_public: player.is_public ?? false,
       is_notifications_subscribed: player.is_notifications_subscribed ?? false,
       preferred_side: player.preferred_side ?? "",
-    });
+    }));
   }, [player]);
+
+  // Fetch per-type notification preferences when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    void (async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+        const res = await fetch("/api/players/notification-preferences", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          notification_preferences?: { match_results?: boolean; predictions?: boolean };
+        };
+        const prefs = json.notification_preferences ?? {};
+        setForm((prev) => ({
+          ...prev,
+          notif_match_results: prefs.match_results ?? true,
+          notif_predictions: prefs.predictions ?? true,
+        }));
+      } catch {
+        // silently ignore; defaults stay true
+      }
+    })();
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -140,6 +173,10 @@ export default function EditProfileModal({
           is_public: form.is_public,
           is_notifications_subscribed: form.is_notifications_subscribed,
           preferred_side: form.preferred_side || null,
+          notification_preferences: {
+            match_results: form.notif_match_results,
+            predictions: form.notif_predictions,
+          },
         }),
       });
 
@@ -288,14 +325,36 @@ export default function EditProfileModal({
             label="Public profile"
             description="Anyone can see your photo and contact details. When off, only league members can."
           />
-          <Toggle
-            checked={form.is_notifications_subscribed}
-            onChange={(v) =>
-              setForm((f) => ({ ...f, is_notifications_subscribed: v }))
-            }
-            label="Email updates"
-            description="Receive notifications about events and league news."
-          />
+          <div className="space-y-3">
+            <Toggle
+              checked={form.is_notifications_subscribed}
+              onChange={(v) =>
+                setForm((f) => ({ ...f, is_notifications_subscribed: v }))
+              }
+              label="Email updates"
+              description="Receive notifications about events and league news."
+            />
+            <div
+              className={`overflow-hidden transition-all duration-200 ${
+                form.is_notifications_subscribed ? "max-h-48 opacity-100" : "max-h-0 opacity-0"
+              }`}
+            >
+              <div className="pl-4 border-l border-[#687FA3]/20 space-y-3 pt-1">
+                <Toggle
+                  checked={form.notif_match_results}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_match_results: v }))}
+                  label="Match results"
+                  description="Score, rating change, and win/loss for your completed matches."
+                />
+                <Toggle
+                  checked={form.notif_predictions}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_predictions: v }))}
+                  label="Prediction results"
+                  description="Points awarded when a match prediction you made is correct."
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Error */}

@@ -1,4 +1,7 @@
 import { sendEmail } from "../send";
+import { buildUnsubscribeUrl } from "../unsubscribeToken";
+import { fetchPlayerPrefsMap } from "@/lib/notificationPreferences";
+import { getServerServiceClient } from "@/app/api/_lib/supabase";
 
 type PlayerInfo = {
   player_id: number;
@@ -52,6 +55,8 @@ function buildEmailHtml({
   timeLocal,
   venue,
   dashboardUrl,
+  unsubscribeMatchUrl,
+  unsubscribeAllUrl,
 }: {
   recipient: PlayerInfo;
   recipientTeam: 1 | 2;
@@ -63,6 +68,8 @@ function buildEmailHtml({
   timeLocal: string | null;
   venue: string | null;
   dashboardUrl: string;
+  unsubscribeMatchUrl: string;
+  unsubscribeAllUrl: string;
 }): string {
   const isWin = rating.result === "win";
   const resultLabel = isWin ? "Win" : "Loss";
@@ -139,6 +146,11 @@ function buildEmailHtml({
       <p style="margin-top: 32px; color: #aaa; font-size: 12px;">
         Padel League PH &mdash; notifications@padelsense.app
       </p>
+      <p style="margin-top: 8px; color: #aaa; font-size: 11px;">
+        <a href="${unsubscribeMatchUrl}" style="color: #aaa;">Unsubscribe from match result emails</a>
+        &nbsp;&middot;&nbsp;
+        <a href="${unsubscribeAllUrl}" style="color: #aaa;">Unsubscribe from all emails</a>
+      </p>
     </div>
   `;
 }
@@ -160,15 +172,23 @@ export async function notifyMatchCompleted(data: MatchCompletedData): Promise<vo
     { player: team2Players[1], team: 2 },
   ];
 
+  const playerIds = allPlayers.map(({ player }) => player.player_id);
+  const supabase = getServerServiceClient();
+  const prefsMap = await fetchPlayerPrefsMap(supabase, playerIds);
+
   for (const { player, team } of allPlayers) {
     if (!player.email) continue;
     if (player.is_notifications_subscribed === false) continue;
+    if (prefsMap.get(player.player_id)?.match_results === false) continue;
 
     const rating = data.ratings.find((r) => r.player_id === player.player_id);
     if (!rating) {
       console.warn(`[email] notifyMatchCompleted: no rating found for player_id=${player.player_id}, skipping`);
       continue;
     }
+
+    const unsubscribeMatchUrl = buildUnsubscribeUrl(player.player_id, "match_results");
+    const unsubscribeAllUrl = buildUnsubscribeUrl(player.player_id, "all");
 
     const html = buildEmailHtml({
       recipient: player,
@@ -181,6 +201,8 @@ export async function notifyMatchCompleted(data: MatchCompletedData): Promise<vo
       timeLocal: data.timeLocal,
       venue: data.venue,
       dashboardUrl,
+      unsubscribeMatchUrl,
+      unsubscribeAllUrl,
     });
 
     const result = await sendEmail({ to: player.email, subject, html });
