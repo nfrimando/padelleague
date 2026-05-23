@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { Pencil, X } from "lucide-react";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { usePlayerMatchCounts } from "@/lib/usePlayerMatchCounts";
 import { computeV3ExpectedWinProbability } from "@/lib/ratings/v3/calculate";
 import { Player } from "@/lib/types";
+import { usePlayerSchedules, ScheduleSlot } from "@/lib/usePlayerSchedules";
+import EditScheduleModal from "./EditScheduleModal";
 
 const FORMULA_NAME = "v3";
 
@@ -161,6 +163,188 @@ function PlayerChip({
   );
 }
 
+// ── Schedule intersection ─────────────────────────────────────────────────────
+const SCHED_HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0];
+const SCHED_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function schedHourLabel(h: number): string {
+  if (h === 0) return "12a";
+  if (h < 12) return `${h}a`;
+  if (h === 12) return "12p";
+  return `${h - 12}p`;
+}
+
+// Four distinct hues so 1/2/3/4 are unambiguous at a glance
+const COUNT_COLORS = [
+  "",
+  "bg-slate-600/50 border-slate-500/40",      // 1 — dim gray-blue
+  "bg-amber-600/60 border-amber-500/50",       // 2 — amber
+  "bg-orange-500/75 border-orange-400/65",     // 3 — orange
+  "bg-emerald-500 border-emerald-400/80",      // 4 — green
+];
+
+function fullSchedHourLabel(h: number): string {
+  if (h === 0) return "midnight";
+  if (h < 12) return `${h}am`;
+  if (h === 12) return "noon";
+  return `${h - 12}pm`;
+}
+
+function ScheduleIntersectionGrid({
+  schedules,
+  playerIdsWithNoSchedule,
+  playerIdToName,
+  totalPlayers,
+  loading,
+  onEditSchedule,
+}: {
+  schedules: Map<string, ScheduleSlot[]>;
+  playerIdsWithNoSchedule: string[];
+  playerIdToName: Map<string, string>;
+  totalPlayers: number;
+  loading: boolean;
+  onEditSchedule?: () => void;
+}) {
+  const [hoverInfo, setHoverInfo] = useState<{
+    label: string;
+    available: string[];
+    unavailable: string[];
+  } | null>(null);
+
+  const { countMap, slotPlayersMap } = useMemo(() => {
+    const counts = new Map<string, number>();
+    const players = new Map<string, string[]>();
+    for (const [pid, slots] of schedules.entries()) {
+      const name = playerIdToName.get(pid) ?? "?";
+      for (const s of slots) {
+        const key = `${s.day_of_week}-${s.start_hour}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        if (!players.has(key)) players.set(key, []);
+        players.get(key)!.push(name);
+      }
+    }
+    return { countMap: counts, slotPlayersMap: players };
+  }, [schedules, playerIdToName]);
+
+  const hasAnySchedule = schedules.size > 0;
+  const missingNames = playerIdsWithNoSchedule
+    .map((id) => playerIdToName.get(id) ?? "Unknown")
+    .join(", ");
+
+  return (
+    <div className="pt-3 border-t border-[#687FA3]/10 space-y-2">
+      {/* Header */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-black uppercase tracking-widest text-[#687FA3]">
+            Schedule Alignment
+          </span>
+          {onEditSchedule && (
+            <button
+              type="button"
+              onClick={onEditSchedule}
+              className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-[#00C8DC] bg-[#00C8DC]/10 border border-[#00C8DC]/25 hover:bg-[#00C8DC]/20 hover:border-[#00C8DC]/50 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+            >
+              <Pencil size={8} />
+              <span>Edit mine</span>
+            </button>
+          )}
+        </div>
+        {/* Legend */}
+        <div className="flex items-center gap-1.5">
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className="flex items-center gap-0.5">
+              <div className={`w-2.5 h-2.5 rounded-[2px] border ${COUNT_COLORS[n]}`} />
+              <span className="text-[8px] text-[#687FA3]/60">{n}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Info row — fixed height; shows hover details or missing-schedule notice */}
+      <div className="h-4 px-1 flex items-center gap-1.5 overflow-hidden">
+        {hoverInfo ? (
+          <>
+            <span className="text-[9px] text-[#687FA3]/60 shrink-0">
+              {hoverInfo.label} ·
+            </span>
+            {hoverInfo.available.map((n) => (
+              <span key={n} className="text-[9px] font-semibold text-emerald-400 shrink-0">{n}</span>
+            ))}
+            {hoverInfo.unavailable.map((n) => (
+              <span key={n} className="text-[9px] text-red-400/80 shrink-0">{n}</span>
+            ))}
+          </>
+        ) : playerIdsWithNoSchedule.length > 0 ? (
+          <span className="text-[9px] text-[#687FA3]/60">
+            No schedule:{" "}
+            <span className="font-semibold text-[#687FA3]/80">{missingNames}</span>
+          </span>
+        ) : null}
+      </div>
+
+      {loading ? (
+        <div className="h-32 rounded-xl bg-[#0d1520] animate-pulse" />
+      ) : !hasAnySchedule ? (
+        <p className="text-[10px] text-[#687FA3]/50 text-center py-6">
+          No players have set schedule preferences yet.
+        </p>
+      ) : (
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: "1.5rem repeat(7, 1fr)", gap: "2px" }}
+        >
+          {/* Day headers */}
+          <div />
+          {SCHED_DAYS.map((d) => (
+            <div
+              key={d}
+              className="text-[8px] font-black uppercase tracking-widest text-center text-[#687FA3]/60 pb-0.5 select-none"
+            >
+              {d}
+            </div>
+          ))}
+
+          {/* Hour rows */}
+          {SCHED_HOURS.map((hour) => (
+            <Fragment key={hour}>
+              <div className="flex items-center justify-end pr-0.5 text-[8px] font-mono text-[#687FA3]/40 select-none">
+                {schedHourLabel(hour)}
+              </div>
+              {SCHED_DAYS.map((_, d) => {
+                const key = `${d}-${hour}`;
+                const count = Math.min(countMap.get(key) ?? 0, totalPlayers);
+                const names = slotPlayersMap.get(key);
+                return (
+                  <div
+                    key={key}
+                    className={`h-4 rounded-[2px] border cursor-default transition-opacity ${
+                      count === 0
+                        ? "bg-[#0d1520] border-transparent"
+                        : COUNT_COLORS[count] ?? COUNT_COLORS[4]
+                    }`}
+                    onMouseEnter={() => {
+                      const available = names ?? [];
+                      const allNames = Array.from(playerIdToName.values());
+                      const unavailable = allNames.filter((n) => !available.includes(n));
+                      setHoverInfo({
+                        label: `${SCHED_DAYS[d]} ${fullSchedHourLabel(hour)}`,
+                        available,
+                        unavailable,
+                      });
+                    }}
+                    onMouseLeave={() => setHoverInfo(null)}
+                  />
+                );
+              })}
+            </Fragment>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function WinProbabilityCalculator({
   lockedPlayer,
@@ -171,6 +355,8 @@ export default function WinProbabilityCalculator({
     orderByName: true,
     onlyActivePlayers: true,
   });
+
+  const [editScheduleOpen, setEditScheduleOpen] = useState(false);
 
   const [slots, setSlots] = useState<Record<SlotKey, SlotState>>({
     t1p1: { ...EMPTY },
@@ -258,6 +444,20 @@ export default function WinProbabilityCalculator({
     effectiveSlots.t2p1.player &&
     effectiveSlots.t2p2.player
   );
+
+  const schedulePlayerIds = allSelected ? selectedPlayerIds : [];
+  const { schedules, playerIdsWithNoSchedule, loading: schedulesLoading } =
+    usePlayerSchedules(schedulePlayerIds);
+
+  const playerIdToName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const slot of Object.values(effectiveSlots)) {
+      if (slot.player) {
+        m.set(String(slot.player.player_id), slot.player.nickname ?? slot.player.name);
+      }
+    }
+    return m;
+  }, [effectiveSlots]);
   const allRatings = r.t1p1 != null && r.t1p2 != null && r.t2p1 != null && r.t2p2 != null;
   const loadingResult = allSelected && ratingsLoading;
   const showResult = allSelected && allRatings && !loadingResult;
@@ -305,6 +505,14 @@ export default function WinProbabilityCalculator({
   };
 
   return (
+    <>
+    {lockedPlayer && (
+      <EditScheduleModal
+        playerId={Number(lockedPlayer.player_id)}
+        isOpen={editScheduleOpen}
+        onClose={() => setEditScheduleOpen(false)}
+      />
+    )}
     <section className="bg-[#162032] border border-[#687FA3]/10 sm:rounded-3xl">
       {/* Header */}
       <div className="px-6 pt-5 pb-4 flex items-start justify-between gap-4">
@@ -434,8 +642,21 @@ export default function WinProbabilityCalculator({
               </div>
             </div>
           )}
+
+          {/* Schedule alignment — only when all 4 players are selected */}
+          {allSelected && (
+            <ScheduleIntersectionGrid
+              schedules={schedules}
+              playerIdsWithNoSchedule={playerIdsWithNoSchedule}
+              playerIdToName={playerIdToName}
+              totalPlayers={4}
+              loading={schedulesLoading}
+              onEditSchedule={lockedPlayer ? () => setEditScheduleOpen(true) : undefined}
+            />
+          )}
         </div>
       </div>
     </section>
+    </>
   );
 }

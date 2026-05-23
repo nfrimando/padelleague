@@ -221,3 +221,9 @@ CREATE TABLE public.player_notification_preferences (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT player_notification_preferences_pkey PRIMARY KEY (player_id, notif_type)
 );
+CREATE TABLE public.player_schedule_preferences (
+  player_id   bigint   NOT NULL REFERENCES public.players(player_id) ON DELETE CASCADE,
+  day_of_week smallint NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  start_hour  smallint NOT NULL CHECK (start_hour BETWEEN 0 AND 23),
+  CONSTRAINT player_schedule_preferences_pkey PRIMARY KEY (player_id, day_of_week, start_hour)
+);
