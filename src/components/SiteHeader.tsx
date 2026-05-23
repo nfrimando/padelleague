@@ -100,30 +100,32 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
           </div>
         </a>
 
-        <div className="hidden md:flex items-center gap-10 font-bold text-[11px] uppercase tracking-[0.2em]">
-          <a href="/events" className={desktopLinkClass("/events")}>
-            Events
-          </a>
-          <a href="/matches" className={desktopLinkClass("/matches")}>
-            Matches
-          </a>
-          <a href="/players" className={desktopLinkClass("/players")}>
-            Players
-          </a>
-          <a href="/leaderboard" className={desktopLinkClass("/leaderboard")}>
-            Leaderboard
-          </a>
-          <a
-            href="/predict"
-            className={`hover:text-[#00C8DC] transition-colors inline-flex items-center gap-1 ${
-              currentPath === "/predict"
-                ? "text-white border-b-2 border-[#00C8DC] pb-1"
-                : "text-amber-400/80"
-            }`}
-          >
-            Predict
-            <span className="text-[8px] font-black tracking-widest text-amber-400/60">β</span>
-          </a>
+        <div className="hidden md:flex min-w-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <div className="flex items-center gap-8 font-bold text-[11px] uppercase tracking-[0.2em] whitespace-nowrap">
+            <a href="/events" className={desktopLinkClass("/events")}>
+              Events
+            </a>
+            <a href="/matches" className={desktopLinkClass("/matches")}>
+              Matches
+            </a>
+            <a href="/players" className={desktopLinkClass("/players")}>
+              Players
+            </a>
+            <a href="/leaderboard" className={desktopLinkClass("/leaderboard")}>
+              Leaderboard
+            </a>
+            <a
+              href="/predict"
+              className={`hover:text-[#00C8DC] transition-colors inline-flex items-center gap-1 ${
+                currentPath === "/predict"
+                  ? "text-white border-b-2 border-[#00C8DC] pb-1"
+                  : "text-amber-400/80"
+              }`}
+            >
+              Predict
+              <span className="text-[8px] font-black tracking-widest text-amber-400/60">β</span>
+            </a>
+          </div>
         </div>
 
         <div className="flex items-center gap-4 min-w-0">

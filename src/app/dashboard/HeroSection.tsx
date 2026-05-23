@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Pencil, X } from "lucide-react";
+import { Calendar, ChevronRight, Pencil, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { countryToFlag } from "@/lib/utils";
 import { COUNTRY_LIST } from "@/lib/countries";
 import EditProfileModal from "@/components/EditProfileModal";
+import EditScheduleModal from "@/app/dashboard/EditScheduleModal";
 import type { Event, Player } from "@/lib/types";
 import type { DashboardStats } from "@/lib/useDashboardStats";
 
@@ -167,7 +168,23 @@ export default function HeroSection({
   const [uploading, setUploading] = useState(false);
   const [localImgSrc, setLocalImgSrc] = useState<string | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [hasSchedule, setHasSchedule] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!showEditProfile) return;
+    void (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/players/schedule-preferences", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) return;
+      const json = (await res.json()) as { schedule?: { day_of_week: number; start_hour: number }[] };
+      setHasSchedule((json.schedule ?? []).length > 0);
+    })();
+  }, [showEditProfile, player.player_id]);
 
   async function handleAvatarUpload(file: File) {
     const {
@@ -649,14 +666,28 @@ export default function HeroSection({
       {/* ── Profile link + edit ── */}
       <div className="border-t border-[#687FA3]/10 px-6 py-3 flex items-center justify-between">
         {showEditProfile ? (
-          <button
-            type="button"
-            onClick={() => setEditModalOpen(true)}
-            className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors cursor-pointer"
-          >
-            <Pencil size={11} />
-            Edit Profile
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setEditModalOpen(true)}
+              className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors cursor-pointer"
+            >
+              <Pencil size={11} />
+              Edit Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleModalOpen(true)}
+              className={`inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                hasSchedule === false
+                  ? "text-red-400 hover:text-red-300"
+                  : "text-[#687FA3] hover:text-[#00C8DC]"
+              }`}
+            >
+              <Calendar size={11} />
+              Preferred Schedule
+            </button>
+          </div>
         ) : (
           <span />
         )}
@@ -678,6 +709,16 @@ export default function HeroSection({
             setEditModalOpen(false);
             onPlayerSaved?.(updated);
           }}
+        />
+      )}
+
+      {/* ── Edit schedule modal ── */}
+      {showEditProfile && (
+        <EditScheduleModal
+          playerId={Number(player.player_id)}
+          isOpen={scheduleModalOpen}
+          onClose={() => setScheduleModalOpen(false)}
+          onSaved={() => { setScheduleModalOpen(false); setHasSchedule(true); }}
         />
       )}
 
