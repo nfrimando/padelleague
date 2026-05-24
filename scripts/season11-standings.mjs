@@ -18,6 +18,9 @@ const COUNTED_STATUSES = new Set(["completed", "forfeit"]);
 // Keyed by "Group|Team|ShortName".
 const OVERRIDES = {
   "Group A|Team 9|Jerry": 80, // Jerry Companjen, not Jerry Echter
+  // Schedule lists "Petar" for Group B Team 2, but the actual roster player is
+  // Guilherme Queen (#193), who plays Team 2's matches. Petar (#150) never played.
+  "Group B|Team 2|Petar": 193,
 };
 
 // Per-set scores for matches the DB has no match_sets/sets_won for (e.g. a
