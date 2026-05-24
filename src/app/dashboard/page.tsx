@@ -399,7 +399,7 @@ export default function DashboardPage() {
                   ).map(({ id, label, ...rest }) => {
                     const isBeta = "beta" in rest && rest.beta === true;
                     const isDisabled =
-                      !!pendingPaymentSignup && id !== "overview" && id !== "predictions";
+                      !!pendingPaymentSignup && id !== "overview";
                     return (
                       <button
                         key={id}
