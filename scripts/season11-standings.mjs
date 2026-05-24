@@ -83,7 +83,7 @@ function candidates(players, token) {
   return [];
 }
 
-(async () => {
+export async function computeStandings() {
   const rosters = parseRosters(
     new URL("../public/11.html", import.meta.url).pathname
   );
@@ -189,6 +189,7 @@ function candidates(players, token) {
   }
 
   // --- 4. Compute standings per group ------------------------------------
+  const result = [];
   for (const group of Object.keys(rosters).sort()) {
     const { idToTeam, ids, teamPlayers } = groupResolved[group];
     const stats = {};
@@ -275,7 +276,15 @@ function candidates(players, token) {
       points: 3 * stats[team].won,
     }));
     rows.sort((a, b) => b.points - a.points || b.setsWon - a.setsWon);
+    perMatch.sort((a, b) => a.match_id - b.match_id);
+    result.push({ group, rows, matches: perMatch });
+  }
 
+  return { groups: result, warnings: allWarnings };
+}
+
+function printStandings({ groups, warnings }) {
+  for (const { group, rows, matches } of groups) {
     console.log(`\n================  SEASON 11 — ${group.toUpperCase()}  ================`);
     console.log("Team    | Players                              | P | W | SetsW | Pts");
     console.log("--------|-------------------------------------|---|---|-------|----");
@@ -286,20 +295,26 @@ function candidates(players, token) {
         ).padStart(1)} | ${String(r.setsWon).padStart(5)} | ${r.points}`
       );
     }
-    console.log(`  matches used (${perMatch.length}):`);
-    for (const pm of perMatch.sort((a, b) => a.match_id - b.match_id)) {
+    console.log(`  matches used (${matches.length}):`);
+    for (const pm of matches) {
       const w = pm.winner === 1 ? pm.sq1 : pm.winner === 2 ? pm.sq2 : "(none)";
       console.log(
         `   #${String(pm.match_id).padEnd(4)} ${pm.sq1} ${pm.t1} vs ${pm.sq2} ${pm.t2} | ${pm.sw1}-${pm.sw2} | sets ${pm.setStr} | W:${w}`
       );
     }
   }
-
-  if (allWarnings.length) {
+  if (warnings.length) {
     console.log("\n!!! NOTES / WARNINGS:");
-    for (const w of allWarnings) console.log("  - " + w);
+    for (const w of warnings) console.log("  - " + w);
   }
-})().catch((e) => {
-  console.error("ERROR:", e.message);
-  process.exit(1);
-});
+}
+
+// Run as CLI when invoked directly.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  computeStandings()
+    .then(printStandings)
+    .catch((e) => {
+      console.error("ERROR:", e.message);
+      process.exit(1);
+    });
+}
