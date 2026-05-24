@@ -226,13 +226,16 @@ function buildGroupSvg(g) {
 let _Resvg = null;
 function getResvg() {
   if (_Resvg) return _Resvg;
-  try {
-    const require = createRequire(`${process.env.RESVG_DIR || "/tmp/imggen"}/x.js`);
-    _Resvg = require("@resvg/resvg-js").Resvg;
-  } catch (e) {
-    console.log("PNG disabled (resvg not available):", e.message);
-    _Resvg = false;
+  // Try, in order: standard resolution (project node_modules), then RESVG_DIR.
+  const bases = [import.meta.url, `${(process.env.RESVG_DIR || "/tmp/imggen").replace(/\/$/, "")}/x.js`];
+  for (const base of bases) {
+    try {
+      _Resvg = createRequire(base)("@resvg/resvg-js").Resvg;
+      return _Resvg;
+    } catch {}
   }
+  console.log("PNG disabled — install the rasterizer:  npm i @resvg/resvg-js   (or set RESVG_DIR). Writing .svg only.");
+  _Resvg = false;
   return _Resvg;
 }
 function writeImage(svg, base) {
