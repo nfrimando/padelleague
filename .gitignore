@@ -55,6 +55,9 @@ __pycache__/
 src/__tests__/e2e/.auth/session.json
 .claude
 
+# local personal Claude notes
+CLAUDE.local.md
+
 # generated standings graphics
 season11-standings.png
 season11-standings.svg
