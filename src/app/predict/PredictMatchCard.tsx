@@ -43,7 +43,10 @@ function PlayerRow({
   const ringCls = team === 1 ? "ring-sky-500/40" : "ring-amber-500/40";
 
   return (
-    <a href={`/players/${playerId}`} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+    <a
+      href={`/players/${playerId}`}
+      className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+    >
       <img
         src={src}
         alt={name}
@@ -64,9 +67,25 @@ function PlayerRow({
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
-function formatDate(dateLocal: string | null, timeLocal: string | null): string {
+function formatDate(
+  dateLocal: string | null,
+  timeLocal: string | null,
+): string {
   if (!dateLocal) return "";
   const [year, month, day] = dateLocal.split("-").map(Number);
   const d = new Date(year, month - 1, day);
@@ -153,7 +172,16 @@ function CrowdBar({
   );
 }
 
-export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict, onPickRequest, isSaving = false, pickError = null, result }: Props) {
+export function PredictMatchCard({
+  match,
+  existingPick,
+  crowdCounts,
+  canPredict,
+  onPickRequest,
+  isSaving = false,
+  pickError = null,
+  result,
+}: Props) {
   const { team1WinProbability, team2WinProbability } = match;
   const ewp1Pct = (team1WinProbability * 100).toFixed(1);
   const ewp2Pct = (team2WinProbability * 100).toFixed(1);
@@ -168,7 +196,11 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
   const team1Reward = getPickReward(team1WinProbability);
   const team2Reward = getPickReward(team2WinProbability);
   // Hide "pts if correct" when the result banner is shown or this is a forfeit (no rewards granted).
-  const rewardsAvailable = team1Reward !== null && team2Reward !== null && result === undefined && !isForfeit;
+  const rewardsAvailable =
+    team1Reward !== null &&
+    team2Reward !== null &&
+    result === undefined &&
+    !isForfeit;
 
   return (
     <div className="bg-[#162032] border border-[#687FA3]/10 rounded-2xl overflow-hidden">
@@ -188,7 +220,9 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
           )}
         </div>
         {match.status !== "scheduled" ? (
-          <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${isForfeit ? "text-rose-400/70 bg-rose-400/5 border border-rose-400/15" : "text-[#687FA3]/50 bg-[#687FA3]/5 border border-[#687FA3]/15"}`}>
+          <span
+            className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${isForfeit ? "text-rose-400/70 bg-rose-400/5 border border-rose-400/15" : "text-[#687FA3]/50 bg-[#687FA3]/5 border border-[#687FA3]/15"}`}
+          >
             {isForfeit ? "Forfeit" : "Completed"}
           </span>
         ) : (
@@ -235,12 +269,16 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
           {/* VS divider */}
           <div className="flex sm:hidden items-center gap-3">
             <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#687FA3]/20 to-transparent" />
-            <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">VS</span>
+            <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">
+              VS
+            </span>
             <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#687FA3]/20 to-transparent" />
           </div>
           <div className="hidden sm:flex flex-col items-center justify-center gap-1 self-stretch pt-5">
             <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
-            <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">VS</span>
+            <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">
+              VS
+            </span>
             <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
           </div>
 
@@ -335,20 +373,29 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
           )}
           {rewardsAvailable && showRewardInfo && (
             <div className="bg-[#0d1520] border border-[#687FA3]/10 rounded-xl p-3 space-y-2">
-              <p className="text-[9px] font-black uppercase tracking-widest text-[#687FA3]/50">How Rewards Work</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-[#687FA3]/50">
+                How Rewards Work
+              </p>
               <p className="text-[10px] text-[#687FA3]/70 leading-relaxed">
-                Correct picks earn more points for picking the underdog. The lower the odds, the higher the reward. Wrong picks earn 0.
+                Correct picks earn more points for picking the underdog. The
+                lower the odds, the higher the reward. Wrong picks earn 0.
               </p>
               <div className="space-y-1 pt-1 border-t border-[#687FA3]/10">
                 <div className="flex justify-between">
-                  <span className="text-[9px] font-black uppercase text-[#687FA3]/40">Win Prob</span>
-                  <span className="text-[9px] font-black uppercase text-[#687FA3]/40">Points</span>
+                  <span className="text-[9px] font-black uppercase text-[#687FA3]/40">
+                    Win Prob
+                  </span>
+                  <span className="text-[9px] font-black uppercase text-[#687FA3]/40">
+                    Points
+                  </span>
                 </div>
                 {REWARD_SAMPLES.map(({ prob, label }) => {
                   const pts = getPickReward(prob);
                   return pts !== null ? (
                     <div key={label} className="flex justify-between">
-                      <span className="text-[10px] tabular-nums text-slate-400">{label}</span>
+                      <span className="text-[10px] tabular-nums text-slate-400">
+                        {label}
+                      </span>
                       <span className="text-[10px] tabular-nums text-slate-300 font-bold">
                         +{pts.toFixed(0)} pts
                       </span>
@@ -380,7 +427,11 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
                     : "text-rose-400"
               }`}
             >
-              {result === null ? "Pending result" : result.was_correct ? "Correct" : "Wrong"}
+              {result === null
+                ? "Pending result"
+                : result.was_correct
+                  ? "Correct"
+                  : "Wrong"}
             </span>
             <span
               className={`text-sm font-black tabular-nums ${
@@ -425,7 +476,9 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
               </span>
             </div>
           </>
-        ) : pickedTeam !== null && crowdCounts !== null && match.status !== "scheduled" ? (
+        ) : pickedTeam !== null &&
+          crowdCounts !== null &&
+          match.status !== "scheduled" ? (
           <CrowdBar pickedTeam={pickedTeam} crowdCounts={crowdCounts} />
         ) : pickedTeam !== null && match.status === "scheduled" ? (
           <div className="space-y-2.5">
@@ -496,24 +549,26 @@ export function PredictMatchCard({ match, existingPick, crowdCounts, canPredict,
         ) : (
           <div className="space-y-2">
             {pickError && (
-              <p className="text-[10px] text-rose-400 text-center">{pickError}</p>
+              <p className="text-[10px] text-rose-400 text-center">
+                {pickError}
+              </p>
             )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => onPickRequest(1)}
-              className="flex-1 py-2.5 rounded-xl text-sm font-bold text-sky-300 bg-sky-900/30 border border-sky-500/30 hover:bg-sky-900/50 hover:border-sky-400/50 transition-colors"
-            >
-              Pick Team 1
-            </button>
-            <button
-              type="button"
-              onClick={() => onPickRequest(2)}
-              className="flex-1 py-2.5 rounded-xl text-sm font-bold text-amber-300 bg-amber-900/30 border border-amber-500/30 hover:bg-amber-900/50 hover:border-amber-400/50 transition-colors"
-            >
-              Pick Team 2
-            </button>
-          </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => onPickRequest(1)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-sky-300 bg-sky-900/30 border border-sky-500/30 hover:bg-sky-900/50 hover:border-sky-400/50 transition-colors"
+              >
+                Pick Team 1
+              </button>
+              <button
+                type="button"
+                onClick={() => onPickRequest(2)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-amber-300 bg-amber-900/30 border border-amber-500/30 hover:bg-amber-900/50 hover:border-amber-400/50 transition-colors"
+              >
+                Pick Team 2
+              </button>
+            </div>
           </div>
         )}
       </div>

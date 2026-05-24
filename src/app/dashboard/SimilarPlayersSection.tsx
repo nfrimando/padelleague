@@ -57,15 +57,12 @@ function CurrentPlayerCard({ player }: { player: SimilarPlayer }) {
   );
 }
 
-function PeerCard({ player }: { player: SimilarPlayer }) {
+function PeerCard({ player, onSelect }: { player: SimilarPlayer; onSelect?: () => void }) {
   const hasCustomImage = !!(player.image_link && player.image_link !== "null");
   const imageSrc = hasCustomImage ? player.image_link! : "/default-avatar.webp";
 
-  return (
-    <Link
-      href={`/players/${player.id}`}
-      className="w-16 flex-shrink-0 flex flex-col items-center gap-1 group focus-visible:outline-none"
-    >
+  const inner = (
+    <>
       <img
         src={imageSrc}
         alt={player.name || "Player"}
@@ -80,6 +77,27 @@ function PeerCard({ player }: { player: SimilarPlayer }) {
       <div className="text-[10px] text-slate-500 leading-none">
         {relativeDate(player.lastMatchDate)}
       </div>
+    </>
+  );
+
+  if (onSelect) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className="w-16 flex-shrink-0 flex flex-col items-center gap-1 group focus-visible:outline-none cursor-pointer"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={`/players/${player.id}`}
+      className="w-16 flex-shrink-0 flex flex-col items-center gap-1 group focus-visible:outline-none"
+    >
+      {inner}
     </Link>
   );
 }
@@ -87,9 +105,10 @@ function PeerCard({ player }: { player: SimilarPlayer }) {
 type Props = {
   playerId: string | number | null;
   currentPlayerRating: number | null;
+  onSelectPeer?: (player: SimilarPlayer) => void;
 };
 
-export default function SimilarPlayersSection({ playerId }: Props) {
+export default function SimilarPlayersSection({ playerId, onSelectPeer }: Props) {
   const { players, currentPlayerIndex, loading } = useSimilarPlayers(playerId);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentCardRef = useRef<HTMLDivElement>(null);
@@ -153,7 +172,13 @@ export default function SimilarPlayersSection({ playerId }: Props) {
                   </div>
                 );
               }
-              return <PeerCard key={player.id} player={player} />;
+              return (
+                <PeerCard
+                  key={player.id}
+                  player={player}
+                  onSelect={onSelectPeer ? () => onSelectPeer(player) : undefined}
+                />
+              );
             })
           )}
         </div>

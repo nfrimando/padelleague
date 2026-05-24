@@ -34,9 +34,13 @@ export function usePlayerMatchCounts(
   >({});
   const [loading, setLoading] = useState(false);
 
+  // Use a primitive string key so the effect stays stable when the same IDs
+  // arrive with a new array reference (e.g. on every search-box keystroke).
+  const stableKey = playerIds.map(String).filter(Boolean).sort().join(",");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const normalizedIds = useMemo(() => {
     return Array.from(new Set(playerIds.map((id) => String(id)).filter(Boolean)));
-  }, [playerIds]);
+  }, [stableKey]);
 
   useEffect(() => {
     if (normalizedIds.length === 0) {

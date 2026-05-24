@@ -86,7 +86,8 @@ export function usePlayerMatches(playerId: string | null) {
             .select("*")
             .in("match_id", matchIds)
             .order("date_local", { ascending: false, nullsFirst: false })
-            .order("time_local", { ascending: false }),
+            .order("time_local", { ascending: false })
+            .order("match_id", { ascending: false }),
           supabase
             .from("match_teams")
             .select(
