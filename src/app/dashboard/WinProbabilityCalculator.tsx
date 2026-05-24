@@ -6,7 +6,6 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { GripHorizontal, MousePointer2, Pencil, X } from "lucide-react";
@@ -412,17 +411,22 @@ const WinProbabilityCalculator = forwardRef<
     t2p2: { ...EMPTY },
   });
 
-  const hasInitialized = useRef(false);
+  // useState (not useRef) so setHasInitialized + setSlots batch into one render,
+  // preventing the onSlotsChange effect from reading stale empty slots.
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
-    if (hasInitialized.current) return;
+    if (hasInitialized) return;
     if (playersLoading) return;
-    hasInitialized.current = true;
-    if (!initialPlayerIds) return;
+
+    const hasUrlParams =
+      !!initialPlayerIds && Object.values(initialPlayerIds).some(Boolean);
+    // Nothing to seed yet — wait for currentPlayer or URL params to arrive.
+    if (!hasUrlParams && !currentPlayer) return;
 
     const patch: Partial<Record<SlotKey, SlotState>> = {};
     for (const key of SLOT_ORDER) {
-      const id = initialPlayerIds[key];
+      const id = initialPlayerIds?.[key];
       if (!id) continue;
       const found =
         allPlayers.find((p) => String(p.player_id) === id) ??
@@ -431,12 +435,19 @@ const WinProbabilityCalculator = forwardRef<
           : null);
       if (found) patch[key] = { player: found, search: "" };
     }
+    // Default t1p1 to currentPlayer when the URL doesn't specify it.
+    if (!patch.t1p1 && !initialPlayerIds?.t1p1 && currentPlayer) {
+      patch.t1p1 = { player: currentPlayer, search: "" };
+    }
+
+    // Batched with setSlots in React 18 — onSlotsChange effect sees both together.
+    setHasInitialized(true);
     if (Object.keys(patch).length > 0)
       setSlots((prev) => ({ ...prev, ...patch }));
-  }, [playersLoading, allPlayers, initialPlayerIds, currentPlayer]);
+  }, [hasInitialized, playersLoading, allPlayers, initialPlayerIds, currentPlayer]);
 
   useEffect(() => {
-    if (!hasInitialized.current) return;
+    if (!hasInitialized) return;
     if (!onSlotsChange) return;
     const ids: Partial<Record<SlotKey, string>> = {};
     for (const key of SLOT_ORDER) {
@@ -444,7 +455,7 @@ const WinProbabilityCalculator = forwardRef<
       if (p) ids[key] = String(p.player_id);
     }
     onSlotsChange(ids);
-  }, [slots, onSlotsChange]);
+  }, [hasInitialized, slots, onSlotsChange]);
 
   const updateSlot = (key: SlotKey, patch: Partial<SlotState>) =>
     setSlots((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
