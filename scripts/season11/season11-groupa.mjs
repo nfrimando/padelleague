@@ -1,6 +1,15 @@
 // One-off: build Season 11 Group A standings from live Supabase.
-const URL = "https://hmztjweohbfnbpuidrtl.supabase.co";
-const KEY = "sb_publishable_HvMwZ4XO6nZrYwCKs1Kffw_zVyjowBI";
+const URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??
+  "https://hmztjweohbfnbpuidrtl.supabase.co";
+const KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  "sb_publishable_HvMwZ4XO6nZrYwCKs1Kffw_zVyjowBI";
+if (!KEY.startsWith("sb_publishable_")) {
+  throw new Error(
+    "Refusing non-public Supabase key. Use NEXT_PUBLIC_SUPABASE_ANON_KEY (sb_publishable_*) only."
+  );
+}
 const EVENT_ID = 11;
 
 const SQUADS = {
