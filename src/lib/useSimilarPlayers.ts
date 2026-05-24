@@ -75,7 +75,7 @@ function compareMatchRecencyDesc(
   return existing.matchId - candidate.matchId;
 }
 
-function toFormulaPriority(formulaName: unknown): number {
+function formulaPriority(formulaName: unknown): number {
   const formula = String(formulaName || "").toLowerCase();
   return formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
 }
@@ -183,7 +183,7 @@ export function useSimilarPlayers(
                   dateLocal: match.date_local ?? null,
                   timeLocal: match.time_local ?? null,
                   matchId,
-                  priority: toFormulaPriority(ratingRow.formula_name),
+                  priority: formulaPriority(ratingRow.formula_name),
                 };
 
                 if (!existing) {
@@ -197,7 +197,7 @@ export function useSimilarPlayers(
                   continue;
                 }
 
-                if (recency === 0 && candidate.priority >= existing.priority) {
+                if (recency === 0 && candidate.priority > existing.priority) {
                   latestByPlayer.set(key, candidate);
                 }
               }

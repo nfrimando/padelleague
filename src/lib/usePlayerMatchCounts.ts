@@ -85,7 +85,16 @@ export function usePlayerMatchCounts(
 
   useEffect(() => {
     if (normalizedIds.length === 0) {
-      return;
+      const resetTimer = setTimeout(() => {
+        setMatchCountCompleted({});
+        setLatestMatchDates({});
+        setLatestRatings({});
+        setLoading(false);
+      }, 0);
+
+      return () => {
+        clearTimeout(resetTimer);
+      };
     }
 
     let isCancelled = false;
@@ -219,7 +228,7 @@ export function usePlayerMatchCounts(
           continue;
         }
 
-        if (recency === 0 && candidate.priority >= existing.priority) {
+        if (recency === 0 && candidate.priority > existing.priority) {
           latestCandidateByPlayer.set(playerKey, candidate);
         }
       }
@@ -253,9 +262,9 @@ export function usePlayerMatchCounts(
   }, [normalizedIds]);
 
   return {
-    matchCountCompleted: normalizedIds.length === 0 ? {} : matchCountCompleted,
-    latestMatchDates: normalizedIds.length === 0 ? {} : latestMatchDates,
-    latestRatings: normalizedIds.length === 0 ? {} : latestRatings,
-    loading: normalizedIds.length === 0 ? false : loading,
+    matchCountCompleted,
+    latestMatchDates,
+    latestRatings,
+    loading,
   };
 }
