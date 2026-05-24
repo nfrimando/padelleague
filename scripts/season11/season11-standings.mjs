@@ -5,8 +5,17 @@
 // belong to that group's roster.
 import { readFileSync } from "node:fs";
 
-const BASE = "https://hmztjweohbfnbpuidrtl.supabase.co";
-const KEY = "sb_publishable_HvMwZ4XO6nZrYwCKs1Kffw_zVyjowBI";
+const BASE =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??
+  "https://hmztjweohbfnbpuidrtl.supabase.co";
+const KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  "sb_publishable_HvMwZ4XO6nZrYwCKs1Kffw_zVyjowBI";
+if (!KEY.startsWith("sb_publishable_")) {
+  throw new Error(
+    "Refusing non-public Supabase key. Use NEXT_PUBLIC_SUPABASE_ANON_KEY (sb_publishable_*) only."
+  );
+}
 const EVENT_ID = 11;
 const EXCLUDED_TYPES = new Set(["duel"]);
 // Statuses that count as a played result. Forfeits have a winner_team and are
@@ -126,7 +135,7 @@ function rankWithTiebreakers(rows, matches) {
 
 export async function computeStandings() {
   const rosters = parseRosters(
-    new URL("../public/11.html", import.meta.url).pathname
+    new URL("../../public/11.html", import.meta.url).pathname
   );
   const players = await rest("players?select=player_id,name,nickname");
   const byId = new Map(players.map((p) => [p.player_id, p]));

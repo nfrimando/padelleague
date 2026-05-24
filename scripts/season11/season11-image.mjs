@@ -1,5 +1,5 @@
 // Render the Season 11 group standings as a branded PNG (+ SVG).
-//   node scripts/season11-image.mjs [outPathWithoutExt]
+//   node scripts/season11/season11-image.mjs [outPathWithoutExt]
 // PNG rasterization needs @resvg/resvg-js. If it isn't installed in this
 // project, set RESVG_DIR to a folder that has it (npm i @resvg/resvg-js there).
 import { writeFileSync } from "node:fs";
@@ -250,7 +250,7 @@ function writeImage(svg, base) {
   }
 }
 
-const outDir = (process.argv[2] || new URL("..", import.meta.url).pathname).replace(/\/$/, "");
+const outDir = (process.argv[2] || new URL("../..", import.meta.url).pathname).replace(/\/$/, "");
 const { groups, warnings } = await computeStandings();
 
 // One image per group (mobile-friendly), plus a combined overview.
