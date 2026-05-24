@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, Lock, LogOut, X } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
@@ -18,7 +25,9 @@ import { useDashboardStats } from "@/lib/useDashboardStats";
 import HeroSection from "./HeroSection";
 import ProgressionSection from "./ProgressionSection";
 import SimilarPlayersSection from "./SimilarPlayersSection";
-import WinProbabilityCalculator, { WinProbabilityCalculatorHandle } from "./WinProbabilityCalculator";
+import WinProbabilityCalculator, {
+  WinProbabilityCalculatorHandle,
+} from "./WinProbabilityCalculator";
 import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
 import ViewAsSelector from "./ViewAsSelector";
@@ -44,7 +53,9 @@ type SignupRow = {
 };
 
 // ── Admin check (mirrors admin/page.tsx pattern) ───────────────────────────────
-async function resolveAdminStatus(userId: string | undefined): Promise<boolean> {
+async function resolveAdminStatus(
+  userId: string | undefined,
+): Promise<boolean> {
   if (!userId) return false;
   const { data, error } = await supabase
     .from("admin_users")
@@ -60,7 +71,10 @@ function LockedSection({ skeletonRows = 3 }: { skeletonRows?: number }) {
     <div className="bg-[#0d1520] border border-[#687FA3]/10 sm:rounded-3xl p-6 space-y-3 relative overflow-hidden">
       <div className="h-2.5 w-20 bg-[#1a2540] rounded-full animate-pulse" />
       <div className="h-28 bg-[#1a2540] rounded-xl animate-pulse" />
-      <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${skeletonRows}, 1fr)` }}>
+      <div
+        className={`grid gap-2`}
+        style={{ gridTemplateColumns: `repeat(${skeletonRows}, 1fr)` }}
+      >
         {Array.from({ length: skeletonRows }).map((_, i) => (
           <div key={i} className="h-10 bg-[#1a2540] rounded-xl animate-pulse" />
         ))}
@@ -75,7 +89,7 @@ function LockedSection({ skeletonRows = 3 }: { skeletonRows?: number }) {
   );
 }
 
-export default function DashboardPage() {
+function DashboardPageContent() {
   const router = useRouter();
 
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -106,6 +120,48 @@ export default function DashboardPage() {
       router.replace(qs ? `/dashboard?${qs}` : "/dashboard");
     },
     [router, searchParams],
+  );
+
+  // ── Peers tab: slot player IDs stored in URL (p1=t1p1, p2=t1p2, p3=t2p1, p4=t2p2) ──
+  const p1 = searchParams.get("p1") ?? undefined;
+  const p2 = searchParams.get("p2") ?? undefined;
+  const p3 = searchParams.get("p3") ?? undefined;
+  const p4 = searchParams.get("p4") ?? undefined;
+
+  const initialPlayerIds = useMemo(
+    () => ({
+      ...(p1 ? { t1p1: p1 } : {}),
+      ...(p2 ? { t1p2: p2 } : {}),
+      ...(p3 ? { t2p1: p3 } : {}),
+      ...(p4 ? { t2p2: p4 } : {}),
+    }),
+    [p1, p2, p3, p4],
+  );
+
+  // Keep a ref so handleSlotsChange never needs searchParams as a dep (stable identity).
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+
+  const handleSlotsChange = useCallback(
+    (ids: Partial<Record<"t1p1" | "t1p2" | "t2p1" | "t2p2", string>>) => {
+      const params = new URLSearchParams(searchParamsRef.current.toString());
+      const slotToParam = {
+        t1p1: "p1",
+        t1p2: "p2",
+        t2p1: "p3",
+        t2p2: "p4",
+      } as const;
+      let changed = false;
+      for (const [slot, param] of Object.entries(slotToParam)) {
+        const id = ids[slot as keyof typeof ids];
+        if ((id ?? "") !== (params.get(param) ?? "")) changed = true;
+        if (id) params.set(param, id);
+        else params.delete(param);
+      }
+      if (!changed) return;
+      router.replace(`/dashboard?${params.toString()}`);
+    },
+    [router],
   );
 
   const calcRef = useRef<WinProbabilityCalculatorHandle>(null);
@@ -281,6 +337,17 @@ export default function DashboardPage() {
     orderByName: true,
   });
 
+  // ── Auto-populate p1 with current player when opening peers tab ───────────
+  useEffect(() => {
+    if (!displayPlayer) return;
+    if (activeTab !== "peers") return;
+    if (p1) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "peers");
+    params.set("p1", String(displayPlayer.player_id));
+    router.replace(`/dashboard?${params.toString()}`);
+  }, [displayPlayer, activeTab, p1, searchParams, router]);
+
   // ── Auth helpers ──────────────────────────────────────────────────────────
   async function handleSignOut() {
     try {
@@ -439,7 +506,9 @@ export default function DashboardPage() {
                       >
                         {label}
                         {isBeta && (
-                          <span className="text-[7px] font-black text-amber-400/60">β</span>
+                          <span className="text-[7px] font-black text-amber-400/60">
+                            β
+                          </span>
                         )}
                       </button>
                     );
@@ -473,7 +542,9 @@ export default function DashboardPage() {
                   onPayingSignupIdChange={setPayingSignupId}
                   onRefreshSignups={() => void load()}
                   showEditProfile={!isViewingAs || isAdmin}
-                  adminTargetPlayerId={isViewingAs ? Number(displayPlayer.player_id) : undefined}
+                  adminTargetPlayerId={
+                    isViewingAs ? Number(displayPlayer.player_id) : undefined
+                  }
                   onPlayerSaved={(updated) => setPlayer(updated)}
                 />
                 {pendingPaymentSignup ? (
@@ -509,8 +580,10 @@ export default function DashboardPage() {
                 />
                 <WinProbabilityCalculator
                   ref={calcRef}
-                  lockedPlayer={displayPlayer}
-                  lockedPlayerRating={latestRating}
+                  initialPlayerIds={initialPlayerIds}
+                  currentPlayer={displayPlayer}
+                  currentPlayerRating={latestRating}
+                  onSlotsChange={handleSlotsChange}
                 />
               </>
             )}
@@ -537,5 +610,19 @@ export default function DashboardPage() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#0E1523]">
+          <div className="w-8 h-8 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <DashboardPageContent />
+    </Suspense>
   );
 }

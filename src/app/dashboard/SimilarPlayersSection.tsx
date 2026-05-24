@@ -33,12 +33,18 @@ function SkeletonCards() {
   );
 }
 
-function CurrentPlayerCard({ player }: { player: SimilarPlayer }) {
+function CurrentPlayerCard({
+  player,
+  onSelect,
+}: {
+  player: SimilarPlayer;
+  onSelect?: () => void;
+}) {
   const hasCustomImage = !!(player.image_link && player.image_link !== "null");
   const imageSrc = hasCustomImage ? player.image_link! : "/default-avatar.webp";
 
-  return (
-    <div className="w-24 flex-shrink-0 flex flex-col items-center gap-1.5">
+  const inner = (
+    <>
       <img
         src={imageSrc}
         alt={player.name || "You"}
@@ -53,6 +59,24 @@ function CurrentPlayerCard({ player }: { player: SimilarPlayer }) {
       <div className="text-xs text-slate-100 text-center line-clamp-1 w-20 leading-snug">
         {player.name ?? "—"}
       </div>
+    </>
+  );
+
+  if (onSelect) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className="w-24 flex-shrink-0 flex flex-col items-center gap-1.5 group cursor-pointer focus-visible:outline-none"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div className="w-24 flex-shrink-0 flex flex-col items-center gap-1.5">
+      {inner}
     </div>
   );
 }
@@ -168,7 +192,10 @@ export default function SimilarPlayersSection({ playerId, onSelectPeer }: Props)
               if (idx === displayIndex) {
                 return (
                   <div key={player.id} ref={currentCardRef}>
-                    <CurrentPlayerCard player={player} />
+                    <CurrentPlayerCard
+                      player={player}
+                      onSelect={onSelectPeer ? () => onSelectPeer(player) : undefined}
+                    />
                   </div>
                 );
               }

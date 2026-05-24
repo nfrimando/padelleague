@@ -3,6 +3,7 @@
 import {
   Fragment,
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -25,9 +26,10 @@ type SlotState = { search: string; player: Player | null };
 const EMPTY: SlotState = { search: "", player: null };
 
 export type WinProbabilityCalculatorProps = {
-  lockedPlayer?: Player | null;
-  lockedSlot?: SlotKey;
-  lockedPlayerRating?: number | null;
+  initialPlayerIds?: Partial<Record<SlotKey, string>>;
+  currentPlayer?: Player | null;
+  currentPlayerRating?: number | null;
+  onSlotsChange?: (ids: Partial<Record<SlotKey, string>>) => void;
 };
 
 export type WinProbabilityCalculatorHandle = {
@@ -392,7 +394,7 @@ const WinProbabilityCalculator = forwardRef<
   WinProbabilityCalculatorHandle,
   WinProbabilityCalculatorProps
 >(function WinProbabilityCalculator(
-  { lockedPlayer, lockedSlot = "t1p1", lockedPlayerRating },
+  { initialPlayerIds, currentPlayer, currentPlayerRating, onSlotsChange },
   ref,
 ) {
   const { players: allPlayers, loading: playersLoading } = usePlayers({
@@ -410,30 +412,50 @@ const WinProbabilityCalculator = forwardRef<
     t2p2: { ...EMPTY },
   });
 
-  // Always reflect the current lockedPlayer without a sync effect
-  const effectiveSlots: Record<SlotKey, SlotState> = useMemo(
-    () => ({
-      ...slots,
-      [lockedSlot]: lockedPlayer
-        ? { search: "", player: lockedPlayer }
-        : slots[lockedSlot],
-    }),
-    [slots, lockedSlot, lockedPlayer],
-  );
+  const hasInitialized = useRef(false);
+
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    if (playersLoading) return;
+    hasInitialized.current = true;
+    if (!initialPlayerIds) return;
+
+    const patch: Partial<Record<SlotKey, SlotState>> = {};
+    for (const key of SLOT_ORDER) {
+      const id = initialPlayerIds[key];
+      if (!id) continue;
+      const found =
+        allPlayers.find((p) => String(p.player_id) === id) ??
+        (currentPlayer && String(currentPlayer.player_id) === id
+          ? currentPlayer
+          : null);
+      if (found) patch[key] = { player: found, search: "" };
+    }
+    if (Object.keys(patch).length > 0)
+      setSlots((prev) => ({ ...prev, ...patch }));
+  }, [playersLoading, allPlayers, initialPlayerIds, currentPlayer]);
+
+  useEffect(() => {
+    if (!hasInitialized.current) return;
+    if (!onSlotsChange) return;
+    const ids: Partial<Record<SlotKey, string>> = {};
+    for (const key of SLOT_ORDER) {
+      const p = slots[key].player;
+      if (p) ids[key] = String(p.player_id);
+    }
+    onSlotsChange(ids);
+  }, [slots, onSlotsChange]);
 
   const updateSlot = (key: SlotKey, patch: Partial<SlotState>) =>
     setSlots((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
 
   const clearSlot = (key: SlotKey) => {
-    if (key === lockedSlot && lockedPlayer) return;
     setSlots((prev) => ({ ...prev, [key]: { ...EMPTY } }));
   };
 
   useImperativeHandle(ref, () => ({
     addPlayer: (player: Player) => {
-      const nextEmpty = SLOT_ORDER.find(
-        (k) => k !== lockedSlot && !slots[k].player,
-      );
+      const nextEmpty = SLOT_ORDER.find((k) => !slots[k].player);
       if (nextEmpty) updateSlot(nextEmpty, { player, search: "" });
     },
   }));
@@ -441,16 +463,16 @@ const WinProbabilityCalculator = forwardRef<
   const selectedIds = useMemo(
     () =>
       new Set(
-        Object.values(effectiveSlots)
+        Object.values(slots)
           .map((s) => (s.player ? String(s.player.player_id) : ""))
           .filter(Boolean),
       ),
-    [effectiveSlots],
+    [slots],
   );
 
   const makeExcluded = (key: SlotKey): Set<string> => {
-    const own = effectiveSlots[key].player
-      ? String(effectiveSlots[key].player!.player_id)
+    const own = slots[key].player
+      ? String(slots[key].player!.player_id)
       : null;
     return new Set([...selectedIds].filter((id) => id !== own));
   };
@@ -472,19 +494,19 @@ const WinProbabilityCalculator = forwardRef<
   };
 
   // Fetch ratings for selected players
-  // Depend only on the player IDs, not the full effectiveSlots (which includes
+  // Depend only on the player IDs, not the full slots object (which includes
   // search text), so typing in a search box doesn't re-trigger rating fetches.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const selectedPlayerIds = useMemo(
     () =>
-      Object.values(effectiveSlots)
+      Object.values(slots)
         .filter((s) => s.player)
         .map((s) => String(s.player!.player_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      effectiveSlots.t1p1.player?.player_id,
-      effectiveSlots.t1p2.player?.player_id,
-      effectiveSlots.t2p1.player?.player_id,
-      effectiveSlots.t2p2.player?.player_id,
+      slots.t1p1.player?.player_id,
+      slots.t1p2.player?.player_id,
+      slots.t2p1.player?.player_id,
+      slots.t2p2.player?.player_id,
     ],
   );
 
@@ -492,10 +514,14 @@ const WinProbabilityCalculator = forwardRef<
     usePlayerMatchCounts(selectedPlayerIds);
 
   const getRating = (key: SlotKey): number | null => {
-    const p = effectiveSlots[key].player;
+    const p = slots[key].player;
     if (!p) return null;
-    if (key === lockedSlot && lockedPlayerRating != null)
-      return lockedPlayerRating;
+    if (
+      currentPlayer &&
+      String(p.player_id) === String(currentPlayer.player_id) &&
+      currentPlayerRating != null
+    )
+      return currentPlayerRating;
     return latestRatings[String(p.player_id)] ?? null;
   };
 
@@ -507,10 +533,10 @@ const WinProbabilityCalculator = forwardRef<
   };
 
   const allSelected = !!(
-    effectiveSlots.t1p1.player &&
-    effectiveSlots.t1p2.player &&
-    effectiveSlots.t2p1.player &&
-    effectiveSlots.t2p2.player
+    slots.t1p1.player &&
+    slots.t1p2.player &&
+    slots.t2p1.player &&
+    slots.t2p2.player
   );
 
   const schedulePlayerIds = selectedPlayerIds;
@@ -519,7 +545,7 @@ const WinProbabilityCalculator = forwardRef<
 
   const playerIdToName = useMemo(() => {
     const m = new Map<string, string>();
-    for (const slot of Object.values(effectiveSlots)) {
+    for (const slot of Object.values(slots)) {
       if (slot.player) {
         m.set(
           String(slot.player.player_id),
@@ -528,7 +554,7 @@ const WinProbabilityCalculator = forwardRef<
       }
     }
     return m;
-  }, [effectiveSlots]);
+  }, [slots]);
   const allRatings =
     r.t1p1 != null && r.t1p2 != null && r.t2p1 != null && r.t2p2 != null;
   const loadingResult = allSelected && ratingsLoading;
@@ -542,7 +568,7 @@ const WinProbabilityCalculator = forwardRef<
     : [0.5, 0.5];
 
   const handleDrop = (targetKey: SlotKey) => {
-    if (!dragSlot || dragSlot === targetKey || targetKey === lockedSlot) return;
+    if (!dragSlot || dragSlot === targetKey) return;
     setSlots((prev) => ({
       ...prev,
       [dragSlot]: prev[targetKey],
@@ -553,16 +579,18 @@ const WinProbabilityCalculator = forwardRef<
 
   // ── Slot renderer ────────────────────────────────────────────────────────────
   const renderSlot = (key: SlotKey, team: 1 | 2) => {
-    const slot = effectiveSlots[key];
-    const isLocked = key === lockedSlot && !!lockedPlayer;
+    const slot = slots[key];
+    const isYou = !!(
+      currentPlayer &&
+      slot.player &&
+      String(slot.player.player_id) === String(currentPlayer.player_id)
+    );
     const isBeingDragged = dragSlot === key;
-    const isDropTarget =
-      dragSlot !== null && dragSlot !== key && key !== lockedSlot;
+    const isDropTarget = dragSlot !== null && dragSlot !== key;
 
     const dropProps = {
       onDragOver: (e: React.DragEvent) => {
-        if (dragSlot && dragSlot !== key && key !== lockedSlot)
-          e.preventDefault();
+        if (dragSlot && dragSlot !== key) e.preventDefault();
       },
       onDrop: () => handleDrop(key),
       onDragLeave: () => {},
@@ -580,8 +608,8 @@ const WinProbabilityCalculator = forwardRef<
           <PlayerChip
             player={slot.player}
             rating={getRating(key)}
-            isYou={isLocked}
-            isLocked={isLocked}
+            isYou={isYou}
+            isLocked={false}
             isDragging={isBeingDragged}
             team={team}
             onRemove={() => clearSlot(key)}
@@ -618,9 +646,9 @@ const WinProbabilityCalculator = forwardRef<
 
   return (
     <>
-      {lockedPlayer && (
+      {currentPlayer && (
         <EditScheduleModal
-          playerId={Number(lockedPlayer.player_id)}
+          playerId={Number(currentPlayer.player_id)}
           isOpen={editScheduleOpen}
           onClose={() => setEditScheduleOpen(false)}
         />
@@ -638,18 +666,16 @@ const WinProbabilityCalculator = forwardRef<
             </p>
           </div>
           <div className="shrink-0 flex flex-col items-end gap-1.5">
-            {lockedPlayer && (
-              <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#00C8DC]/80">
-                  <MousePointer2 size={9} />
-                  <span>Click peer to add</span>
-                </div>
-                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#00C8DC]/55">
-                  <GripHorizontal size={9} />
-                  <span>Drag to swap</span>
-                </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#00C8DC]/80">
+                <MousePointer2 size={9} />
+                <span>Click peer to add</span>
               </div>
-            )}
+              <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#00C8DC]/55">
+                <GripHorizontal size={9} />
+                <span>Drag to swap</span>
+              </div>
+            </div>
             <span className="text-[9px] font-mono text-[#687FA3]/40 bg-[#687FA3]/5 border border-[#687FA3]/10 px-2 py-1 rounded-full">
               {FORMULA_NAME}
             </span>
@@ -783,7 +809,15 @@ const WinProbabilityCalculator = forwardRef<
               playerIdToName={playerIdToName}
               totalPlayers={selectedPlayerIds.length}
               onEditSchedule={
-                lockedPlayer ? () => setEditScheduleOpen(true) : undefined
+                currentPlayer &&
+                Object.values(slots).some(
+                  (s) =>
+                    s.player &&
+                    String(s.player.player_id) ===
+                      String(currentPlayer.player_id),
+                )
+                  ? () => setEditScheduleOpen(true)
+                  : undefined
               }
             />
           </div>
