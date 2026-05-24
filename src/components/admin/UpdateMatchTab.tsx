@@ -47,6 +47,23 @@ function resolvePlayerName(
   return nameById.get(String(id)) ?? `#${id}`;
 }
 
+function IconCheck() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="h-4 w-4"
+    >
+      <path
+        fillRule="evenodd"
+        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
 function IconPencil() {
   return (
     <svg
@@ -120,6 +137,11 @@ export function UpdateMatchTab() {
   // Forfeit confirmation modal state
   const [forfeitModalOpen, setForfeitModalOpen] = useState(false);
   const [forfeitWinnerTeam, setForfeitWinnerTeam] = useState<1 | 2 | null>(null);
+  const [forfeitResult, setForfeitResult] = useState<{
+    matchId: number;
+    winnerTeam: 1 | 2;
+    setsWon: { team1: number; team2: number };
+  } | null>(null);
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<MatchListRow | null>(null);
@@ -316,6 +338,7 @@ export function UpdateMatchTab() {
     setEditMatchId("");
     setUpdateMatchError(null);
     setUpdateMatchSuccess(null);
+    setForfeitResult(null);
   };
 
   const handleUpdateMatch = async (confirmedForfeitWinner?: 1 | 2) => {
@@ -455,6 +478,8 @@ export function UpdateMatchTab() {
         error?: string;
         details?: string[];
         message?: string;
+        winnerTeam?: 1 | 2;
+        setsWon?: { team1: number; team2: number };
       };
 
       if (!response.ok) {
@@ -466,7 +491,15 @@ export function UpdateMatchTab() {
         return;
       }
 
-      setUpdateMatchSuccess(result.message || "Match updated successfully.");
+      if (updateMatchStatus === "forfeit" && result.winnerTeam && result.setsWon) {
+        setForfeitResult({
+          matchId: parsedId,
+          winnerTeam: result.winnerTeam,
+          setsWon: result.setsWon,
+        });
+      } else {
+        setUpdateMatchSuccess(result.message || "Match updated successfully.");
+      }
       setForfeitModalOpen(false);
       setListRefreshKey((k) => k + 1);
     } catch {
@@ -975,6 +1008,32 @@ export function UpdateMatchTab() {
               {updateMatchSuccess}
             </div>
           )}
+          {forfeitResult && (
+            <div className="rounded-lg border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 p-4 space-y-3">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                Match #{forfeitResult.matchId} recorded as forfeit — Team{" "}
+                {forfeitResult.winnerTeam} wins (
+                {forfeitResult.setsWon.team1}–{forfeitResult.setsWon.team2} sets)
+              </p>
+              <ul className="space-y-1.5">
+                <li className="flex items-center gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                  <span className="shrink-0 text-emerald-500 dark:text-emerald-400"><IconCheck /></span>
+                  <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-36 shrink-0">matches</code>
+                  <span className="text-slate-500 dark:text-slate-400">status → forfeit</span>
+                </li>
+                <li className="flex items-center gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                  <span className="shrink-0 text-emerald-500 dark:text-emerald-400"><IconCheck /></span>
+                  <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-36 shrink-0">match_sets</code>
+                  <span className="text-slate-500 dark:text-slate-400">2 sets recorded (6-0 6-0)</span>
+                </li>
+                <li className="flex items-center gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                  <span className="shrink-0 text-emerald-500 dark:text-emerald-400"><IconCheck /></span>
+                  <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-36 shrink-0">match_teams</code>
+                  <span className="text-slate-500 dark:text-slate-400">sets_won updated</span>
+                </li>
+              </ul>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-1">
             <button
@@ -1008,8 +1067,8 @@ export function UpdateMatchTab() {
           <div className="rounded-md border border-amber-800/40 bg-amber-900/20 px-3 py-2.5 text-sm text-amber-300 space-y-1">
             <p className="font-semibold">What happens when confirmed:</p>
             <ul className="text-xs text-amber-200/80 space-y-0.5 list-disc list-inside">
-              <li>Winning team gets a leaderboard win (2–0 sets)</li>
-              <li>No ratings will be recalculated</li>
+              <li>6-0 6-0 sets are recorded for the winning team</li>
+              <li>Ratings are not recalculated</li>
               <li>Predictions will not be resolved — no rewards granted</li>
             </ul>
           </div>
