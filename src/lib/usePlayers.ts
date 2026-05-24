@@ -19,7 +19,7 @@ export function usePlayers(options: UsePlayersOptions = {}) {
     select = "*",
   } = options;
   const [players, setPlayers] = useState<Player[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(enabled !== false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
