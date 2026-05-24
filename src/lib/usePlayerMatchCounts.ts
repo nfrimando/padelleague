@@ -10,17 +10,62 @@ type UsePlayerMatchCountsResult = {
   loading: boolean;
 };
 
-type PlayerSummaryRow = {
-  player_id: number | string;
-  match_count_all: number | string | null;
-  match_count_scheduled: number | string | null;
-  match_count_completed: number | string | null;
-  match_count_cancelled: number | string | null;
-  match_count_forfeit: number | string | null;
-  latest_match_date: string | null;
-  latest_rating: number | string | null;
-  latest_rating_formula: string | null;
+type PlayerInitialRatingRow = {
+  player_id: number | string | null;
+  initial_rating: number | string | null;
 };
+
+type MatchPlayerRatingRow = {
+  player_id: number | string | null;
+  match_id: number | string | null;
+  rating_post: number | string | null;
+  formula_name: string | null;
+};
+
+type MatchMetaRow = {
+  match_id: number | string | null;
+  date_local: string | null;
+  time_local: string | null;
+  status: string | null;
+};
+
+type LatestRatingCandidate = {
+  rating: number;
+  dateLocal: string | null;
+  timeLocal: string | null;
+  matchId: number;
+  priority: number;
+};
+
+function toFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function compareNullableStringDesc(a: string | null, b: string | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return b.localeCompare(a);
+}
+
+function compareMatchRecencyDesc(
+  candidate: { dateLocal: string | null; timeLocal: string | null; matchId: number },
+  existing: { dateLocal: string | null; timeLocal: string | null; matchId: number },
+): number {
+  const byDate = compareNullableStringDesc(candidate.dateLocal, existing.dateLocal);
+  if (byDate !== 0) return byDate;
+
+  const byTime = compareNullableStringDesc(candidate.timeLocal, existing.timeLocal);
+  if (byTime !== 0) return byTime;
+
+  return existing.matchId - candidate.matchId;
+}
+
+function formulaPriority(formulaName: unknown): number {
+  const formula = String(formulaName || "").toLowerCase();
+  return formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
+}
 
 export function usePlayerMatchCounts(
   playerIds: Array<number | string>,
@@ -40,10 +85,6 @@ export function usePlayerMatchCounts(
 
   useEffect(() => {
     if (normalizedIds.length === 0) {
-      setMatchCountCompleted({});
-      setLatestMatchDates({});
-      setLatestRatings({});
-      setLoading(false);
       return;
     }
 
@@ -75,30 +116,127 @@ export function usePlayerMatchCounts(
         latestRatingValues[id] = null;
       });
 
-      const { data, error } = await supabase.rpc("get_player_summary", {
-        p_ids: numericIds,
-      });
+      const [playersResult, ratingsResult] = await Promise.all([
+        supabase
+          .from("players")
+          .select("player_id, initial_rating")
+          .in("player_id", numericIds),
+        supabase
+          .from("match_player_ratings")
+          .select("player_id, match_id, rating_post, formula_name")
+          .in("player_id", numericIds),
+      ]);
 
-      if (isCancelled) {
-        return;
+      if (isCancelled) return;
+
+      const initialRatingByPlayer = new Map<string, number | null>();
+      if (!playersResult.error) {
+        for (const row of (playersResult.data ?? []) as PlayerInitialRatingRow[]) {
+          const playerId = toFiniteNumber(row.player_id);
+          if (playerId === null) continue;
+          initialRatingByPlayer.set(
+            String(playerId),
+            toFiniteNumber(row.initial_rating),
+          );
+        }
       }
 
-      if (!error) {
-        ((data || []) as PlayerSummaryRow[]).forEach((row) => {
-          const playerId = String(row.player_id);
-          if (!(playerId in counts)) {
-            return;
+      const ratingRows = ratingsResult.error
+        ? []
+        : ((ratingsResult.data ?? []) as MatchPlayerRatingRow[]);
+
+      const matchIds = Array.from(
+        new Set(
+          ratingRows
+            .map((row) => toFiniteNumber(row.match_id))
+            .filter((id): id is number => id !== null),
+        ),
+      );
+
+      const completedMatchesById = new Map<number, MatchMetaRow>();
+      if (matchIds.length > 0) {
+        const { data: matchRows, error: matchesError } = await supabase
+          .from("matches")
+          .select("match_id, date_local, time_local, status")
+          .in("match_id", matchIds)
+          .eq("status", "completed");
+
+        if (isCancelled) return;
+
+        if (!matchesError) {
+          for (const row of (matchRows ?? []) as MatchMetaRow[]) {
+            const matchId = toFiniteNumber(row.match_id);
+            if (matchId === null) continue;
+            completedMatchesById.set(matchId, row);
           }
+        }
+      }
 
-          const matchCount = Number(row.match_count_completed);
-          counts[playerId] = Number.isFinite(matchCount) ? matchCount : 0;
+      const completedMatchIdsByPlayer = new Map<string, Set<number>>();
+      const latestCandidateByPlayer = new Map<string, LatestRatingCandidate>();
 
-          latestDates[playerId] = row.latest_match_date || null;
+      for (const row of ratingRows) {
+        const playerId = toFiniteNumber(row.player_id);
+        const matchId = toFiniteNumber(row.match_id);
+        const ratingPost = toFiniteNumber(row.rating_post);
 
-          const rawRating = row.latest_rating;
-          const rating = rawRating !== null && rawRating !== undefined ? Number(rawRating) : null;
-          latestRatingValues[playerId] = rating !== null && Number.isFinite(rating) ? rating : null;
-        });
+        if (playerId === null || matchId === null || ratingPost === null) {
+          continue;
+        }
+
+        const playerKey = String(playerId);
+        if (!(playerKey in counts)) {
+          continue;
+        }
+
+        const completedMatch = completedMatchesById.get(matchId);
+        if (!completedMatch) {
+          continue;
+        }
+
+        const completedSet =
+          completedMatchIdsByPlayer.get(playerKey) ?? new Set<number>();
+        completedSet.add(matchId);
+        completedMatchIdsByPlayer.set(playerKey, completedSet);
+
+        const candidate: LatestRatingCandidate = {
+          rating: ratingPost,
+          dateLocal: completedMatch.date_local ?? null,
+          timeLocal: completedMatch.time_local ?? null,
+          matchId,
+          priority: formulaPriority(row.formula_name),
+        };
+
+        const existing = latestCandidateByPlayer.get(playerKey);
+        if (!existing) {
+          latestCandidateByPlayer.set(playerKey, candidate);
+          continue;
+        }
+
+        const recency = compareMatchRecencyDesc(candidate, existing);
+        if (recency < 0) {
+          latestCandidateByPlayer.set(playerKey, candidate);
+          continue;
+        }
+
+        if (recency === 0 && candidate.priority >= existing.priority) {
+          latestCandidateByPlayer.set(playerKey, candidate);
+        }
+      }
+
+      for (const playerId of normalizedIds) {
+        counts[playerId] = completedMatchIdsByPlayer.get(playerId)?.size ?? 0;
+        latestDates[playerId] =
+          latestCandidateByPlayer.get(playerId)?.dateLocal ?? null;
+
+        const latestRating = latestCandidateByPlayer.get(playerId)?.rating ?? null;
+        if (latestRating !== null) {
+          latestRatingValues[playerId] = latestRating;
+          continue;
+        }
+
+        latestRatingValues[playerId] =
+          initialRatingByPlayer.get(playerId) ?? null;
       }
 
       setMatchCountCompleted(counts);
@@ -115,9 +253,9 @@ export function usePlayerMatchCounts(
   }, [normalizedIds]);
 
   return {
-    matchCountCompleted,
-    latestMatchDates,
-    latestRatings,
-    loading,
+    matchCountCompleted: normalizedIds.length === 0 ? {} : matchCountCompleted,
+    latestMatchDates: normalizedIds.length === 0 ? {} : latestMatchDates,
+    latestRatings: normalizedIds.length === 0 ? {} : latestRatings,
+    loading: normalizedIds.length === 0 ? false : loading,
   };
 }

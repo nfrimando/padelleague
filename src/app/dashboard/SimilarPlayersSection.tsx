@@ -122,7 +122,7 @@ export default function SimilarPlayersSection({ playerId }: Props) {
           Similar Level
         </h2>
         <p className="mt-0.5 text-[10px] text-slate-600">
-          ← lower rating · ±15 player range · higher rating →
+          ← lower rating · all players · higher rating →
         </p>
       </div>
 
