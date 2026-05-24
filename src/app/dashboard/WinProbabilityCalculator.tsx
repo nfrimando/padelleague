@@ -195,14 +195,12 @@ function ScheduleIntersectionGrid({
   playerIdsWithNoSchedule,
   playerIdToName,
   totalPlayers,
-  loading,
   onEditSchedule,
 }: {
   schedules: Map<string, ScheduleSlot[]>;
   playerIdsWithNoSchedule: string[];
   playerIdToName: Map<string, string>;
   totalPlayers: number;
-  loading: boolean;
   onEditSchedule?: () => void;
 }) {
   const [hoverInfo, setHoverInfo] = useState<{
@@ -226,7 +224,6 @@ function ScheduleIntersectionGrid({
     return { countMap: counts, slotPlayersMap: players };
   }, [schedules, playerIdToName]);
 
-  const hasAnySchedule = schedules.size > 0;
   const missingNames = playerIdsWithNoSchedule
     .map((id) => playerIdToName.get(id) ?? "Unknown")
     .join(", ");
@@ -252,7 +249,7 @@ function ScheduleIntersectionGrid({
         </div>
         {/* Legend */}
         <div className="flex items-center gap-1.5">
-          {[1, 2, 3, 4].map((n) => (
+          {Array.from({ length: totalPlayers }, (_, i) => i + 1).map((n) => (
             <div key={n} className="flex items-center gap-0.5">
               <div className={`w-2.5 h-2.5 rounded-[2px] border ${COUNT_COLORS[n]}`} />
               <span className="text-[8px] text-[#687FA3]/60">{n}</span>
@@ -261,7 +258,7 @@ function ScheduleIntersectionGrid({
         </div>
       </div>
 
-      {/* Info row — fixed height; shows hover details or missing-schedule notice */}
+      {/* Info row — fixed height; shows hover details, missing-schedule notice, or prompt */}
       <div className="h-4 px-1 flex items-center gap-1.5 overflow-hidden">
         {hoverInfo ? (
           <>
@@ -275,6 +272,10 @@ function ScheduleIntersectionGrid({
               <span key={n} className="text-[9px] text-red-400/80 shrink-0">{n}</span>
             ))}
           </>
+        ) : playerIdToName.size === 0 ? (
+          <span className="text-[9px] text-[#687FA3]/40">
+            Add players above to see schedule overlap.
+          </span>
         ) : playerIdsWithNoSchedule.length > 0 ? (
           <span className="text-[9px] text-[#687FA3]/60">
             No schedule:{" "}
@@ -283,64 +284,56 @@ function ScheduleIntersectionGrid({
         ) : null}
       </div>
 
-      {loading ? (
-        <div className="h-32 rounded-xl bg-[#0d1520] animate-pulse" />
-      ) : !hasAnySchedule ? (
-        <p className="text-[10px] text-[#687FA3]/50 text-center py-6">
-          No players have set schedule preferences yet.
-        </p>
-      ) : (
-        <div
-          className="grid"
-          style={{ gridTemplateColumns: "1.5rem repeat(7, 1fr)", gap: "2px" }}
-        >
-          {/* Day headers */}
-          <div />
-          {SCHED_DAYS.map((d) => (
-            <div
-              key={d}
-              className="text-[8px] font-black uppercase tracking-widest text-center text-[#687FA3]/60 pb-0.5 select-none"
-            >
-              {d}
-            </div>
-          ))}
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: "1.5rem repeat(7, 1fr)", gap: "2px" }}
+      >
+        {/* Day headers */}
+        <div />
+        {SCHED_DAYS.map((d) => (
+          <div
+            key={d}
+            className="text-[8px] font-black uppercase tracking-widest text-center text-[#687FA3]/60 pb-0.5 select-none"
+          >
+            {d}
+          </div>
+        ))}
 
-          {/* Hour rows */}
-          {SCHED_HOURS.map((hour) => (
-            <Fragment key={hour}>
-              <div className="flex items-center justify-end pr-0.5 text-[8px] font-mono text-[#687FA3]/40 select-none">
-                {schedHourLabel(hour)}
-              </div>
-              {SCHED_DAYS.map((_, d) => {
-                const key = `${d}-${hour}`;
-                const count = Math.min(countMap.get(key) ?? 0, totalPlayers);
-                const names = slotPlayersMap.get(key);
-                return (
-                  <div
-                    key={key}
-                    className={`h-4 rounded-[2px] border cursor-default transition-opacity ${
-                      count === 0
-                        ? "bg-[#0d1520] border-transparent"
-                        : COUNT_COLORS[count] ?? COUNT_COLORS[4]
-                    }`}
-                    onMouseEnter={() => {
-                      const available = names ?? [];
-                      const allNames = Array.from(playerIdToName.values());
-                      const unavailable = allNames.filter((n) => !available.includes(n));
-                      setHoverInfo({
-                        label: `${SCHED_DAYS[d]} ${fullSchedHourLabel(hour)}`,
-                        available,
-                        unavailable,
-                      });
-                    }}
-                    onMouseLeave={() => setHoverInfo(null)}
-                  />
-                );
-              })}
-            </Fragment>
-          ))}
-        </div>
-      )}
+        {/* Hour rows */}
+        {SCHED_HOURS.map((hour) => (
+          <Fragment key={hour}>
+            <div className="flex items-center justify-end pr-0.5 text-[8px] font-mono text-[#687FA3]/40 select-none">
+              {schedHourLabel(hour)}
+            </div>
+            {SCHED_DAYS.map((_, d) => {
+              const key = `${d}-${hour}`;
+              const count = Math.min(countMap.get(key) ?? 0, totalPlayers);
+              const names = slotPlayersMap.get(key);
+              return (
+                <div
+                  key={key}
+                  className={`h-4 rounded-[2px] border cursor-default transition-colors ${
+                    count === 0
+                      ? "bg-[#0d1520] border-transparent"
+                      : COUNT_COLORS[count] ?? COUNT_COLORS[4]
+                  }`}
+                  onMouseEnter={() => {
+                    const available = names ?? [];
+                    const allNames = Array.from(playerIdToName.values());
+                    const unavailable = allNames.filter((n) => !available.includes(n));
+                    setHoverInfo({
+                      label: `${SCHED_DAYS[d]} ${fullSchedHourLabel(hour)}`,
+                      available,
+                      unavailable,
+                    });
+                  }}
+                  onMouseLeave={() => setHoverInfo(null)}
+                />
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
     </div>
   );
 }
@@ -445,8 +438,8 @@ export default function WinProbabilityCalculator({
     effectiveSlots.t2p2.player
   );
 
-  const schedulePlayerIds = allSelected ? selectedPlayerIds : [];
-  const { schedules, playerIdsWithNoSchedule, loading: schedulesLoading } =
+  const schedulePlayerIds = selectedPlayerIds;
+  const { schedules, playerIdsWithNoSchedule } =
     usePlayerSchedules(schedulePlayerIds);
 
   const playerIdToName = useMemo(() => {
@@ -613,47 +606,46 @@ export default function WinProbabilityCalculator({
             )}
           </div>
 
-          {/* Favored label row */}
-          {showResult && (
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-1.5">
-                {ewp1 > ewp2 && (
-                  <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
-                    Favored
-                  </span>
-                )}
-                {ewp1 <= ewp2 && (
-                  <span className="text-[10px] text-sky-500/60 font-semibold tabular-nums">
-                    {(ewp1 * 100).toFixed(1)}%
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5">
-                {ewp2 > ewp1 && (
-                  <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
-                    Favored
-                  </span>
-                )}
-                {ewp2 <= ewp1 && (
-                  <span className="text-[10px] text-amber-500/60 font-semibold tabular-nums">
-                    {(ewp2 * 100).toFixed(1)}%
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Favored label row — fixed height prevents layout shift */}
+          <div className="h-5 flex items-center justify-between px-1">
+            {showResult && (
+              <>
+                <div className="flex items-center gap-1.5">
+                  {ewp1 > ewp2 && (
+                    <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
+                      Favored
+                    </span>
+                  )}
+                  {ewp1 <= ewp2 && (
+                    <span className="text-[10px] text-sky-500/60 font-semibold tabular-nums">
+                      {(ewp1 * 100).toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {ewp2 > ewp1 && (
+                    <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
+                      Favored
+                    </span>
+                  )}
+                  {ewp2 <= ewp1 && (
+                    <span className="text-[10px] text-amber-500/60 font-semibold tabular-nums">
+                      {(ewp2 * 100).toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
 
-          {/* Schedule alignment — only when all 4 players are selected */}
-          {allSelected && (
-            <ScheduleIntersectionGrid
-              schedules={schedules}
-              playerIdsWithNoSchedule={playerIdsWithNoSchedule}
-              playerIdToName={playerIdToName}
-              totalPlayers={4}
-              loading={schedulesLoading}
-              onEditSchedule={lockedPlayer ? () => setEditScheduleOpen(true) : undefined}
-            />
-          )}
+          {/* Schedule alignment — always visible, updates incrementally as players are added */}
+          <ScheduleIntersectionGrid
+            schedules={schedules}
+            playerIdsWithNoSchedule={playerIdsWithNoSchedule}
+            playerIdToName={playerIdToName}
+            totalPlayers={selectedPlayerIds.length}
+            onEditSchedule={lockedPlayer ? () => setEditScheduleOpen(true) : undefined}
+          />
         </div>
       </div>
     </section>
