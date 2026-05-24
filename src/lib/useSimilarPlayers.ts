@@ -47,7 +47,7 @@ export function useSimilarPlayers(
     (async () => {
       const { data, error } = await supabase.rpc("get_similar_players", {
         p_player_id: Number(currentPlayerId),
-        p_window: 15,
+        p_window: 24,
       });
 
       if (cancelled) return;

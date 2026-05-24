@@ -215,34 +215,38 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               </div>
             </div>
           ) : (
-            <div className="flex md:hidden overflow-x-auto min-w-0">
-              <div className="flex gap-5 font-bold text-[11px] uppercase tracking-[0.12em] w-max">
-                {(
-                  [
-                    ["/matches", "Matches"],
-                    ["/players", "Players"],
-                    ["/leaderboard", "Standings"],
-                  ] as const
-                ).map(([href, label]) => (
+            <div className="flex md:hidden items-center min-w-0 gap-3">
+              <div className="flex-1 overflow-x-auto min-w-0" style={{ scrollbarWidth: "none" }}>
+                <div className="flex gap-5 font-bold text-[11px] uppercase tracking-[0.12em] w-max">
+                  {(
+                    [
+                      ["/matches", "Matches"],
+                      ["/players", "Players"],
+                      ["/leaderboard", "Standings"],
+                    ] as const
+                  ).map(([href, label]) => (
+                    <a
+                      key={href}
+                      href={href}
+                      className={
+                        currentPath === href
+                          ? "text-[#00C8DC]"
+                          : "text-white/75 hover:text-[#00C8DC] transition-colors"
+                      }
+                    >
+                      {label}
+                    </a>
+                  ))}
                   <a
-                    key={href}
-                    href={href}
-                    className={
-                      currentPath === href
-                        ? "text-[#00C8DC]"
-                        : "text-white/75 hover:text-[#00C8DC] transition-colors"
-                    }
+                    href="/predict"
+                    className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
                   >
-                    {label}
+                    Predict
+                    <span className="text-[7px] font-black text-amber-400/60">β</span>
                   </a>
-                ))}
-                <a
-                  href="/predict"
-                  className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
-                >
-                  Predict
-                  <span className="text-[7px] font-black text-amber-400/60">β</span>
-                </a>
+                </div>
+              </div>
+              <div className="flex-shrink-0 font-bold text-[11px] uppercase tracking-[0.12em]">
                 {loading ? (
                   <div className="h-6 w-10 rounded-full bg-[#22304a] animate-pulse" />
                 ) : user ? (
