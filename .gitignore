@@ -54,3 +54,12 @@ __pycache__/
 # playwright auth session
 src/__tests__/e2e/.auth/session.json
 .claude
+
+# local personal Claude notes
+CLAUDE.local.md
+
+# generated standings graphics
+season11-standings.png
+season11-standings.svg
+season11-group*.png
+season11-group*.svg
