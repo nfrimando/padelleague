@@ -10,6 +10,15 @@ const SQUADS = {
   "Team 9": ["Armand", "Hein", "Jerry"],
 };
 
+// Explicit player_id for ambiguous names, keyed by "Squad|Token".
+// Jerry in Group A is Jerry Companjen (#80), not Jerry Echter (#81).
+const OVERRIDES = {
+  "Team 9|Jerry": 80,
+};
+
+// Match types to exclude from the standings (duels are 1-off, not group play).
+const EXCLUDED_TYPES = new Set(["duel"]);
+
 async function rest(path) {
   const res = await fetch(`${URL}/rest/v1/${path}`, {
     headers: { apikey: KEY, Authorization: `Bearer ${KEY}` },
@@ -62,6 +71,18 @@ function matchToken(player, token) {
   const problems = [];
   for (const [squad, names] of Object.entries(SQUADS)) {
     for (const token of names) {
+      const overrideId = OVERRIDES[`${squad}|${token}`];
+      if (overrideId != null) {
+        const p = players.find((x) => x.player_id === overrideId);
+        playerToSquad.set(overrideId, squad);
+        resolution.push({
+          squad,
+          token,
+          player_id: overrideId,
+          resolved: p ? `${p.name} / ${p.nickname} (override)` : "(override id not found)",
+        });
+        continue;
+      }
       let hits = players.filter((p) => matchToken(p, token));
       if (hits.length > 1) {
         // Disambiguate by who actually played in this event.
@@ -141,10 +162,21 @@ function matchToken(player, token) {
   const groupAIds = new Set(playerToSquad.keys());
   console.log(`\nResolved ${groupAIds.size}/12 Group A player ids.\n`);
 
-  // Pull completed matches for the event.
-  const matches = await rest(
+  // Pull completed matches for the event, excluding duels (not group play).
+  const allCompleted = await rest(
     `matches?select=match_id,event_id,type,winner_team,status&event_id=eq.${EVENT_ID}&status=eq.completed`
   );
+  const excluded = allCompleted.filter((m) => EXCLUDED_TYPES.has(m.type));
+  const matches = allCompleted.filter((m) => !EXCLUDED_TYPES.has(m.type));
+  if (excluded.length) {
+    console.log(
+      `Excluded ${excluded.length} completed match(es) by type [${[
+        ...EXCLUDED_TYPES,
+      ].join(", ")}]: ${excluded
+        .map((m) => `#${m.match_id}(${m.type})`)
+        .join(", ")}\n`
+    );
+  }
   const matchIds = matches.map((m) => m.match_id);
   if (matchIds.length === 0) {
     console.log("No completed matches for event.");
