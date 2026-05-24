@@ -6,27 +6,27 @@ write to the database.
 
 | File | Purpose |
 | --- | --- |
-| `season11-standings.mjs` | Compute standings (CLI prints tables + per-match results; also `export`s `computeStandings()`). |
-| `season11-image.mjs` | Render one PNG/SVG per group **plus** a combined overview, importing `computeStandings()`. |
-| `season11-groupa.mjs` | Original Group-A-only script. **Superseded** by `season11-standings.mjs`; kept for reference. |
+| `scripts/season11/season11-standings.mjs` | Compute standings (CLI prints tables + per-match results; also `export`s `computeStandings()`). |
+| `scripts/season11/season11-image.mjs` | Render one PNG/SVG per group **plus** a combined overview, importing `computeStandings()`. |
+| `scripts/season11/season11-groupa.mjs` | Original Group-A-only script. **Superseded** by `season11-standings.mjs`; kept for reference. |
 
 ## Quick start
 
 ```bash
 # 1. Recalculate standings (prints tables, per-match breakdown, and any warnings)
-node scripts/season11-standings.mjs
+node scripts/season11/season11-standings.mjs
 
 # 2. (optional, for PNG output) install the rasterizer once
 npm i @resvg/resvg-js
 
 # 3. Regenerate the graphics -> writes to the repo root:
 #    season11-groupa.png … season11-groupd.png + season11-standings.png (+ .svg)
-node scripts/season11-image.mjs
+node scripts/season11/season11-image.mjs
 ```
 
 If `@resvg/resvg-js` isn't installed, the image script still writes the `.svg`
 files and skips the `.png` (it prints a hint). You can also point it at an
-existing install with `RESVG_DIR=/path/to/dir node scripts/season11-image.mjs`.
+existing install with `RESVG_DIR=/path/to/dir node scripts/season11/season11-image.mjs`.
 
 The generated `season11-*.png` / `.svg` files are git-ignored (regenerate them;
 don't commit them).
@@ -34,8 +34,8 @@ don't commit them).
 ## Requirements
 
 - Node 18+ (uses global `fetch`).
-- Network access to Supabase. Credentials are read from the hardcoded anon URL/key
-  in `season11-standings.mjs` (same public anon key as `.env`).
+- Network access to Supabase. Credentials are read from `NEXT_PUBLIC_SUPABASE_URL`
+  and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (must be a public `sb_publishable_*` key).
 - `@resvg/resvg-js` only for PNG rendering (SVG works without it).
 
 ## How standings are computed
