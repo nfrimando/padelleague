@@ -142,7 +142,7 @@ function buildSvg(groups) {
   // Footer
   const fy = gridTop + cardH * 2 + gap + 44;
   s += text(W / 2, fy, "PADELPH.COM", { size: 12, fill: C.slate, anchor: "middle", spacing: 3, family: MONO });
-  s += text(W / 2, fy + 22, "Win = 3 pts · ties broken by sets won", { size: 11, fill: "rgba(104,127,163,0.7)", anchor: "middle", family: SANS });
+  s += text(W / 2, fy + 22, "Win = 3 pts · ties: sets won, then head-to-head", { size: 11, fill: "rgba(104,127,163,0.7)", anchor: "middle", family: SANS });
 
   s += `</svg>`;
   return s;
@@ -217,7 +217,7 @@ function buildGroupSvg(g) {
   // Footer
   const fy = H - 56;
   s += text(margin, fy, "PADELPH.COM", { size: 14, fill: C.slate, spacing: 3, family: MONO });
-  s += text(cardRight, fy, "Win = 3 pts · ties broken by sets won", { size: 14, fill: "rgba(104,127,163,0.75)", anchor: "end", family: SANS });
+  s += text(cardRight, fy, "Win = 3 pts · ties: sets won, then head-to-head", { size: 14, fill: "rgba(104,127,163,0.75)", anchor: "end", family: SANS });
 
   s += `</svg>`;
   return s;
