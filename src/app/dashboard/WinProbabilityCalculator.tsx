@@ -1,7 +1,14 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
-import { Pencil, X } from "lucide-react";
+import {
+  Fragment,
+  forwardRef,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { GripHorizontal, MousePointer2, Pencil, X } from "lucide-react";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { usePlayerMatchCounts } from "@/lib/usePlayerMatchCounts";
@@ -21,6 +28,10 @@ export type WinProbabilityCalculatorProps = {
   lockedPlayer?: Player | null;
   lockedSlot?: SlotKey;
   lockedPlayerRating?: number | null;
+};
+
+export type WinProbabilityCalculatorHandle = {
+  addPlayer: (player: Player) => void;
 };
 
 // ── Search input ─────────────────────────────────────────────────────────────
@@ -60,13 +71,16 @@ function SlotSearch({
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();
-              if (showDrop) setActiveIdx((i) => (i < visible.length - 1 ? i + 1 : 0));
+              if (showDrop)
+                setActiveIdx((i) => (i < visible.length - 1 ? i + 1 : 0));
             } else if (e.key === "ArrowUp") {
               e.preventDefault();
-              if (showDrop) setActiveIdx((i) => (i > 0 ? i - 1 : visible.length - 1));
+              if (showDrop)
+                setActiveIdx((i) => (i > 0 ? i - 1 : visible.length - 1));
             } else if (e.key === "Enter") {
               e.preventDefault();
-              if (showDrop && activeIdx >= 0 && visible[activeIdx]) commit(visible[activeIdx]);
+              if (showDrop && activeIdx >= 0 && visible[activeIdx])
+                commit(visible[activeIdx]);
             } else if (e.key === "Escape") {
               setActiveIdx(-1);
             }
@@ -96,9 +110,13 @@ function SlotSearch({
                 i === activeIdx ? "bg-[#1a2540]" : "hover:bg-[#1a2540]/60"
               }`}
             >
-              <div className="text-sm font-medium text-slate-100 truncate">{p.name}</div>
+              <div className="text-sm font-medium text-slate-100 truncate">
+                {p.name}
+              </div>
               {p.nickname && (
-                <div className="text-[11px] text-[#687FA3] truncate">{p.nickname}</div>
+                <div className="text-[11px] text-[#687FA3] truncate">
+                  {p.nickname}
+                </div>
               )}
             </button>
           ))}
@@ -114,22 +132,36 @@ function PlayerChip({
   rating,
   isYou,
   isLocked,
+  isDragging,
   team,
   onRemove,
+  onDragStart,
 }: {
   player: Player;
   rating: number | null;
   isYou?: boolean;
   isLocked?: boolean;
+  isDragging?: boolean;
   team: 1 | 2;
   onRemove?: () => void;
+  onDragStart?: () => void;
 }) {
   const hasImg = !!(player.image_link && player.image_link !== "null");
   const src = hasImg ? player.image_link! : "/default-avatar.webp";
   const ringCls = team === 1 ? "ring-sky-500/40" : "ring-amber-500/40";
 
   return (
-    <div className="flex items-center gap-2.5 bg-[#0d1520] border border-[#687FA3]/20 rounded-xl px-2.5 py-2 h-[52px]">
+    <div
+      draggable={!isLocked}
+      onDragStart={!isLocked ? onDragStart : undefined}
+      className={[
+        "flex items-center gap-2.5 rounded-xl px-2.5 py-2 h-[52px] transition-opacity",
+        isLocked
+          ? "bg-sky-950/40 border border-sky-700/25 cursor-default"
+          : "bg-[#0d1520] border border-[#687FA3]/20 cursor-grab active:cursor-grabbing",
+        isDragging ? "opacity-40" : "",
+      ].join(" ")}
+    >
       <img
         src={src}
         alt={player.name}
@@ -164,7 +196,9 @@ function PlayerChip({
 }
 
 // ── Schedule intersection ─────────────────────────────────────────────────────
-const SCHED_HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0];
+const SCHED_HOURS = [
+  6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0,
+];
 const SCHED_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function schedHourLabel(h: number): string {
@@ -177,10 +211,10 @@ function schedHourLabel(h: number): string {
 // Four distinct hues so 1/2/3/4 are unambiguous at a glance
 const COUNT_COLORS = [
   "",
-  "bg-slate-600/50 border-slate-500/40",      // 1 — dim gray-blue
-  "bg-amber-600/60 border-amber-500/50",       // 2 — amber
-  "bg-orange-500/75 border-orange-400/65",     // 3 — orange
-  "bg-emerald-500 border-emerald-400/80",      // 4 — green
+  "bg-slate-600/50 border-slate-500/40", // 1 — dim gray-blue
+  "bg-amber-600/60 border-amber-500/50", // 2 — amber
+  "bg-orange-500/75 border-orange-400/65", // 3 — orange
+  "bg-emerald-500 border-emerald-400/80", // 4 — green
 ];
 
 function fullSchedHourLabel(h: number): string {
@@ -251,7 +285,9 @@ function ScheduleIntersectionGrid({
         <div className="flex items-center gap-1.5">
           {Array.from({ length: totalPlayers }, (_, i) => i + 1).map((n) => (
             <div key={n} className="flex items-center gap-0.5">
-              <div className={`w-2.5 h-2.5 rounded-[2px] border ${COUNT_COLORS[n]}`} />
+              <div
+                className={`w-2.5 h-2.5 rounded-[2px] border ${COUNT_COLORS[n]}`}
+              />
               <span className="text-[8px] text-[#687FA3]/60">{n}</span>
             </div>
           ))}
@@ -266,10 +302,17 @@ function ScheduleIntersectionGrid({
               {hoverInfo.label} ·
             </span>
             {hoverInfo.available.map((n) => (
-              <span key={n} className="text-[9px] font-semibold text-emerald-400 shrink-0">{n}</span>
+              <span
+                key={n}
+                className="text-[9px] font-semibold text-emerald-400 shrink-0"
+              >
+                {n}
+              </span>
             ))}
             {hoverInfo.unavailable.map((n) => (
-              <span key={n} className="text-[9px] text-red-400/80 shrink-0">{n}</span>
+              <span key={n} className="text-[9px] text-red-400/80 shrink-0">
+                {n}
+              </span>
             ))}
           </>
         ) : playerIdToName.size === 0 ? (
@@ -279,7 +322,9 @@ function ScheduleIntersectionGrid({
         ) : playerIdsWithNoSchedule.length > 0 ? (
           <span className="text-[9px] text-[#687FA3]/60">
             No schedule:{" "}
-            <span className="font-semibold text-[#687FA3]/80">{missingNames}</span>
+            <span className="font-semibold text-[#687FA3]/80">
+              {missingNames}
+            </span>
           </span>
         ) : null}
       </div>
@@ -315,12 +360,14 @@ function ScheduleIntersectionGrid({
                   className={`h-4 rounded-[2px] border cursor-default transition-colors ${
                     count === 0
                       ? "bg-[#0d1520] border-transparent"
-                      : COUNT_COLORS[count] ?? COUNT_COLORS[4]
+                      : (COUNT_COLORS[count] ?? COUNT_COLORS[4])
                   }`}
                   onMouseEnter={() => {
                     const available = names ?? [];
                     const allNames = Array.from(playerIdToName.values());
-                    const unavailable = allNames.filter((n) => !available.includes(n));
+                    const unavailable = allNames.filter(
+                      (n) => !available.includes(n),
+                    );
                     setHoverInfo({
                       label: `${SCHED_DAYS[d]} ${fullSchedHourLabel(hour)}`,
                       available,
@@ -339,17 +386,22 @@ function ScheduleIntersectionGrid({
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function WinProbabilityCalculator({
-  lockedPlayer,
-  lockedSlot = "t1p1",
-  lockedPlayerRating,
-}: WinProbabilityCalculatorProps) {
+const SLOT_ORDER: SlotKey[] = ["t1p1", "t1p2", "t2p1", "t2p2"];
+
+const WinProbabilityCalculator = forwardRef<
+  WinProbabilityCalculatorHandle,
+  WinProbabilityCalculatorProps
+>(function WinProbabilityCalculator(
+  { lockedPlayer, lockedSlot = "t1p1", lockedPlayerRating },
+  ref,
+) {
   const { players: allPlayers, loading: playersLoading } = usePlayers({
     orderByName: true,
     onlyActivePlayers: true,
   });
 
   const [editScheduleOpen, setEditScheduleOpen] = useState(false);
+  const [dragSlot, setDragSlot] = useState<SlotKey | null>(null);
 
   const [slots, setSlots] = useState<Record<SlotKey, SlotState>>({
     t1p1: { ...EMPTY },
@@ -362,7 +414,9 @@ export default function WinProbabilityCalculator({
   const effectiveSlots: Record<SlotKey, SlotState> = useMemo(
     () => ({
       ...slots,
-      [lockedSlot]: lockedPlayer ? { search: "", player: lockedPlayer } : slots[lockedSlot],
+      [lockedSlot]: lockedPlayer
+        ? { search: "", player: lockedPlayer }
+        : slots[lockedSlot],
     }),
     [slots, lockedSlot, lockedPlayer],
   );
@@ -375,6 +429,15 @@ export default function WinProbabilityCalculator({
     setSlots((prev) => ({ ...prev, [key]: { ...EMPTY } }));
   };
 
+  useImperativeHandle(ref, () => ({
+    addPlayer: (player: Player) => {
+      const nextEmpty = SLOT_ORDER.find(
+        (k) => k !== lockedSlot && !slots[k].player,
+      );
+      if (nextEmpty) updateSlot(nextEmpty, { player, search: "" });
+    },
+  }));
+
   const selectedIds = useMemo(
     () =>
       new Set(
@@ -386,7 +449,9 @@ export default function WinProbabilityCalculator({
   );
 
   const makeExcluded = (key: SlotKey): Set<string> => {
-    const own = effectiveSlots[key].player ? String(effectiveSlots[key].player!.player_id) : null;
+    const own = effectiveSlots[key].player
+      ? String(effectiveSlots[key].player!.player_id)
+      : null;
     return new Set([...selectedIds].filter((id) => id !== own));
   };
 
@@ -407,20 +472,30 @@ export default function WinProbabilityCalculator({
   };
 
   // Fetch ratings for selected players
+  // Depend only on the player IDs, not the full effectiveSlots (which includes
+  // search text), so typing in a search box doesn't re-trigger rating fetches.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const selectedPlayerIds = useMemo(
     () =>
       Object.values(effectiveSlots)
         .filter((s) => s.player)
         .map((s) => String(s.player!.player_id)),
-    [effectiveSlots],
+    [
+      effectiveSlots.t1p1.player?.player_id,
+      effectiveSlots.t1p2.player?.player_id,
+      effectiveSlots.t2p1.player?.player_id,
+      effectiveSlots.t2p2.player?.player_id,
+    ],
   );
 
-  const { latestRatings, loading: ratingsLoading } = usePlayerMatchCounts(selectedPlayerIds);
+  const { latestRatings, loading: ratingsLoading } =
+    usePlayerMatchCounts(selectedPlayerIds);
 
   const getRating = (key: SlotKey): number | null => {
     const p = effectiveSlots[key].player;
     if (!p) return null;
-    if (key === lockedSlot && lockedPlayerRating != null) return lockedPlayerRating;
+    if (key === lockedSlot && lockedPlayerRating != null)
+      return lockedPlayerRating;
     return latestRatings[String(p.player_id)] ?? null;
   };
 
@@ -446,12 +521,16 @@ export default function WinProbabilityCalculator({
     const m = new Map<string, string>();
     for (const slot of Object.values(effectiveSlots)) {
       if (slot.player) {
-        m.set(String(slot.player.player_id), slot.player.nickname ?? slot.player.name);
+        m.set(
+          String(slot.player.player_id),
+          slot.player.nickname ?? slot.player.name,
+        );
       }
     }
     return m;
   }, [effectiveSlots]);
-  const allRatings = r.t1p1 != null && r.t1p2 != null && r.t2p1 != null && r.t2p2 != null;
+  const allRatings =
+    r.t1p1 != null && r.t1p2 != null && r.t2p1 != null && r.t2p2 != null;
   const loadingResult = allSelected && ratingsLoading;
   const showResult = allSelected && allRatings && !loadingResult;
 
@@ -462,21 +541,53 @@ export default function WinProbabilityCalculator({
       )
     : [0.5, 0.5];
 
+  const handleDrop = (targetKey: SlotKey) => {
+    if (!dragSlot || dragSlot === targetKey || targetKey === lockedSlot) return;
+    setSlots((prev) => ({
+      ...prev,
+      [dragSlot]: prev[targetKey],
+      [targetKey]: prev[dragSlot],
+    }));
+    setDragSlot(null);
+  };
+
   // ── Slot renderer ────────────────────────────────────────────────────────────
   const renderSlot = (key: SlotKey, team: 1 | 2) => {
     const slot = effectiveSlots[key];
     const isLocked = key === lockedSlot && !!lockedPlayer;
+    const isBeingDragged = dragSlot === key;
+    const isDropTarget =
+      dragSlot !== null && dragSlot !== key && key !== lockedSlot;
+
+    const dropProps = {
+      onDragOver: (e: React.DragEvent) => {
+        if (dragSlot && dragSlot !== key && key !== lockedSlot)
+          e.preventDefault();
+      },
+      onDrop: () => handleDrop(key),
+      onDragLeave: () => {},
+    };
 
     if (slot.player) {
       return (
-        <PlayerChip
-          player={slot.player}
-          rating={getRating(key)}
-          isYou={isLocked}
-          isLocked={isLocked}
-          team={team}
-          onRemove={() => clearSlot(key)}
-        />
+        <div
+          {...dropProps}
+          className={[
+            "rounded-xl transition-colors",
+            isDropTarget ? "ring-1 ring-[#00C8DC]/40 bg-[#00C8DC]/5" : "",
+          ].join(" ")}
+        >
+          <PlayerChip
+            player={slot.player}
+            rating={getRating(key)}
+            isYou={isLocked}
+            isLocked={isLocked}
+            isDragging={isBeingDragged}
+            team={team}
+            onRemove={() => clearSlot(key)}
+            onDragStart={() => setDragSlot(key)}
+          />
+        </div>
       );
     }
 
@@ -487,168 +598,199 @@ export default function WinProbabilityCalculator({
     }
 
     return (
-      <SlotSearch
-        value={slot.search}
-        suggestions={suggMap[key]}
-        onChange={(v) => updateSlot(key, { search: v })}
-        onSelect={(p) => updateSlot(key, { player: p, search: "" })}
-        onClear={() => updateSlot(key, { search: "" })}
-      />
+      <div
+        {...dropProps}
+        className={[
+          "rounded-xl transition-colors",
+          isDropTarget ? "ring-1 ring-[#00C8DC]/40 bg-[#00C8DC]/5" : "",
+        ].join(" ")}
+      >
+        <SlotSearch
+          value={slot.search}
+          suggestions={suggMap[key]}
+          onChange={(v) => updateSlot(key, { search: v })}
+          onSelect={(p) => updateSlot(key, { player: p, search: "" })}
+          onClear={() => updateSlot(key, { search: "" })}
+        />
+      </div>
     );
   };
 
   return (
     <>
-    {lockedPlayer && (
-      <EditScheduleModal
-        playerId={Number(lockedPlayer.player_id)}
-        isOpen={editScheduleOpen}
-        onClose={() => setEditScheduleOpen(false)}
-      />
-    )}
-    <section className="bg-[#162032] border border-[#687FA3]/10 sm:rounded-3xl">
-      {/* Header */}
-      <div className="px-6 pt-5 pb-4 flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xs font-black uppercase tracking-widest text-[#687FA3]">
-            Win Probability
-          </h2>
-          <p className="mt-0.5 text-[10px] text-slate-600">
-            Who has the edge before a ball is hit?
-          </p>
-        </div>
-        <span className="shrink-0 text-[9px] font-mono text-[#687FA3]/40 bg-[#687FA3]/5 border border-[#687FA3]/10 px-2 py-1 rounded-full">
-          {FORMULA_NAME}
-        </span>
-      </div>
-
-      <div className="px-4 pb-6 space-y-4">
-        {/* Team columns */}
-        <div className="flex flex-col sm:grid sm:grid-cols-[1fr_28px_1fr] sm:items-center gap-3 sm:gap-2">
-          {/* Team 1 */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5 px-0.5">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
-              <span className="text-[9px] font-black uppercase tracking-widest text-sky-500">
-                Team 1
-              </span>
-            </div>
-            {renderSlot("t1p1", 1)}
-            {renderSlot("t1p2", 1)}
+      {lockedPlayer && (
+        <EditScheduleModal
+          playerId={Number(lockedPlayer.player_id)}
+          isOpen={editScheduleOpen}
+          onClose={() => setEditScheduleOpen(false)}
+        />
+      )}
+      <section className="bg-[#162032] border border-[#687FA3]/10 sm:rounded-3xl">
+        {/* Header */}
+        <div className="px-6 pt-5 pb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-widest text-[#687FA3]">
+              Win Probability and Schedule Alignment
+            </h2>
+            <p className="mt-0.5 text-[10px] text-slate-600">
+              Find the best time to play with / against peers of similar
+              caliber.
+            </p>
           </div>
-
-          {/* VS — horizontal on mobile, vertical on sm+ */}
-          <div className="flex sm:hidden items-center gap-3">
-            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#687FA3]/20 to-transparent" />
-            <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">VS</span>
-            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#687FA3]/20 to-transparent" />
-          </div>
-          <div className="hidden sm:flex flex-col items-center justify-center gap-1 self-stretch pt-5">
-            <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
-            <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">
-              VS
-            </span>
-            <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
-          </div>
-
-          {/* Team 2 */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5 px-0.5">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-              <span className="text-[9px] font-black uppercase tracking-widest text-amber-500">
-                Team 2
-              </span>
-            </div>
-            {renderSlot("t2p1", 2)}
-            {renderSlot("t2p2", 2)}
-          </div>
-        </div>
-
-        {/* Result */}
-        <div className="space-y-2 pt-1">
-          {/* Probability bar */}
-          <div className="relative h-11 rounded-xl overflow-hidden bg-[#0d1520]">
-            {loadingResult ? (
-              <div className="absolute inset-0 animate-pulse bg-[#1a2540]" />
-            ) : showResult ? (
-              <>
-                {/* Team 1 fill */}
-                <div
-                  className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-sky-700 to-sky-400 transition-all duration-700 ease-out"
-                  style={{ width: `${ewp1 * 100}%` }}
-                />
-                {/* Team 2 fill */}
-                <div
-                  className="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-amber-700 to-amber-400 transition-all duration-700 ease-out"
-                  style={{ width: `${ewp2 * 100}%` }}
-                />
-                {/* Thin divider at meeting point */}
-                <div
-                  className="absolute top-0 bottom-0 w-px bg-[#162032]/60 transition-all duration-700 ease-out"
-                  style={{ left: `${ewp1 * 100}%` }}
-                />
-                {/* Labels */}
-                <div className="absolute inset-0 flex items-center justify-between px-4">
-                  <span className="text-sm font-black tabular-nums text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">
-                    {(ewp1 * 100).toFixed(1)}%
-                  </span>
-                  <span className="text-sm font-black tabular-nums text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">
-                    {(ewp2 * 100).toFixed(1)}%
-                  </span>
+          <div className="shrink-0 flex flex-col items-end gap-1.5">
+            {lockedPlayer && (
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#00C8DC]/80">
+                  <MousePointer2 size={9} />
+                  <span>Click peer to add</span>
                 </div>
-              </>
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-[11px] text-[#687FA3]/40 font-medium">
-                  {allSelected ? "Fetching ratings…" : "Select all 4 players to calculate"}
-                </span>
+                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#00C8DC]/55">
+                  <GripHorizontal size={9} />
+                  <span>Drag to swap</span>
+                </div>
               </div>
             )}
+            <span className="text-[9px] font-mono text-[#687FA3]/40 bg-[#687FA3]/5 border border-[#687FA3]/10 px-2 py-1 rounded-full">
+              {FORMULA_NAME}
+            </span>
+          </div>
+        </div>
+
+        <div className="px-4 pb-6 space-y-4">
+          {/* Team columns */}
+          <div className="flex flex-col sm:grid sm:grid-cols-[1fr_28px_1fr] sm:items-center gap-3 sm:gap-2">
+            {/* Team 1 */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 px-0.5">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-sky-500">
+                  Team 1
+                </span>
+              </div>
+              {renderSlot("t1p1", 1)}
+              {renderSlot("t1p2", 1)}
+            </div>
+
+            {/* VS — horizontal on mobile, vertical on sm+ */}
+            <div className="flex sm:hidden items-center gap-3">
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#687FA3]/20 to-transparent" />
+              <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">
+                VS
+              </span>
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#687FA3]/20 to-transparent" />
+            </div>
+            <div className="hidden sm:flex flex-col items-center justify-center gap-1 self-stretch pt-5">
+              <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
+              <span className="text-[10px] font-black text-[#687FA3]/50 tracking-widest">
+                VS
+              </span>
+              <div className="flex-1 w-px bg-gradient-to-b from-transparent via-[#687FA3]/20 to-transparent" />
+            </div>
+
+            {/* Team 2 */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 px-0.5">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-500">
+                  Team 2
+                </span>
+              </div>
+              {renderSlot("t2p1", 2)}
+              {renderSlot("t2p2", 2)}
+            </div>
           </div>
 
-          {/* Favored label row — fixed height prevents layout shift */}
-          <div className="h-5 flex items-center justify-between px-1">
-            {showResult && (
-              <>
-                <div className="flex items-center gap-1.5">
-                  {ewp1 > ewp2 && (
-                    <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
-                      Favored
-                    </span>
-                  )}
-                  {ewp1 <= ewp2 && (
-                    <span className="text-[10px] text-sky-500/60 font-semibold tabular-nums">
+          {/* Result */}
+          <div className="space-y-2 pt-1">
+            {/* Probability bar */}
+            <div className="relative h-11 rounded-xl overflow-hidden bg-[#0d1520]">
+              {loadingResult ? (
+                <div className="absolute inset-0 animate-pulse bg-[#1a2540]" />
+              ) : showResult ? (
+                <>
+                  {/* Team 1 fill */}
+                  <div
+                    className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-sky-700 to-sky-400 transition-all duration-700 ease-out"
+                    style={{ width: `${ewp1 * 100}%` }}
+                  />
+                  {/* Team 2 fill */}
+                  <div
+                    className="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-amber-700 to-amber-400 transition-all duration-700 ease-out"
+                    style={{ width: `${ewp2 * 100}%` }}
+                  />
+                  {/* Thin divider at meeting point */}
+                  <div
+                    className="absolute top-0 bottom-0 w-px bg-[#162032]/60 transition-all duration-700 ease-out"
+                    style={{ left: `${ewp1 * 100}%` }}
+                  />
+                  {/* Labels */}
+                  <div className="absolute inset-0 flex items-center justify-between px-4">
+                    <span className="text-sm font-black tabular-nums text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">
                       {(ewp1 * 100).toFixed(1)}%
                     </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {ewp2 > ewp1 && (
-                    <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
-                      Favored
-                    </span>
-                  )}
-                  {ewp2 <= ewp1 && (
-                    <span className="text-[10px] text-amber-500/60 font-semibold tabular-nums">
+                    <span className="text-sm font-black tabular-nums text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">
                       {(ewp2 * 100).toFixed(1)}%
                     </span>
-                  )}
+                  </div>
+                </>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-[11px] text-[#687FA3]/40 font-medium">
+                    {allSelected
+                      ? "Fetching ratings…"
+                      : "Select all 4 players to calculate"}
+                  </span>
                 </div>
-              </>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Schedule alignment — always visible, updates incrementally as players are added */}
-          <ScheduleIntersectionGrid
-            schedules={schedules}
-            playerIdsWithNoSchedule={playerIdsWithNoSchedule}
-            playerIdToName={playerIdToName}
-            totalPlayers={selectedPlayerIds.length}
-            onEditSchedule={lockedPlayer ? () => setEditScheduleOpen(true) : undefined}
-          />
+            {/* Favored label row — fixed height prevents layout shift */}
+            <div className="h-5 flex items-center justify-between px-1">
+              {showResult && (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    {ewp1 > ewp2 && (
+                      <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
+                        Favored
+                      </span>
+                    )}
+                    {ewp1 <= ewp2 && (
+                      <span className="text-[10px] text-sky-500/60 font-semibold tabular-nums">
+                        {(ewp1 * 100).toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {ewp2 > ewp1 && (
+                      <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-sm">
+                        Favored
+                      </span>
+                    )}
+                    {ewp2 <= ewp1 && (
+                      <span className="text-[10px] text-amber-500/60 font-semibold tabular-nums">
+                        {(ewp2 * 100).toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Schedule alignment — always visible, updates incrementally as players are added */}
+            <ScheduleIntersectionGrid
+              schedules={schedules}
+              playerIdsWithNoSchedule={playerIdsWithNoSchedule}
+              playerIdToName={playerIdToName}
+              totalPlayers={selectedPlayerIds.length}
+              onEditSchedule={
+                lockedPlayer ? () => setEditScheduleOpen(true) : undefined
+              }
+            />
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
     </>
   );
-}
+});
+
+export default WinProbabilityCalculator;

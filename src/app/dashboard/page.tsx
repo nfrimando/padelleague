@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, Lock, LogOut, X } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
@@ -18,7 +18,7 @@ import { useDashboardStats } from "@/lib/useDashboardStats";
 import HeroSection from "./HeroSection";
 import ProgressionSection from "./ProgressionSection";
 import SimilarPlayersSection from "./SimilarPlayersSection";
-import WinProbabilityCalculator from "./WinProbabilityCalculator";
+import WinProbabilityCalculator, { WinProbabilityCalculatorHandle } from "./WinProbabilityCalculator";
 import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
 import ViewAsSelector from "./ViewAsSelector";
@@ -86,7 +86,29 @@ export default function DashboardPage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [payingSignupId, setPayingSignupId] = useState<string | null>(null);
   const [paymentJustCompleted, setPaymentJustCompleted] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "peers" | "favorites" | "predictions">("overview");
+  const searchParams = useSearchParams();
+  const rawTab = searchParams.get("tab");
+  const VALID_TABS = ["overview", "peers", "favorites", "predictions"] as const;
+  type DashboardTab = (typeof VALID_TABS)[number];
+  const activeTab: DashboardTab = VALID_TABS.includes(rawTab as DashboardTab)
+    ? (rawTab as DashboardTab)
+    : "overview";
+
+  const setActiveTab = useCallback(
+    (tab: DashboardTab) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (tab === "overview") {
+        params.delete("tab");
+      } else {
+        params.set("tab", tab);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `/dashboard?${qs}` : "/dashboard");
+    },
+    [router, searchParams],
+  );
+
+  const calcRef = useRef<WinProbabilityCalculatorHandle>(null);
 
   // Admin-only: player to view as (null = view as self)
   const [viewAsPlayer, setViewAsPlayer] = useState<Player | null>(null);
@@ -282,7 +304,7 @@ export default function DashboardPage() {
   // Reset to overview when payment is pending
   useEffect(() => {
     if (pendingPaymentSignup) setActiveTab("overview");
-  }, [pendingPaymentSignup]);
+  }, [pendingPaymentSignup, setActiveTab]);
 
   // ── Loading / redirect states ─────────────────────────────────────────────
   if (user === undefined) {
@@ -476,8 +498,17 @@ export default function DashboardPage() {
                 <SimilarPlayersSection
                   playerId={displayPlayer.player_id}
                   currentPlayerRating={latestRating}
+                  onSelectPeer={(peer) => {
+                    calcRef.current?.addPlayer({
+                      player_id: peer.id,
+                      name: peer.name ?? "",
+                      nickname: peer.nickname ?? "",
+                      image_link: peer.image_link,
+                    } as Player);
+                  }}
                 />
                 <WinProbabilityCalculator
+                  ref={calcRef}
                   lockedPlayer={displayPlayer}
                   lockedPlayerRating={latestRating}
                 />

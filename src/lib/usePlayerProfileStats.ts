@@ -144,7 +144,8 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
           )
           .in("match_id", matchIds)
           .order("date_local", { ascending: false, nullsFirst: false })
-          .order("time_local", { ascending: false }),
+          .order("time_local", { ascending: false })
+          .order("match_id", { ascending: false }),
 
         // Step 4: Rating history for this player only
         supabase
