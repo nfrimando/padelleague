@@ -737,6 +737,80 @@ export async function PATCH(
     );
   }
 
+  if (validation.value.status === "forfeit") {
+    const forfeitWinnerTeam = validation.value.forfeitWinnerTeam as 1 | 2;
+
+    const { error: deleteSetsError } = await supabase
+      .from("match_sets")
+      .delete()
+      .eq("match_id", matchId);
+
+    if (deleteSetsError) {
+      return NextResponse.json(
+        { error: deleteSetsError.message || "Failed to clear existing sets for forfeit." },
+        { status: 500 },
+      );
+    }
+
+    const forfeitSetRows = [1, 2].map((set_number) => ({
+      match_id: matchId,
+      set_number,
+      team_1_games: forfeitWinnerTeam === 1 ? 6 : 0,
+      team_2_games: forfeitWinnerTeam === 2 ? 6 : 0,
+    }));
+
+    const { error: insertSetsError } = await supabase
+      .from("match_sets")
+      .insert(forfeitSetRows);
+
+    if (insertSetsError) {
+      return NextResponse.json(
+        { error: insertSetsError.message || "Failed to insert forfeit sets." },
+        { status: 500 },
+      );
+    }
+
+    const winnerTeamRow = forfeitWinnerTeam === 1 ? team1 : team2;
+    const loserTeamRow = forfeitWinnerTeam === 1 ? team2 : team1;
+
+    const { error: winnerSetsError } = await supabase
+      .from("match_teams")
+      .update({ sets_won: 2 })
+      .eq("uuid", winnerTeamRow.uuid);
+
+    if (winnerSetsError) {
+      return NextResponse.json(
+        { error: winnerSetsError.message || "Failed to update winner sets_won." },
+        { status: 500 },
+      );
+    }
+
+    const { error: loserSetsError } = await supabase
+      .from("match_teams")
+      .update({ sets_won: 0 })
+      .eq("uuid", loserTeamRow.uuid);
+
+    if (loserSetsError) {
+      return NextResponse.json(
+        { error: loserSetsError.message || "Failed to update loser sets_won." },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        matchId,
+        winnerTeam: forfeitWinnerTeam,
+        setsWon: {
+          team1: forfeitWinnerTeam === 1 ? 2 : 0,
+          team2: forfeitWinnerTeam === 2 ? 2 : 0,
+        },
+        message: "Match recorded as forfeit with 6-0 6-0 sets.",
+      },
+      { status: 200 },
+    );
+  }
+
   return NextResponse.json(
     {
       matchId,
