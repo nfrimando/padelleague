@@ -86,6 +86,44 @@ function candidates(players, token) {
   return [];
 }
 
+// Rank rows by Points, then Sets Won, then head-to-head among the tied teams.
+// Head-to-head is a mini-league over only the matches played between the tied
+// teams (works for 2-way and N-way ties): more H2H points first, then more H2H
+// sets won. Anything still equal keeps its current (stable) order.
+function rankWithTiebreakers(rows, matches) {
+  rows.sort((a, b) => b.points - a.points || b.setsWon - a.setsWon);
+  const out = [];
+  for (let i = 0; i < rows.length; ) {
+    let j = i + 1;
+    while (
+      j < rows.length &&
+      rows[j].points === rows[i].points &&
+      rows[j].setsWon === rows[i].setsWon
+    )
+      j++;
+    const tied = rows.slice(i, j);
+    if (tied.length > 1) {
+      const S = new Set(tied.map((r) => r.team));
+      const h2h = {};
+      for (const t of S) h2h[t] = { pts: 0, sets: 0 };
+      for (const m of matches) {
+        if (!S.has(m.sq1) || !S.has(m.sq2)) continue;
+        const winner = m.winner === 1 ? m.sq1 : m.winner === 2 ? m.sq2 : null;
+        if (winner) h2h[winner].pts += 3;
+        h2h[m.sq1].sets += m.sw1 ?? 0;
+        h2h[m.sq2].sets += m.sw2 ?? 0;
+      }
+      tied.sort(
+        (a, b) => h2h[b.team].pts - h2h[a.team].pts || h2h[b.team].sets - h2h[a.team].sets
+      );
+      for (const r of tied) r._h2h = h2h[r.team];
+    }
+    out.push(...tied);
+    i = j;
+  }
+  return out;
+}
+
 export async function computeStandings() {
   const rosters = parseRosters(
     new URL("../public/11.html", import.meta.url).pathname
@@ -278,9 +316,9 @@ export async function computeStandings() {
       ...stats[team],
       points: 3 * stats[team].won,
     }));
-    rows.sort((a, b) => b.points - a.points || b.setsWon - a.setsWon);
     perMatch.sort((a, b) => a.match_id - b.match_id);
-    result.push({ group, rows, matches: perMatch });
+    const rankedRows = rankWithTiebreakers(rows, perMatch);
+    result.push({ group, rows: rankedRows, matches: perMatch });
   }
 
   return { groups: result, warnings: allWarnings };
