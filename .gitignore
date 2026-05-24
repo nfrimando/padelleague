@@ -58,3 +58,5 @@ src/__tests__/e2e/.auth/session.json
 # generated standings graphics
 season11-standings.png
 season11-standings.svg
+season11-group*.png
+season11-group*.svg

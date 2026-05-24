@@ -148,21 +148,112 @@ function buildSvg(groups) {
   return s;
 }
 
-const out = process.argv[2] || new URL("../season11-standings", import.meta.url).pathname;
-const { groups, warnings } = await computeStandings();
-const svg = buildSvg(groups);
-writeFileSync(`${out}.svg`, svg);
-console.log(`Wrote ${out}.svg`);
+// One large, mobile-friendly card per group.
+function buildGroupSvg(g) {
+  const W = 1080;
+  const margin = 60;
+  const headerTop = 64;
+  const cardRight = W - margin;
+  const rowH = 176;
+  const rowsTop = 372;
+  const H = rowsTop + rowH * g.rows.length + 116;
 
-// Rasterize to PNG if resvg is available.
-try {
-  const require = createRequire(`${process.env.RESVG_DIR || "/tmp/imggen"}/x.js`);
-  const { Resvg } = require("@resvg/resvg-js");
-  const r = new Resvg(svg, { fitTo: { mode: "width", value: 1080 }, background: C.bg });
-  const png = r.render().asPng();
-  writeFileSync(`${out}.png`, png);
-  console.log(`Wrote ${out}.png (${png.length} bytes)`);
-} catch (e) {
-  console.log("PNG skipped (resvg not available):", e.message);
+  const ptsCx = cardRight - 72;
+  const setsCx = cardRight - 206;
+  const wCx = cardRight - 330;
+  const pCx = cardRight - 432;
+  const nameX = margin + 96;
+
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  s += rect(0, 0, W, H, { fill: C.bg });
+
+  // Header
+  s += logo(margin, headerTop);
+  s += `<text x="${margin + 70}" y="${headerTop + 24}" font-family="${SANS}" font-size="30" font-weight="700" fill="${C.white}" letter-spacing="1">PADEL LEAGUE <tspan fill="${C.slate}">PH</tspan></text>`;
+  s += text(margin + 70, headerTop + 50, "SEASON 11 · GROUP STANDINGS", { size: 14, fill: C.slate, spacing: 2, family: MONO });
+  const dstr = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase();
+  s += text(cardRight, headerTop + 46, dstr, { size: 17, fill: C.teal, anchor: "end", weight: 700, family: SANS, spacing: 1 });
+  s += rect(margin, headerTop + 88, W - margin * 2, 1, { fill: C.border });
+
+  // Big group title + accent + match count
+  const titleY = headerTop + 168;
+  s += text(margin, titleY, g.group.toUpperCase(), { size: 52, weight: 700, family: SANS, spacing: 0.5 });
+  s += rect(margin, titleY + 18, 78, 5, { fill: C.teal, rx: 2.5 });
+  const played = g.matches.length;
+  s += text(cardRight, titleY - 6, `${played} ${played === 1 ? "MATCH" : "MATCHES"} PLAYED`, { size: 15, fill: C.slate, anchor: "end", family: MONO, spacing: 1 });
+
+  // Column headers
+  const hY = rowsTop - 22;
+  const hOpt = { size: 16, fill: C.slate, anchor: "middle", family: MONO, spacing: 1 };
+  s += text(nameX, hY, "TEAM", { size: 16, fill: C.slate, family: MONO, spacing: 1 });
+  s += text(pCx, hY, "P", hOpt);
+  s += text(wCx, hY, "W", hOpt);
+  s += text(setsCx, hY, "SETS", hOpt);
+  s += text(ptsCx, hY, "PTS", { ...hOpt, fill: C.teal });
+  s += rect(margin, hY + 16, W - margin * 2, 1, { fill: C.border });
+
+  // Rows
+  g.rows.forEach((r, i) => {
+    const top = rowsTop + i * rowH;
+    const isLeader = i === 0 && r.points > 0;
+    if (isLeader) {
+      s += rect(margin, top, W - margin * 2, rowH, { fill: C.leaderBg, rx: 12 });
+      s += rect(margin, top + 16, 5, rowH - 32, { fill: C.teal, rx: 2.5 });
+    }
+    const nameY = top + 78;
+    const subY = top + 116;
+    const numY = top + 92;
+    s += text(margin + 30, nameY, String(i + 1), { size: 40, fill: isLeader ? C.teal : C.slate, weight: 700, family: MONO });
+    s += text(nameX, nameY, r.team, { size: 36, weight: 700, fill: isLeader ? C.white : C.soft });
+    s += text(nameX, subY, r.players, { size: 21, fill: C.slate });
+    const numOpt = { size: 32, anchor: "middle", family: MONO, fill: C.soft };
+    s += text(pCx, numY, r.played, numOpt);
+    s += text(wCx, numY, r.won, numOpt);
+    s += text(setsCx, numY, r.setsWon, numOpt);
+    s += text(ptsCx, numY, r.points, { size: 50, anchor: "middle", family: MONO, weight: 700, fill: isLeader ? C.teal : C.soft });
+    if (i < g.rows.length - 1) s += rect(margin, top + rowH, W - margin * 2, 1, { fill: C.rowLine });
+  });
+
+  // Footer
+  const fy = H - 56;
+  s += text(margin, fy, "PADELPH.COM", { size: 14, fill: C.slate, spacing: 3, family: MONO });
+  s += text(cardRight, fy, "Win = 3 pts · ties broken by sets won", { size: 14, fill: "rgba(104,127,163,0.75)", anchor: "end", family: SANS });
+
+  s += `</svg>`;
+  return s;
 }
+
+let _Resvg = null;
+function getResvg() {
+  if (_Resvg) return _Resvg;
+  try {
+    const require = createRequire(`${process.env.RESVG_DIR || "/tmp/imggen"}/x.js`);
+    _Resvg = require("@resvg/resvg-js").Resvg;
+  } catch (e) {
+    console.log("PNG disabled (resvg not available):", e.message);
+    _Resvg = false;
+  }
+  return _Resvg;
+}
+function writeImage(svg, base) {
+  writeFileSync(`${base}.svg`, svg);
+  const Resvg = getResvg();
+  if (Resvg) {
+    const png = new Resvg(svg, { fitTo: { mode: "width", value: 1080 }, background: C.bg }).render().asPng();
+    writeFileSync(`${base}.png`, png);
+    console.log(`Wrote ${base}.png`);
+  } else {
+    console.log(`Wrote ${base}.svg`);
+  }
+}
+
+const outDir = (process.argv[2] || new URL("..", import.meta.url).pathname).replace(/\/$/, "");
+const { groups, warnings } = await computeStandings();
+
+// One image per group (mobile-friendly), plus a combined overview.
+for (const g of groups) {
+  const letter = g.group.replace(/[^A-Za-z0-9]/g, "").toLowerCase(); // "groupa"
+  writeImage(buildGroupSvg(g), `${outDir}/season11-${letter}`);
+}
+writeImage(buildSvg(groups), `${outDir}/season11-standings`);
 if (warnings.length) console.log("notes:", warnings.join(" | "));
