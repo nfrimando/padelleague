@@ -182,9 +182,9 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
             {rightSlot}
           </div>
 
-          {rightSlot ? (
-            <div className="flex md:hidden overflow-x-auto min-w-0">
-              <div className="flex items-center gap-4 font-bold text-[10px] uppercase tracking-[0.15em] w-max">
+          <div className="flex md:hidden items-center min-w-0 gap-3">
+            <div className="flex-1 overflow-x-auto min-w-0" style={{ scrollbarWidth: "none" }}>
+              <div className="flex gap-5 font-bold text-[11px] uppercase tracking-[0.12em] w-max">
                 {(
                   [
                     ["/matches", "Matches"],
@@ -211,70 +211,36 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   Predict
                   <span className="text-[7px] font-black text-amber-400/60">β</span>
                 </a>
-                {rightSlot}
               </div>
             </div>
-          ) : (
-            <div className="flex md:hidden items-center min-w-0 gap-3">
-              <div className="flex-1 overflow-x-auto min-w-0" style={{ scrollbarWidth: "none" }}>
-                <div className="flex gap-5 font-bold text-[11px] uppercase tracking-[0.12em] w-max">
-                  {(
-                    [
-                      ["/matches", "Matches"],
-                      ["/players", "Players"],
-                      ["/leaderboard", "Standings"],
-                    ] as const
-                  ).map(([href, label]) => (
-                    <a
-                      key={href}
-                      href={href}
-                      className={
-                        currentPath === href
-                          ? "text-[#00C8DC]"
-                          : "text-white/75 hover:text-[#00C8DC] transition-colors"
-                      }
-                    >
-                      {label}
-                    </a>
-                  ))}
-                  <a
-                    href="/predict"
-                    className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
-                  >
-                    Predict
-                    <span className="text-[7px] font-black text-amber-400/60">β</span>
-                  </a>
-                </div>
-              </div>
-              <div className="flex-shrink-0 font-bold text-[11px] uppercase tracking-[0.12em]">
-                {loading ? (
-                  <div className="h-6 w-10 rounded-full bg-[#22304a] animate-pulse" />
-                ) : user ? (
-                  <a
-                    href="/dashboard"
-                    className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
-                  >
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="Profile"
-                        referrerPolicy="no-referrer"
-                        className="h-4 w-4 rounded-full border border-white/20 object-cover"
-                      />
-                    ) : null}
-                    Me
-                  </a>
-                ) : (
-                  <a
-                    href="/join"
-                    className="text-[#00C8DC] hover:text-white transition-colors"
-                  >
-                    Sign In
-                  </a>
-                )}
-              </div>
+            <div className="flex-shrink-0 font-bold text-[11px] uppercase tracking-[0.12em]">
+              {rightSlot ?? (loading ? (
+                <div className="h-6 w-10 rounded-full bg-[#22304a] animate-pulse" />
+              ) : user ? (
+                <a
+                  href="/dashboard"
+                  className="inline-flex items-center gap-1.5 text-[#00C8DC] hover:text-white transition-colors"
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Profile"
+                      referrerPolicy="no-referrer"
+                      className="h-4 w-4 rounded-full border border-white/20 object-cover"
+                    />
+                  ) : null}
+                  Me
+                </a>
+              ) : (
+                <a
+                  href="/join"
+                  className="text-[#00C8DC] hover:text-white transition-colors"
+                >
+                  Sign In
+                </a>
+              ))}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </nav>

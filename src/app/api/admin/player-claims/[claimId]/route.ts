@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
+import { notifyClaimApproved } from "@/lib/email/notifications/claimApproved";
 
 /** PATCH /api/admin/player-claims/[claimId]
  *  Body: { approved: boolean }
@@ -33,7 +34,7 @@ export async function PATCH(
   // 1. Fetch the claim
   const { data: claim, error: claimError } = await supabase
     .from("player_claims")
-    .select("id, player_id, claimed_by_email, status")
+    .select("id, player_id, claimed_by_email, claimed_by_name, status")
     .eq("id", claimId)
     .maybeSingle();
 
@@ -58,7 +59,7 @@ export async function PATCH(
     // 2a. Verify the target player still has no email (guard against race)
     const { data: targetPlayer, error: playerError } = await supabase
       .from("players")
-      .select("player_id, email")
+      .select("player_id, email, name, nickname")
       .eq("player_id", claim.player_id)
       .maybeSingle();
 
@@ -96,7 +97,16 @@ export async function PATCH(
       .update({ status: "approved", reviewed_at: now, notes })
       .eq("id", claimId);
 
-    // 2d. Reject all other pending claims for this player
+    // 2d. Notify the claimant
+    await notifyClaimApproved({
+      playerId: claim.player_id,
+      playerName: targetPlayer.name,
+      playerNickname: targetPlayer.nickname,
+      claimedByEmail: claim.claimed_by_email,
+      claimedByName: claim.claimed_by_name ?? null,
+    }).catch((err) => console.error("[email] claimApproved notification failed:", err));
+
+    // 2e. Reject all other pending claims for this player
     await supabase
       .from("player_claims")
       .update({ status: "rejected", reviewed_at: now })
