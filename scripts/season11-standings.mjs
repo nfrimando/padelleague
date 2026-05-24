@@ -9,12 +9,23 @@ const BASE = "https://hmztjweohbfnbpuidrtl.supabase.co";
 const KEY = "sb_publishable_HvMwZ4XO6nZrYwCKs1Kffw_zVyjowBI";
 const EVENT_ID = 11;
 const EXCLUDED_TYPES = new Set(["duel"]);
+// Statuses that count as a played result. Forfeits have a winner_team and are
+// real outcomes; "scheduled"/"cancelled" are not counted.
+const COUNTED_STATUSES = new Set(["completed", "forfeit"]);
 
 // Explicit short-name -> player_id overrides for names that can't be resolved
 // from players.name/nickname (or are ambiguous with no match participation).
 // Keyed by "Group|Team|ShortName".
 const OVERRIDES = {
   "Group A|Team 9|Jerry": 80, // Jerry Companjen, not Jerry Echter
+};
+
+// Per-set scores for matches the DB has no match_sets/sets_won for (e.g. a
+// match mislabeled as a forfeit). Each entry is [team_1_games, team_2_games].
+const SET_OVERRIDES = {
+  // m746 Group B Team 4 (Gil/Shogo) beat Team 5 (Kino/Andy) 6-0 6-0; DB marks
+  // it forfeit with no scores. Team 1 in the row is Gil/Shogo.
+  746: [[6, 0], [6, 0]],
 };
 
 async function rest(path) {
@@ -83,11 +94,13 @@ function candidates(players, token) {
     return p ? p.nickname ?? p.name ?? `#${id}` : `#${id}`;
   };
 
-  // Players who actually played a completed match in this event (for disambig).
+  // Players who actually played a counted match in this event (for disambig).
   const evMatches = await rest(
-    `matches?select=match_id,type,winner_team,status&event_id=eq.${EVENT_ID}&status=eq.completed`
+    `matches?select=match_id,type,winner_team,status&event_id=eq.${EVENT_ID}`
   );
-  const evGroup = evMatches.filter((m) => !EXCLUDED_TYPES.has(m.type));
+  const evGroup = evMatches.filter(
+    (m) => COUNTED_STATUSES.has(m.status) && !EXCLUDED_TYPES.has(m.type)
+  );
   const evIds = evGroup.map((m) => m.match_id);
   const teams = evIds.length
     ? await rest(
@@ -205,8 +218,29 @@ function candidates(players, token) {
         );
         continue;
       }
-      const sw1 = t1.sets_won ?? 0;
-      const sw2 = t2.sets_won ?? 0;
+      // Resolve sets: prefer recorded sets_won; else derive from match_sets;
+      // else use a manual SET_OVERRIDE (for results the DB has no scores for).
+      const ovSets = SET_OVERRIDES[m.match_id];
+      const setRows = ovSets
+        ? ovSets.map(([a, b], i) => ({
+            set_number: i + 1,
+            team_1_games: a,
+            team_2_games: b,
+          }))
+        : (sByM.get(m.match_id) ?? [])
+            .slice()
+            .sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0));
+      let sw1 = t1.sets_won;
+      let sw2 = t2.sets_won;
+      if (sw1 == null || sw2 == null) {
+        if (setRows.length) {
+          sw1 = setRows.filter((s) => (s.team_1_games ?? 0) > (s.team_2_games ?? 0)).length;
+          sw2 = setRows.filter((s) => (s.team_2_games ?? 0) > (s.team_1_games ?? 0)).length;
+        } else {
+          sw1 = sw1 ?? 0;
+          sw2 = sw2 ?? 0;
+        }
+      }
       if (stats[sq1]) {
         stats[sq1].played++;
         stats[sq1].setsWon += sw1;
@@ -217,10 +251,10 @@ function candidates(players, token) {
         stats[sq2].setsWon += sw2;
         if (m.winner_team === 2) stats[sq2].won++;
       }
-      const setStr = (sByM.get(m.match_id) ?? [])
-        .sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
-        .map((s) => `${s.team_1_games ?? 0}-${s.team_2_games ?? 0}`)
-        .join(", ");
+      const setStr =
+        setRows.map((s) => `${s.team_1_games ?? 0}-${s.team_2_games ?? 0}`).join(", ") +
+        (m.status === "forfeit" ? " [forfeit]" : "") +
+        (ovSets ? " [score supplied]" : "");
       perMatch.push({
         match_id: m.match_id,
         sq1,
