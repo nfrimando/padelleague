@@ -28,18 +28,6 @@ type ValidationResult =
   | { valid: false; errors: string[] };
 
 const ALLOWED_MATCH_TYPES = ["duel", "kotc", "group", "finals"] as const;
-const ALLOWED_MATCH_VENUES = [
-  "ACC",
-  "Manila Polo Club",
-  "MPC Arcovia",
-  "MPC BGC",
-  "Padel 300",
-  "Palm Beach",
-  "Play Padel",
-  "Play Padel Pavilion",
-  "Unilab",
-  "Warehouse 71",
-] as const;
 
 function validatePayload(payload: unknown): ValidationResult {
   const errors: string[] = [];
@@ -67,12 +55,6 @@ function validatePayload(payload: unknown): ValidationResult {
     errors.push("type is required.");
   } else if (!(ALLOWED_MATCH_TYPES as readonly string[]).includes(type)) {
     errors.push("type must be one of duel, kotc, group, finals.");
-  }
-
-  if (venue && !(ALLOWED_MATCH_VENUES as readonly string[]).includes(venue)) {
-    errors.push(
-      "venue must be one of MPC Arcovia, MPC BGC, Unilab, Padel 300, Warehouse 71, Palm Beach, ACC, Play Padel Pavilion, Manila Polo Club, or Play Padel.",
-    );
   }
 
   const validateTeam = (label: string, value: unknown): TeamInput | null => {
