@@ -102,9 +102,15 @@ export function ScheduleMatchTab() {
   const [venue, setVenue] = useState("");
   const [matchType, setMatchType] = useState("");
   const [slots, setSlots] = useState<Record<SlotKey, SlotState>>(EMPTY_SLOTS);
+  type EmailNotifResult = {
+    sent: Array<{ player_id: number; displayName: string }>;
+    skipped: Array<{ player_id: number; displayName: string; reason: string }>;
+  } | null;
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [emailResult, setEmailResult] = useState<EmailNotifResult>(null);
 
   const sortedSeasons = useMemo(
     () => matchSeasons.slice().sort((a, b) => b.id - a.id),
@@ -143,6 +149,7 @@ export function ScheduleMatchTab() {
   const handleSubmit = async () => {
     setError(null);
     setSuccess(null);
+    setEmailResult(null);
 
     const playerIds = [
       slots.t1p1.player?.player_id,
@@ -199,6 +206,7 @@ export function ScheduleMatchTab() {
         details?: string[];
         match?: { match_id: number };
         message?: string;
+        emails?: EmailNotifResult;
       };
 
       if (!response.ok) {
@@ -220,6 +228,7 @@ export function ScheduleMatchTab() {
         result.message ||
           `Match #${result.match?.match_id ?? ""} created successfully.`,
       );
+      setEmailResult(result.emails ?? null);
       refreshScheduledMatches();
     } catch {
       setError("Unexpected error while creating match.");
@@ -416,8 +425,32 @@ export function ScheduleMatchTab() {
         </div>
       )}
       {success && (
-        <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-          {success}
+        <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300 space-y-2">
+          <p className="font-medium">{success}</p>
+          {emailResult && (
+            <div className="pt-1 border-t border-emerald-200 dark:border-emerald-800/40">
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1.5">
+                Emails: {emailResult.sent.length} / {emailResult.sent.length + emailResult.skipped.length} sent
+              </p>
+              <ul className="space-y-0.5">
+                {emailResult.sent.map((p) => (
+                  <li key={p.player_id} className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    <span className="text-emerald-500">✓</span>
+                    <span>{p.displayName}</span>
+                  </li>
+                ))}
+                {emailResult.skipped.map((p) => (
+                  <li key={p.player_id} className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="text-rose-400">✗</span>
+                    <span>{p.displayName}</span>
+                    <span className="text-slate-400 dark:text-slate-500">
+                      — {p.reason === "no_email" ? "no email on file" : p.reason === "unsubscribed" ? "unsubscribed" : "opted out"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

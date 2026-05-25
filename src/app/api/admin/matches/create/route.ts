@@ -257,6 +257,7 @@ export async function POST(request: Request) {
     eventName = ev?.name ?? null;
   }
 
+  let emailResult = null;
   if (playerDetails && playerDetails.length === 4) {
     const findPlayer = (id: number) =>
       playerDetails.find((p) => p.player_id === id) ?? {
@@ -267,7 +268,7 @@ export async function POST(request: Request) {
         is_notifications_subscribed: null,
       };
 
-    await notifyMatchScheduled({
+    emailResult = await notifyMatchScheduled({
       matchId: createdMatch.match_id,
       dateLocal: createdMatch.date_local ?? null,
       timeLocal: createdMatch.time_local ?? null,
@@ -282,7 +283,10 @@ export async function POST(request: Request) {
         findPlayer(validation.value.team2.player1Id),
         findPlayer(validation.value.team2.player2Id),
       ],
-    }).catch((err) => console.error("[email] notifyMatchScheduled failed:", err));
+    }).catch((err) => {
+      console.error("[email] notifyMatchScheduled failed:", err);
+      return null;
+    });
   }
 
   return NextResponse.json(
@@ -293,6 +297,7 @@ export async function POST(request: Request) {
         team2: validation.value.team2,
       },
       message: "Scheduled match created successfully.",
+      emails: emailResult,
     },
     { status: 201 },
   );
