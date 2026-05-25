@@ -874,19 +874,20 @@ export function UpdateMatchTab() {
                 <label className={labelCls} htmlFor="update-match-venue">
                   Venue
                 </label>
-                <select
+                <input
                   id="update-match-venue"
+                  type="text"
+                  list="update-venue-options"
                   value={updateMatchVenue}
                   onChange={(e) => setUpdateMatchVenue(e.target.value)}
+                  placeholder="Select or type venue"
                   className={inputCls}
-                >
-                  <option value="">No venue</option>
-                  {SCHEDULE_MATCH_VENUE_OPTIONS.map((venue) => (
-                    <option key={venue} value={venue}>
-                      {venue}
-                    </option>
+                />
+                <datalist id="update-venue-options">
+                  {SCHEDULE_MATCH_VENUE_OPTIONS.map((v) => (
+                    <option key={v} value={v} />
                   ))}
-                </select>
+                </datalist>
               </div>
               <div className="sm:col-span-2 lg:col-span-3">
                 <label className={labelCls} htmlFor="update-match-youtube-link">
