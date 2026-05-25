@@ -312,19 +312,20 @@ export function ScheduleMatchTab() {
             <label className={labelCls} htmlFor="sched-venue">
               Venue
             </label>
-            <select
+            <input
               id="sched-venue"
+              type="text"
+              list="sched-venue-options"
               value={venue}
               onChange={(e) => setVenue(e.target.value)}
+              placeholder="Select or type venue"
               className={inputCls}
-            >
-              <option value="">Select venue</option>
+            />
+            <datalist id="sched-venue-options">
               {SCHEDULE_MATCH_VENUE_OPTIONS.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
+                <option key={v} value={v} />
               ))}
-            </select>
+            </datalist>
           </div>
 
           <div>
