@@ -6,6 +6,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import EmailAuthForm from "@/components/EmailAuthForm";
+import { useUnvotedUpcomingCount } from "@/lib/useUnvotedUpcomingCount";
 
 type SiteHeaderProps = {
   activePath?: string;
@@ -20,6 +21,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
   const [showSignInDropdown, setShowSignInDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+  const unvotedCount = useUnvotedUpcomingCount(user?.email ?? null);
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
@@ -123,6 +125,9 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               }`}
             >
               Predict
+              {unvotedCount > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+              )}
               <span className="text-[8px] font-black tracking-widest text-amber-400/60">β</span>
             </a>
           </div>
@@ -209,6 +214,9 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
                 >
                   Predict
+                  {unvotedCount > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  )}
                   <span className="text-[7px] font-black text-amber-400/60">β</span>
                 </a>
               </div>

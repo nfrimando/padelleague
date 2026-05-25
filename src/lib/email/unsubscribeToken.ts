@@ -2,7 +2,7 @@ import crypto from "crypto";
 
 const BASE_URL = "https://www.padelph.com";
 
-type UnsubscribeType = "all" | "match_results" | "predictions";
+type UnsubscribeType = "all" | "match_results" | "match_scheduled" | "predictions";
 
 function getSecret(): string {
   const secret = process.env.UNSUBSCRIBE_SECRET;

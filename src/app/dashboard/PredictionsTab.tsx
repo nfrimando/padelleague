@@ -12,7 +12,7 @@ const PAGE_SIZE = 6;
 export default function PredictionsTab({ email }: { email: string }) {
   const { entries, stats, loading } = useUserPredictionHistory(email);
 
-  const [filter, setFilter] = useState<PredictionFilter>("all");
+  const [filter, setFilter] = useState<PredictionFilter>("completed");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   function changeFilter(next: PredictionFilter) {
@@ -102,9 +102,9 @@ export default function PredictionsTab({ email }: { email: string }) {
         <div className="flex items-center gap-2 flex-wrap">
           {(
             [
-              { id: "all",       label: "All" },
-              { id: "scheduled", label: "Upcoming" },
               { id: "completed", label: "Completed" },
+              { id: "scheduled", label: "Upcoming" },
+              { id: "all",       label: "All" },
             ] as { id: PredictionFilter; label: string }[]
           ).map(({ id, label }) => (
             <button
