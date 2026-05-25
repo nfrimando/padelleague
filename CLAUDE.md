@@ -52,6 +52,9 @@ This rewards dominant wins (6-0 6-0) over squeaky wins (7-6 7-6).
 
 **Hooks** — use these before writing new fetch logic:
 
+Auth / current user:
+- `src/lib/useCurrentPlayer.ts` — **always use this first** when any component needs to know the signed-in user or their player record. Returns `{ user, player, isLinked, isLoading }`. `isLinked` is `true` when the auth email maps to a row in `players`. Never re-implement this fetch inline.
+
 Players:
 - `src/lib/usePlayers.ts` — list of players (supports `onlyActivePlayers`, `orderByName`, custom `select`)
 - `src/lib/usePlayerSearch.ts` — client-side filter by name/nickname
