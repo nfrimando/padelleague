@@ -33,6 +33,7 @@ import PartnersSection from "./PartnersSection";
 import ViewAsSelector from "./ViewAsSelector";
 import DashboardBanner from "./DashboardBanner";
 import PredictionsTab from "./PredictionsTab";
+import { useUnviewedPredictionResults } from "@/lib/useUnviewedPredictionResults";
 import type { User } from "@supabase/supabase-js";
 import type { Event, Player } from "@/lib/types";
 
@@ -110,7 +111,7 @@ function DashboardPageContent() {
 
   const setActiveTab = useCallback(
     (tab: DashboardTab) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParamsRef.current.toString());
       if (tab === "overview") {
         params.delete("tab");
       } else {
@@ -119,8 +120,17 @@ function DashboardPageContent() {
       const qs = params.toString();
       router.replace(qs ? `/dashboard?${qs}` : "/dashboard");
     },
-    [router, searchParams],
+    [router],
   );
+
+  const { hasUnviewed: hasUnviewedResults, markViewed } = useUnviewedPredictionResults(
+    user?.email ?? null,
+  );
+
+  // Clear the predictions badge when the user opens that tab
+  useEffect(() => {
+    if (activeTab === "predictions") markViewed();
+  }, [activeTab, markViewed]);
 
   // ── Peers tab: slot player IDs stored in URL (p1=t1p1, p2=t1p2, p3=t2p1, p4=t2p2) ──
   const p1 = searchParams.get("p1") ?? undefined;
@@ -370,8 +380,8 @@ function DashboardPageContent() {
 
   // Reset to overview when payment is pending
   useEffect(() => {
-    if (pendingPaymentSignup) setActiveTab("overview");
-  }, [pendingPaymentSignup, setActiveTab]);
+    if (pendingPaymentSignup && activeTab !== "overview") setActiveTab("overview");
+  }, [pendingPaymentSignup, activeTab, setActiveTab]);
 
   // ── Loading / redirect states ─────────────────────────────────────────────
   if (user === undefined) {
@@ -480,13 +490,14 @@ function DashboardPageContent() {
                 <div className="flex">
                   {(
                     [
-                      { id: "overview", label: "Overview" },
+                      { id: "overview", label: "Overview", badge: !!pendingPaymentSignup },
                       { id: "peers", label: "Peers" },
                       { id: "favorites", label: "Favorites" },
-                      { id: "predictions", label: "Predictions", beta: true },
+                      { id: "predictions", label: "Predictions", beta: true, badge: hasUnviewedResults },
                     ] as const
                   ).map(({ id, label, ...rest }) => {
                     const isBeta = "beta" in rest && rest.beta === true;
+                    const hasBadge = "badge" in rest && rest.badge === true;
                     const isDisabled =
                       !!pendingPaymentSignup && id !== "overview";
                     return (
@@ -496,7 +507,7 @@ function DashboardPageContent() {
                         disabled={isDisabled}
                         onClick={() => setActiveTab(id)}
                         className={[
-                          "flex-1 min-w-fit py-2 px-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors inline-flex items-center justify-center gap-1 whitespace-nowrap",
+                          "flex-1 min-w-fit py-2 px-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-colors inline-flex items-center justify-center gap-1 whitespace-nowrap relative",
                           activeTab === id
                             ? "bg-[#1a2540] text-white"
                             : isDisabled
@@ -509,6 +520,9 @@ function DashboardPageContent() {
                           <span className="text-[7px] font-black text-amber-400/60">
                             β
                           </span>
+                        )}
+                        {hasBadge && activeTab !== id && (
+                          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400" />
                         )}
                       </button>
                     );

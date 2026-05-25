@@ -3,13 +3,13 @@ import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { verifyUnsubscribeToken } from "@/lib/email/unsubscribeToken";
 import { setPlayerPref } from "@/lib/notificationPreferences";
 
-const VALID_TYPES = ["all", "match_results", "predictions"] as const;
+const VALID_TYPES = ["all", "match_results", "match_scheduled"] as const;
 type UnsubscribeType = (typeof VALID_TYPES)[number];
 
 const TYPE_LABELS: Record<UnsubscribeType, string> = {
   all: "all emails",
   match_results: "match result emails",
-  predictions: "prediction result emails",
+  match_scheduled: "match scheduling emails",
 };
 
 const DASHBOARD_URL = "https://www.padelph.com/dashboard";

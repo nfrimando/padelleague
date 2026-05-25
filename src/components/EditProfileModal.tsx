@@ -24,7 +24,7 @@ type FormState = {
   is_public: boolean;
   is_notifications_subscribed: boolean;
   notif_match_results: boolean;
-  notif_predictions: boolean;
+  notif_match_scheduled: boolean;
   preferred_side: "left" | "right" | "both" | "";
 };
 
@@ -86,7 +86,7 @@ export default function EditProfileModal({
     is_public: player.is_public ?? false,
     is_notifications_subscribed: player.is_notifications_subscribed ?? false,
     notif_match_results: true,
-    notif_predictions: true,
+    notif_match_scheduled: true,
     preferred_side: player.preferred_side ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -123,13 +123,13 @@ export default function EditProfileModal({
         });
         if (!res.ok) return;
         const json = (await res.json()) as {
-          notification_preferences?: { match_results?: boolean; predictions?: boolean };
+          notification_preferences?: { match_results?: boolean; match_scheduled?: boolean };
         };
         const prefs = json.notification_preferences ?? {};
         setForm((prev) => ({
           ...prev,
           notif_match_results: prefs.match_results ?? true,
-          notif_predictions: prefs.predictions ?? true,
+          notif_match_scheduled: prefs.match_scheduled ?? true,
         }));
       } catch {
         // silently ignore; defaults stay true
@@ -183,7 +183,7 @@ export default function EditProfileModal({
           preferred_side: form.preferred_side || null,
           notification_preferences: {
             match_results: form.notif_match_results,
-            predictions: form.notif_predictions,
+            match_scheduled: form.notif_match_scheduled,
           },
         }),
       });
@@ -344,7 +344,7 @@ export default function EditProfileModal({
             />
             <div
               className={`overflow-hidden transition-all duration-200 ${
-                form.is_notifications_subscribed ? "max-h-48 opacity-100" : "max-h-0 opacity-0"
+                form.is_notifications_subscribed ? "max-h-64 opacity-100" : "max-h-0 opacity-0"
               }`}
             >
               <div className="pl-4 border-l border-[#687FA3]/20 space-y-3 pt-1">
@@ -355,10 +355,10 @@ export default function EditProfileModal({
                   description="Score, rating change, and win/loss for your completed matches."
                 />
                 <Toggle
-                  checked={form.notif_predictions}
-                  onChange={(v) => setForm((f) => ({ ...f, notif_predictions: v }))}
-                  label="Prediction results"
-                  description="Points awarded when a match prediction you made is correct."
+                  checked={form.notif_match_scheduled}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_match_scheduled: v }))}
+                  label="Match schedule"
+                  description="When a match you're in is scheduled — date, time, venue, and opponent details."
                 />
               </div>
             </div>

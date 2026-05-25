@@ -6,6 +6,7 @@ import {
   normalizeOptionalString,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import { notifyMatchScheduled } from "@/lib/email/notifications/matchScheduled";
 
 type TeamInput = {
   player1Id: number;
@@ -239,6 +240,49 @@ export async function POST(request: Request) {
       },
       { status: 500 },
     );
+  }
+
+  const { data: playerDetails } = await supabase
+    .from("players")
+    .select("player_id,name,nickname,email,is_notifications_subscribed")
+    .in("player_id", playerIds);
+
+  let eventName: string | null = null;
+  if (createdMatch.event_id) {
+    const { data: ev } = await supabase
+      .from("events")
+      .select("name")
+      .eq("event_id", createdMatch.event_id)
+      .maybeSingle();
+    eventName = ev?.name ?? null;
+  }
+
+  if (playerDetails && playerDetails.length === 4) {
+    const findPlayer = (id: number) =>
+      playerDetails.find((p) => p.player_id === id) ?? {
+        player_id: id,
+        name: null,
+        nickname: null,
+        email: null,
+        is_notifications_subscribed: null,
+      };
+
+    await notifyMatchScheduled({
+      matchId: createdMatch.match_id,
+      dateLocal: createdMatch.date_local ?? null,
+      timeLocal: createdMatch.time_local ?? null,
+      venue: createdMatch.venue ?? null,
+      matchType: createdMatch.type ?? null,
+      eventName,
+      team1Players: [
+        findPlayer(validation.value.team1.player1Id),
+        findPlayer(validation.value.team1.player2Id),
+      ],
+      team2Players: [
+        findPlayer(validation.value.team2.player1Id),
+        findPlayer(validation.value.team2.player2Id),
+      ],
+    }).catch((err) => console.error("[email] notifyMatchScheduled failed:", err));
   }
 
   return NextResponse.json(

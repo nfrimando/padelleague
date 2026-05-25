@@ -173,6 +173,7 @@ export default function HeroSection({
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [hasSchedule, setHasSchedule] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const paymentPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!showEditProfile) return;
@@ -250,6 +251,12 @@ export default function HeroSection({
   const payingSignup = payingSignupId
     ? (signups.find((s) => s.id === payingSignupId) ?? null)
     : null;
+
+  useEffect(() => {
+    if (payingSignup && paymentPanelRef.current) {
+      paymentPanelRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [payingSignup]);
 
   async function handlePayOnline() {
     if (!payingSignupId) return;
@@ -588,7 +595,7 @@ export default function HeroSection({
 
               {/* Payment panel — shown below chips when pending_payment is expanded */}
               {payingSignup && (
-                <div className="rounded-2xl bg-orange-500/5 border border-orange-500/20 p-4 space-y-4">
+                <div ref={paymentPanelRef} className="rounded-2xl bg-orange-500/5 border border-orange-500/20 p-4 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-orange-300 mb-1">

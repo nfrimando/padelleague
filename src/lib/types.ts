@@ -1,6 +1,6 @@
 // ─── Notification preferences ─────────────────────────────────────────────────
 
-export type NotifType = "match_results" | "predictions";
+export type NotifType = "match_results" | "match_scheduled";
 
 // Map of notif_type → subscribed. Missing key means subscribed (default true).
 export type PlayerNotificationPreferences = Partial<Record<NotifType, boolean>>;
