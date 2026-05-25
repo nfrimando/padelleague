@@ -357,8 +357,8 @@ export default function EditProfileModal({
                 <Toggle
                   checked={form.notif_match_scheduled}
                   onChange={(v) => setForm((f) => ({ ...f, notif_match_scheduled: v }))}
-                  label="Match schedule"
-                  description="When a match you're in is scheduled — date, time, venue, and opponent details."
+                  label="Match Schedule / Update"
+                  description="When a match you're in is scheduled or its details change — date, time, venue, and opponent."
                 />
               </div>
             </div>

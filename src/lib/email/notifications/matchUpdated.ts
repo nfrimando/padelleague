@@ -11,7 +11,7 @@ type PlayerInfo = {
   is_notifications_subscribed?: boolean | null;
 };
 
-type MatchScheduledData = {
+type MatchUpdatedData = {
   matchId: number;
   dateLocal: string | null;
   timeLocal: string | null;
@@ -20,6 +20,11 @@ type MatchScheduledData = {
   eventName: string | null;
   team1Players: [PlayerInfo, PlayerInfo];
   team2Players: [PlayerInfo, PlayerInfo];
+};
+
+export type NotifyResult = {
+  sent: Array<{ player_id: number; displayName: string }>;
+  skipped: Array<{ player_id: number; displayName: string; reason: "no_email" | "unsubscribed" | "opted_out" }>;
 };
 
 function displayName(p: PlayerInfo): string {
@@ -92,8 +97,8 @@ function buildEmailHtml({
 
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
-      <h2 style="margin-bottom: 4px;">Match Scheduled</h2>
-      <p style="color: #555; margin-top: 0;">Hi ${recipientDisplayName}, a match has been scheduled for you.</p>
+      <h2 style="margin-bottom: 4px;">Match Updated</h2>
+      <p style="color: #555; margin-top: 0;">Hi ${recipientDisplayName}, the details for your match have been updated.</p>
 
       <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
         <tr>
@@ -133,7 +138,7 @@ function buildEmailHtml({
       </p>
       <p style="margin-top: 8px; color: #aaa; font-size: 11px;">
         You're receiving this because you're a Padel League PH member.
-        <a href="${unsubscribeScheduleUrl}" style="color: #aaa;">Unsubscribe from match schedule emails</a>
+        <a href="${unsubscribeScheduleUrl}" style="color: #aaa;">Unsubscribe from match schedule/update emails</a>
         &nbsp;&middot;&nbsp;
         <a href="${unsubscribeAllUrl}" style="color: #aaa;">Unsubscribe from all emails</a>
       </p>
@@ -141,12 +146,7 @@ function buildEmailHtml({
   `;
 }
 
-export type NotifyResult = {
-  sent: Array<{ player_id: number; displayName: string }>;
-  skipped: Array<{ player_id: number; displayName: string; reason: "no_email" | "unsubscribed" | "opted_out" }>;
-};
-
-export async function notifyMatchScheduled(data: MatchScheduledData): Promise<NotifyResult> {
+export async function notifyMatchUpdated(data: MatchUpdatedData): Promise<NotifyResult> {
   const { team1Players, team2Players } = data;
   const dashboardUrl = "https://www.padelph.com/dashboard";
 
@@ -155,7 +155,7 @@ export async function notifyMatchScheduled(data: MatchScheduledData): Promise<No
   const t2n1 = displayName(team2Players[0]);
   const t2n2 = displayName(team2Players[1]);
   const datePart = data.dateLocal ? ` on ${data.dateLocal}` : "";
-  const subject = `Padel League PH Match Scheduled${datePart} - ${t1n1} & ${t1n2} vs ${t2n1} & ${t2n2}`;
+  const subject = `Padel League PH Match Updated${datePart} - ${t1n1} & ${t1n2} vs ${t2n1} & ${t2n2}`;
 
   const allPlayers: Array<{ player: PlayerInfo; team: 1 | 2 }> = [
     { player: team1Players[0], team: 1 },
@@ -205,7 +205,7 @@ export async function notifyMatchScheduled(data: MatchScheduledData): Promise<No
 
     const result = await sendEmail({ to: player.email, subject, html });
     if (!result.ok) {
-      console.error(`[email] notifyMatchScheduled failed for player_id=${player.player_id}:`, result.error);
+      console.error(`[email] notifyMatchUpdated failed for player_id=${player.player_id}:`, result.error);
     }
     notifyResult.sent.push({ player_id: player.player_id, displayName: dn });
   }

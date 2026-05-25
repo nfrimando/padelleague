@@ -10,6 +10,7 @@ import {
 import { calculateRatings } from "@/lib/ratingCalculator";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
+import { notifyMatchUpdated } from "@/lib/email/notifications/matchUpdated";
 import { resolveMatchPredictions } from "@/lib/predictions/resolveMatchPredictions";
 
 type MatchStatus = "scheduled" | "completed" | "forfeit" | "cancelled";
@@ -260,7 +261,7 @@ export async function PATCH(
 
   const { data: matchRow, error: matchError } = await supabase
     .from("matches")
-    .select("match_id")
+    .select("match_id,date_local,time_local,venue,type,event_id")
     .eq("match_id", matchId)
     .maybeSingle();
 
@@ -657,6 +658,7 @@ export async function PATCH(
       .select("player_id,name,nickname,email,is_notifications_subscribed")
       .in("player_id", playerIds);
 
+    let completedEmailResult = null;
     if (playerRows && playerRows.length === 4) {
       const byId = new Map(playerRows.map((p) => [p.player_id as number, p]));
       const toPlayerInfo = (id: number) => ({
@@ -680,7 +682,7 @@ export async function PATCH(
           ? validation.value.venue
           : matchSnapshot.venue;
 
-      await notifyMatchCompleted({
+      completedEmailResult = await notifyMatchCompleted({
         matchId,
         dateLocal: finalDateLocal,
         timeLocal: finalTimeLocal,
@@ -695,7 +697,10 @@ export async function PATCH(
           result: r.result as "win" | "loss",
         })),
         winnerTeam: calculation.winnerTeam as 1 | 2,
-      }).catch((err) => console.error("[email] notifyMatchCompleted failed:", err));
+      }).catch((err) => {
+        console.error("[email] notifyMatchCompleted failed:", err);
+        return null;
+      });
     }
 
     await resolveMatchPredictions(supabase, matchId, { force: false })
@@ -711,6 +716,7 @@ export async function PATCH(
         },
         ratings: insertedRatings ?? [],
         message: "Match updated as completed with sets and v3 ratings.",
+        emails: completedEmailResult,
       },
       { status: 200 },
     );
@@ -797,6 +803,8 @@ export async function PATCH(
       );
     }
 
+    const forfeitEmailResult = await buildAndSendUpdatedEmail(supabase, matchId, matchRow, team1, team2, validation.value);
+
     return NextResponse.json(
       {
         matchId,
@@ -806,16 +814,76 @@ export async function PATCH(
           team2: forfeitWinnerTeam === 2 ? 2 : 0,
         },
         message: "Match recorded as forfeit with 6-0 6-0 sets.",
+        emails: forfeitEmailResult,
       },
       { status: 200 },
     );
   }
 
+  const genericEmailResult = await buildAndSendUpdatedEmail(supabase, matchId, matchRow, team1, team2, validation.value);
+
   return NextResponse.json(
     {
       matchId,
       message: "Match updated successfully.",
+      emails: genericEmailResult,
     },
     { status: 200 },
   );
+}
+
+async function buildAndSendUpdatedEmail(
+  supabase: AdminSupabaseClient,
+  matchId: number,
+  matchRow: { date_local: string | null; time_local: string | null; venue: string | null; type: string | null; event_id: number | null },
+  team1: { player_1_id: number; player_2_id: number },
+  team2: { player_1_id: number; player_2_id: number },
+  update: UpdateMatchRequest,
+) {
+  const playerIds = [team1.player_1_id, team1.player_2_id, team2.player_1_id, team2.player_2_id];
+  const { data: playerRows } = await supabase
+    .from("players")
+    .select("player_id,name,nickname,email,is_notifications_subscribed")
+    .in("player_id", playerIds);
+
+  if (!playerRows || playerRows.length < 4) return null;
+
+  const byId = new Map(playerRows.map((p) => [p.player_id as number, p]));
+  const toPlayerInfo = (id: number) => ({
+    player_id: id,
+    name: (byId.get(id)?.name as string | null) ?? null,
+    nickname: (byId.get(id)?.nickname as string | null) ?? null,
+    email: (byId.get(id)?.email as string | null) ?? null,
+    is_notifications_subscribed: (byId.get(id)?.is_notifications_subscribed as boolean | null) ?? null,
+  });
+
+  const finalDateLocal = update.dateLocal !== undefined ? update.dateLocal : matchRow.date_local;
+  const finalTimeLocal = update.timeLocal !== undefined ? update.timeLocal : matchRow.time_local;
+  const finalVenue = update.venue !== undefined ? update.venue : matchRow.venue;
+  const finalType = update.type !== undefined ? update.type : matchRow.type;
+
+  let eventName: string | null = null;
+  const finalEventId = update.eventId !== undefined ? update.eventId : matchRow.event_id;
+  if (finalEventId) {
+    const { data: ev } = await supabase
+      .from("events")
+      .select("name")
+      .eq("event_id", finalEventId)
+      .maybeSingle();
+    eventName = ev?.name ?? null;
+  }
+
+  return notifyMatchUpdated({
+    matchId,
+    dateLocal: finalDateLocal,
+    timeLocal: finalTimeLocal,
+    venue: finalVenue,
+    matchType: finalType,
+    eventName,
+    team1Players: [toPlayerInfo(team1.player_1_id), toPlayerInfo(team1.player_2_id)],
+    team2Players: [toPlayerInfo(team2.player_1_id), toPlayerInfo(team2.player_2_id)],
+  }).catch((err) => {
+    console.error("[email] notifyMatchUpdated failed:", err);
+    return null;
+  });
 }

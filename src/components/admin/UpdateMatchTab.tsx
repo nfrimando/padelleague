@@ -113,6 +113,11 @@ export function UpdateMatchTab() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  type EmailNotifResult = {
+    sent: Array<{ player_id: number; displayName: string }>;
+    skipped: Array<{ player_id: number; displayName: string; reason: string }>;
+  } | null;
+
   // Edit modal state
   const [editMatchId, setEditMatchId] = useState("");
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -133,6 +138,7 @@ export function UpdateMatchTab() {
   const [updateMatchSuccess, setUpdateMatchSuccess] = useState<string | null>(
     null,
   );
+  const [updateEmailResult, setUpdateEmailResult] = useState<EmailNotifResult>(null);
 
   // Forfeit confirmation modal state
   const [forfeitModalOpen, setForfeitModalOpen] = useState(false);
@@ -141,6 +147,7 @@ export function UpdateMatchTab() {
     matchId: number;
     winnerTeam: 1 | 2;
     setsWon: { team1: number; team2: number };
+    emails: EmailNotifResult;
   } | null>(null);
 
   // Delete modal state
@@ -330,6 +337,7 @@ export function UpdateMatchTab() {
     setEditMatchId(String(row.match_id));
     setUpdateMatchError(null);
     setUpdateMatchSuccess(null);
+    setUpdateEmailResult(null);
     setEditModalOpen(true);
   };
 
@@ -338,6 +346,7 @@ export function UpdateMatchTab() {
     setEditMatchId("");
     setUpdateMatchError(null);
     setUpdateMatchSuccess(null);
+    setUpdateEmailResult(null);
     setForfeitResult(null);
   };
 
@@ -351,6 +360,7 @@ export function UpdateMatchTab() {
     setUpdatingMatch(true);
     setUpdateMatchError(null);
     setUpdateMatchSuccess(null);
+    setUpdateEmailResult(null);
 
     try {
       const parsedId = Number.parseInt(editMatchId, 10);
@@ -480,6 +490,7 @@ export function UpdateMatchTab() {
         message?: string;
         winnerTeam?: 1 | 2;
         setsWon?: { team1: number; team2: number };
+        emails?: EmailNotifResult;
       };
 
       if (!response.ok) {
@@ -496,9 +507,11 @@ export function UpdateMatchTab() {
           matchId: parsedId,
           winnerTeam: result.winnerTeam,
           setsWon: result.setsWon,
+          emails: result.emails ?? null,
         });
       } else {
         setUpdateMatchSuccess(result.message || "Match updated successfully.");
+        setUpdateEmailResult(result.emails ?? null);
       }
       setForfeitModalOpen(false);
       setListRefreshKey((k) => k + 1);
@@ -1004,8 +1017,32 @@ export function UpdateMatchTab() {
             </div>
           )}
           {updateMatchSuccess && (
-            <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-              {updateMatchSuccess}
+            <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300 space-y-2">
+              <p className="font-medium">{updateMatchSuccess}</p>
+              {updateEmailResult && (
+                <div className="pt-1 border-t border-emerald-200 dark:border-emerald-800/40">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1.5">
+                    Emails: {updateEmailResult.sent.length} / {updateEmailResult.sent.length + updateEmailResult.skipped.length} sent
+                  </p>
+                  <ul className="space-y-0.5">
+                    {updateEmailResult.sent.map((p) => (
+                      <li key={p.player_id} className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+                        <span className="text-emerald-500">✓</span>
+                        <span>{p.displayName}</span>
+                      </li>
+                    ))}
+                    {updateEmailResult.skipped.map((p) => (
+                      <li key={p.player_id} className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="text-rose-400">✗</span>
+                        <span>{p.displayName}</span>
+                        <span className="text-slate-400 dark:text-slate-500">
+                          — {p.reason === "no_email" ? "no email on file" : p.reason === "unsubscribed" ? "unsubscribed" : "opted out"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
           {forfeitResult && (
@@ -1031,6 +1068,34 @@ export function UpdateMatchTab() {
                   <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-36 shrink-0">match_teams</code>
                   <span className="text-slate-500 dark:text-slate-400">sets_won updated</span>
                 </li>
+                {forfeitResult.emails && (
+                  <li className="flex items-start gap-2.5 text-sm">
+                    <span className="shrink-0 text-slate-400 mt-0.5">✉</span>
+                    <div className="min-w-0">
+                      <span className="text-xs font-mono text-slate-600 dark:text-slate-300">emails</span>
+                      <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                        {forfeitResult.emails.sent.length} / {forfeitResult.emails.sent.length + forfeitResult.emails.skipped.length} sent
+                      </span>
+                      <ul className="mt-1 space-y-0.5">
+                        {forfeitResult.emails.sent.map((p) => (
+                          <li key={p.player_id} className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+                            <span className="text-emerald-500">✓</span>
+                            <span>{p.displayName}</span>
+                          </li>
+                        ))}
+                        {forfeitResult.emails.skipped.map((p) => (
+                          <li key={p.player_id} className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                            <span className="text-rose-400">✗</span>
+                            <span>{p.displayName}</span>
+                            <span className="text-slate-400 dark:text-slate-500">
+                              — {p.reason === "no_email" ? "no email on file" : p.reason === "unsubscribed" ? "unsubscribed" : "opted out"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </li>
+                )}
               </ul>
             </div>
           )}
