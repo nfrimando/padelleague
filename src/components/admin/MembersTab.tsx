@@ -28,6 +28,7 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
 
   const [reviewing, setReviewing] = useState<ReviewTarget | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const startReview = (
     id: string,
@@ -37,7 +38,10 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
     setReviewing({ id, kind, approved, notes: "" });
   };
 
-  const cancelReview = () => setReviewing(null);
+  const cancelReview = () => {
+    setReviewing(null);
+    setSubmitError(null);
+  };
 
   const handleConfirm = async () => {
     if (!reviewing) return;
@@ -47,6 +51,7 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
     if (!session) return;
 
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const url =
         reviewing.kind === "claim"
@@ -78,7 +83,12 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
           );
         }
         setReviewing(null);
+      } else {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        setSubmitError(json.error ?? `Request failed (${res.status})`);
       }
+    } catch {
+      setSubmitError("Network error — please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -178,6 +188,7 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
                       approved={reviewing.approved}
                       notes={reviewing.notes}
                       submitting={submitting}
+                      error={submitError}
                       onChange={(notes) =>
                         setReviewing((r) => r && { ...r, notes })
                       }
@@ -277,6 +288,7 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
                       approved={reviewing.approved}
                       notes={reviewing.notes}
                       submitting={submitting}
+                      error={submitError}
                       onChange={(notes) =>
                         setReviewing((r) => r && { ...r, notes })
                       }
@@ -298,6 +310,7 @@ function NotesPanel({
   approved,
   notes,
   submitting,
+  error,
   onChange,
   onConfirm,
   onCancel,
@@ -305,6 +318,7 @@ function NotesPanel({
   approved: boolean;
   notes: string;
   submitting: boolean;
+  error: string | null;
   onChange: (notes: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
@@ -321,6 +335,9 @@ function NotesPanel({
         placeholder="e.g. Verified identity via referral from existing member"
         className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-500 resize-none"
       />
+      {error && (
+        <p className="text-xs text-red-400">{error}</p>
+      )}
       <div className="flex gap-2">
         <button
           type="button"
