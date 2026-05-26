@@ -103,7 +103,6 @@ export async function PATCH(
         nickname,
         email,
         is_profile_complete: true,
-        auto_renew_season: false,
       })
       .select("player_id")
       .single();
