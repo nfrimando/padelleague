@@ -156,8 +156,8 @@ function buildEmailHtml({
 }
 
 export type NotifyResult = {
-  sent: Array<{ player_id: number; displayName: string }>;
-  skipped: Array<{ player_id: number; displayName: string; reason: "no_email" | "unsubscribed" | "opted_out" }>;
+  sent: Array<{ player_id: number; displayName: string; email: string }>;
+  skipped: Array<{ player_id: number; displayName: string; email: string | null; reason: "no_email" | "unsubscribed" | "opted_out" }>;
 };
 
 export async function notifyMatchCompleted(data: MatchCompletedData): Promise<NotifyResult> {
@@ -186,22 +186,22 @@ export async function notifyMatchCompleted(data: MatchCompletedData): Promise<No
   for (const { player, team } of allPlayers) {
     const dn = displayName(player);
     if (!player.email) {
-      notifyResult.skipped.push({ player_id: player.player_id, displayName: dn, reason: "no_email" });
+      notifyResult.skipped.push({ player_id: player.player_id, displayName: dn, email: null, reason: "no_email" });
       continue;
     }
     if (player.is_notifications_subscribed === false) {
-      notifyResult.skipped.push({ player_id: player.player_id, displayName: dn, reason: "unsubscribed" });
+      notifyResult.skipped.push({ player_id: player.player_id, displayName: dn, email: player.email, reason: "unsubscribed" });
       continue;
     }
     if (prefsMap.get(player.player_id)?.match_results === false) {
-      notifyResult.skipped.push({ player_id: player.player_id, displayName: dn, reason: "opted_out" });
+      notifyResult.skipped.push({ player_id: player.player_id, displayName: dn, email: player.email, reason: "opted_out" });
       continue;
     }
 
     const rating = data.ratings.find((r) => r.player_id === player.player_id);
     if (!rating) {
       console.warn(`[email] notifyMatchCompleted: no rating found for player_id=${player.player_id}, skipping`);
-      notifyResult.skipped.push({ player_id: player.player_id, displayName: dn, reason: "opted_out" });
+      notifyResult.skipped.push({ player_id: player.player_id, displayName: dn, email: player.email, reason: "opted_out" });
       continue;
     }
 
@@ -227,7 +227,7 @@ export async function notifyMatchCompleted(data: MatchCompletedData): Promise<No
     if (!result.ok) {
       console.error(`[email] notifyMatchCompleted failed for player_id=${player.player_id}:`, result.error);
     }
-    notifyResult.sent.push({ player_id: player.player_id, displayName: dn });
+    notifyResult.sent.push({ player_id: player.player_id, displayName: dn, email: player.email });
   }
 
   return notifyResult;
