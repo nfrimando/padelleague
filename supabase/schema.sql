@@ -128,7 +128,7 @@ CREATE TABLE public.players (
   player_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   name text UNIQUE,
-  nickname text UNIQUE,
+  nickname text,
   image_link text,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   initial_rating numeric CHECK (initial_rating IS NULL OR initial_rating >= 0::numeric),
