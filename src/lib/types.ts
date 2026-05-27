@@ -29,6 +29,7 @@ export type Player = {
   is_public?: boolean;
   is_notifications_subscribed?: boolean;
   preferred_side?: "left" | "right" | "both" | null;
+  shirt_size?: string | null;
   created_at?: string;
   updated_at?: string;
 };

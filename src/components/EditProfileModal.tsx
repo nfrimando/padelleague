@@ -26,6 +26,7 @@ type FormState = {
   notif_match_results: boolean;
   notif_match_scheduled: boolean;
   preferred_side: "left" | "right" | "both" | "";
+  shirt_size: string;
 };
 
 function Toggle({
@@ -88,6 +89,7 @@ export default function EditProfileModal({
     notif_match_results: true,
     notif_match_scheduled: true,
     preferred_side: player.preferred_side ?? "",
+    shirt_size: player.shirt_size ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +105,7 @@ export default function EditProfileModal({
       is_public: player.is_public ?? false,
       is_notifications_subscribed: player.is_notifications_subscribed ?? false,
       preferred_side: player.preferred_side ?? "",
+      shirt_size: player.shirt_size ?? "",
     }));
   }, [player]);
 
@@ -181,6 +184,7 @@ export default function EditProfileModal({
           is_public: form.is_public,
           is_notifications_subscribed: form.is_notifications_subscribed,
           preferred_side: form.preferred_side || null,
+          shirt_size: form.shirt_size || null,
           notification_preferences: {
             match_results: form.notif_match_results,
             match_scheduled: form.notif_match_scheduled,
@@ -319,6 +323,30 @@ export default function EditProfileModal({
             <option value="left">Left</option>
             <option value="right">Right</option>
             <option value="both">Both</option>
+          </select>
+        </div>
+
+        {/* Shirt Size */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
+            Shirt Size
+          </label>
+          <select
+            value={form.shirt_size}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, shirt_size: e.target.value }))
+            }
+            className="w-full bg-[#1a2540] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#00C8DC]/50 transition-colors cursor-pointer"
+          >
+            <option value="">— Not set —</option>
+            <option value="XS">XS</option>
+            <option value="S">S</option>
+            <option value="M">M</option>
+            <option value="L">L</option>
+            <option value="XL">XL</option>
+            <option value="XXL">XXL</option>
+            <option value="XXXL">XXXL</option>
+            <option value="4XL">4XL</option>
           </select>
         </div>
 

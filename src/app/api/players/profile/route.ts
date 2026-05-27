@@ -16,6 +16,7 @@ type ProfileUpdateBody = {
   is_public?: boolean;
   is_notifications_subscribed?: boolean;
   preferred_side?: "left" | "right" | "both" | null;
+  shirt_size?: string | null;
   notification_preferences?: Partial<Record<NotifType, boolean>>;
 };
 
@@ -123,6 +124,17 @@ export async function PATCH(request: NextRequest) {
       );
     }
     updates.preferred_side = body.preferred_side;
+  }
+
+  const VALID_SHIRT_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "4XL"];
+  if (body.shirt_size !== undefined) {
+    if (body.shirt_size !== null && !VALID_SHIRT_SIZES.includes(body.shirt_size)) {
+      return NextResponse.json(
+        { error: "shirt_size must be a valid size or null" },
+        { status: 400 },
+      );
+    }
+    updates.shirt_size = body.shirt_size;
   }
 
   // Validate notification_preferences if present
