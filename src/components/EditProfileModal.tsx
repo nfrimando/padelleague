@@ -27,6 +27,7 @@ type FormState = {
   notif_match_scheduled: boolean;
   preferred_side: "left" | "right" | "both" | "";
   shirt_size: string;
+  ig_handle: string;
 };
 
 function Toggle({
@@ -90,6 +91,7 @@ export default function EditProfileModal({
     notif_match_scheduled: true,
     preferred_side: player.preferred_side ?? "",
     shirt_size: player.shirt_size ?? "",
+    ig_handle: player.ig_handle ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export default function EditProfileModal({
       is_notifications_subscribed: player.is_notifications_subscribed ?? false,
       preferred_side: player.preferred_side ?? "",
       shirt_size: player.shirt_size ?? "",
+      ig_handle: player.ig_handle ?? "",
     }));
   }, [player]);
 
@@ -185,6 +188,7 @@ export default function EditProfileModal({
           is_notifications_subscribed: form.is_notifications_subscribed,
           preferred_side: form.preferred_side || null,
           shirt_size: form.shirt_size || null,
+          ig_handle: form.ig_handle.trim() || null,
           notification_preferences: {
             match_results: form.notif_match_results,
             match_scheduled: form.notif_match_scheduled,
@@ -210,13 +214,14 @@ export default function EditProfileModal({
   if (!mounted || !isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
       <div
         className="fixed inset-0 bg-black/60 cursor-pointer"
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative w-full max-w-sm bg-[#162032] border border-[#687FA3]/20 rounded-2xl shadow-2xl p-6 space-y-5 my-auto">
+      <div className="relative w-full max-w-sm bg-[#162032] border border-[#687FA3]/20 rounded-2xl shadow-2xl p-6 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -350,6 +355,26 @@ export default function EditProfileModal({
           </select>
         </div>
 
+        {/* Instagram Handle */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
+            Instagram Handle <span className="text-[#687FA3]/50 normal-case tracking-normal font-normal">(optional)</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-[#687FA3]/60">@</span>
+            <input
+              type="text"
+              value={form.ig_handle}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, ig_handle: e.target.value.replace(/^@/, "") }))
+              }
+              maxLength={30}
+              placeholder="yourhandle"
+              className="w-full bg-[#1a2540] border border-[#687FA3]/20 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/60 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+            />
+          </div>
+        </div>
+
         {/* Divider */}
         <div className="border-t border-[#687FA3]/10" />
 
@@ -425,6 +450,7 @@ export default function EditProfileModal({
             )}
           </button>
         </div>
+      </div>
       </div>
     </div>,
     document.body,
