@@ -15,12 +15,18 @@ const inputCls =
 const tableThCls =
   "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide text-left py-1 pr-3";
 
+type EmailNotifyResult = {
+  sent: Array<{ player_id: number; displayName: string; email: string }>;
+  skipped: Array<{ player_id: number; displayName: string; email: string | null; reason: "no_email" | "unsubscribed" | "opted_out" }>;
+};
+
 type CompletionResult = {
   matchId: number;
   winnerTeam: 1 | 2;
   setsWon: { team1: number; team2: number };
   ratings: Array<{ player_id: number }>;
   message: string;
+  emails?: EmailNotifyResult | null;
 };
 
 function resolvePlayerName(
@@ -621,6 +627,35 @@ export function CompleteMatchTab() {
                   <span className="text-slate-500 dark:text-slate-400">auto-resolved</span>
                 </li>
               </ul>
+              {completionResult.emails && (
+                <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800/40 space-y-2">
+                  {completionResult.emails.sent.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Emails sent</span>
+                      <ul className="mt-1 space-y-0.5">
+                        {completionResult.emails.sent.map((s) => (
+                          <li key={s.player_id} className="text-xs font-mono text-emerald-700 dark:text-emerald-400">{s.email}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {completionResult.emails.skipped.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Emails not sent</span>
+                      <ul className="mt-1 space-y-0.5">
+                        {completionResult.emails.skipped.map((s) => (
+                          <li key={s.player_id} className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                            {s.email ?? s.displayName}
+                            <span className="ml-1.5 font-sans text-slate-400 dark:text-slate-500">
+                              ({s.reason === "no_email" ? "no email" : s.reason === "unsubscribed" ? "unsubscribed" : "opted out"})
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
