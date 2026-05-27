@@ -96,16 +96,16 @@ function Panel({
 }
 
 export default function PartnersSection({ partnerStats, loading }: Props) {
-  // Best partners: highest win % (min 2 matches together)
+  // Best partners: highest win % (min 2 matches together), then most games
   const bestPartners = [...partnerStats]
     .filter((s) => s.matchesPlayed >= 2)
     .sort((a, b) => b.winRate - a.winRate || b.matchesPlayed - a.matchesPlayed)
-    .slice(0, 3);
+    .slice(0, 5);
 
   // Most common: most matches together
   const mostCommon = [...partnerStats]
     .sort((a, b) => b.matchesPlayed - a.matchesPlayed)
-    .slice(0, 3);
+    .slice(0, 5);
 
   const hasData = partnerStats.length > 0;
 

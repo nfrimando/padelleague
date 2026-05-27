@@ -139,6 +139,7 @@ CREATE TABLE public.players (
   country character varying,
   is_public boolean NOT NULL DEFAULT false,
   is_notifications_subscribed boolean NOT NULL DEFAULT false,
+  shirt_size character varying,
   CONSTRAINT players_pkey PRIMARY KEY (player_id)
 );
 CREATE TABLE public.prediction_results (

@@ -89,25 +89,25 @@ export default function RivalriesSection({ opponentStats, loading }: Props) {
   const biggestRival = [...opponentStats]
     .filter((s) => s.matchesPlayed >= 2)
     .sort((a, b) => b.matchesPlayed - a.matchesPlayed)
-    .slice(0, 3);
+    .slice(0, 5);
 
-  // Nemesis: lowest win % (min 2 matches)
+  // Nemesis: lowest win % (min 2 matches), then most games
   const nemesis = [...opponentStats]
     .filter((s) => s.matchesPlayed >= 2)
-    .sort((a, b) => a.winRate - b.winRate)
-    .slice(0, 3);
+    .sort((a, b) => a.winRate - b.winRate || b.matchesPlayed - a.matchesPlayed)
+    .slice(0, 5);
 
-  // Favorite matchup: highest win % (min 2 matches)
+  // Favorite matchup: highest win % (min 2 matches), then most games
   const favorite = [...opponentStats]
     .filter((s) => s.matchesPlayed >= 2)
-    .sort((a, b) => b.winRate - a.winRate)
-    .slice(0, 3);
+    .sort((a, b) => b.winRate - a.winRate || b.matchesPlayed - a.matchesPlayed)
+    .slice(0, 5);
 
   // Unfinished business: 40–60% win rate, min 3 matches
   const unfinished = [...opponentStats]
     .filter((s) => s.matchesPlayed >= 3 && s.winRate >= 40 && s.winRate <= 60)
     .sort((a, b) => b.matchesPlayed - a.matchesPlayed)
-    .slice(0, 3);
+    .slice(0, 5);
 
   const hasAnyData = opponentStats.length > 0;
 
