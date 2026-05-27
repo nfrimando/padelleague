@@ -17,6 +17,7 @@ type ProfileUpdateBody = {
   is_notifications_subscribed?: boolean;
   preferred_side?: "left" | "right" | "both" | null;
   shirt_size?: string | null;
+  ig_handle?: string | null;
   notification_preferences?: Partial<Record<NotifType, boolean>>;
 };
 
@@ -135,6 +136,18 @@ export async function PATCH(request: NextRequest) {
       );
     }
     updates.shirt_size = body.shirt_size;
+  }
+
+  if (body.ig_handle !== undefined) {
+    if (body.ig_handle !== null) {
+      if (typeof body.ig_handle !== "string" || body.ig_handle.length > 30) {
+        return NextResponse.json(
+          { error: "ig_handle must be a string under 30 characters or null" },
+          { status: 400 },
+        );
+      }
+    }
+    updates.ig_handle = body.ig_handle;
   }
 
   // Validate notification_preferences if present

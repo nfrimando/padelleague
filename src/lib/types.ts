@@ -30,6 +30,7 @@ export type Player = {
   is_notifications_subscribed?: boolean;
   preferred_side?: "left" | "right" | "both" | null;
   shirt_size?: string | null;
+  ig_handle?: string | null;
   created_at?: string;
   updated_at?: string;
 };
