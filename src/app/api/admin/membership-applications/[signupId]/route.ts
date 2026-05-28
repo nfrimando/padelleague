@@ -14,7 +14,7 @@ export async function PATCH(
   const { supabase } = authResult;
   const { signupId } = await params;
 
-  let body: { approved?: unknown; notes?: unknown };
+  let body: { approved?: unknown; notes?: unknown; initialRating?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -25,7 +25,18 @@ export async function PATCH(
     return NextResponse.json({ error: "approved (boolean) is required." }, { status: 400 });
   }
 
+  if (body.approved) {
+    const r = typeof body.initialRating === "number" ? body.initialRating : NaN;
+    if (isNaN(r) || r < 0) {
+      return NextResponse.json(
+        { error: "initialRating (non-negative number) is required when approving." },
+        { status: 400 },
+      );
+    }
+  }
+
   const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null;
+  const initialRating = body.approved && typeof body.initialRating === "number" ? body.initialRating : null;
 
   const { data: signup, error: signupError } = await supabase
     .from("signups_players")
@@ -103,6 +114,7 @@ export async function PATCH(
         nickname,
         email,
         is_profile_complete: true,
+        initial_rating: initialRating,
       })
       .select("player_id")
       .single();

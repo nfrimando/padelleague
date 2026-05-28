@@ -12,6 +12,7 @@ type ReviewTarget = {
   kind: "claim" | "application";
   approved: boolean;
   notes: string;
+  initialRating: string;
 };
 
 export function MembersTab({ enabled }: { enabled: boolean }) {
@@ -35,7 +36,7 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
     kind: "claim" | "application",
     approved: boolean,
   ) => {
-    setReviewing({ id, kind, approved, notes: "" });
+    setReviewing({ id, kind, approved, notes: "", initialRating: "" });
   };
 
   const cancelReview = () => {
@@ -67,6 +68,9 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
         body: JSON.stringify({
           approved: reviewing.approved,
           notes: reviewing.notes || null,
+          ...(reviewing.kind === "application" && reviewing.approved
+            ? { initialRating: parseFloat(reviewing.initialRating) }
+            : {}),
         }),
       });
 
@@ -289,6 +293,11 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
                       notes={reviewing.notes}
                       submitting={submitting}
                       error={submitError}
+                      showInitialRating={reviewing.approved}
+                      initialRating={reviewing.initialRating}
+                      onInitialRatingChange={(v) =>
+                        setReviewing((r) => r && { ...r, initialRating: v })
+                      }
                       onChange={(notes) =>
                         setReviewing((r) => r && { ...r, notes })
                       }
@@ -311,6 +320,9 @@ function NotesPanel({
   notes,
   submitting,
   error,
+  showInitialRating,
+  initialRating,
+  onInitialRatingChange,
   onChange,
   onConfirm,
   onCancel,
@@ -319,15 +331,42 @@ function NotesPanel({
   notes: string;
   submitting: boolean;
   error: string | null;
+  showInitialRating?: boolean;
+  initialRating?: string;
+  onInitialRatingChange?: (v: string) => void;
   onChange: (notes: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const ratingValid =
+    !showInitialRating ||
+    (initialRating !== undefined &&
+      initialRating.trim() !== "" &&
+      !isNaN(parseFloat(initialRating)) &&
+      parseFloat(initialRating) >= 0);
+
   return (
     <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 space-y-2">
       <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
         {approved ? "Approving" : "Rejecting"} — add a note (optional)
       </p>
+      {showInitialRating && (
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+            Initial Rating <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="number"
+            step="0.0001"
+            min="0"
+            required
+            value={initialRating}
+            onChange={(e) => onInitialRatingChange?.(e.target.value)}
+            placeholder="e.g. 1500"
+            className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-500"
+          />
+        </div>
+      )}
       <textarea
         rows={2}
         value={notes}
@@ -342,8 +381,8 @@ function NotesPanel({
         <button
           type="button"
           onClick={onConfirm}
-          disabled={submitting}
-          className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 ${
+          disabled={submitting || !ratingValid}
+          className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed ${
             approved
               ? "bg-emerald-600 hover:bg-emerald-700"
               : "bg-red-600 hover:bg-red-700"
