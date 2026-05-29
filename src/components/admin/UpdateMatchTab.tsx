@@ -428,12 +428,10 @@ export function UpdateMatchTab() {
               team1: {
                 player1Id: parsedParticipantIds[0],
                 player2Id: parsedParticipantIds[1],
-                setsWon: loadedMatchDetails?.team1SetsWon ?? null,
               },
               team2: {
                 player1Id: parsedParticipantIds[2],
                 player2Id: parsedParticipantIds[3],
-                setsWon: loadedMatchDetails?.team2SetsWon ?? null,
               },
             }),
           },
