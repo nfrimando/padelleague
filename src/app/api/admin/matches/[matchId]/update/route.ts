@@ -150,7 +150,8 @@ function validatePayload(payload: unknown): ValidationResult {
   }
 
   if (status === "completed") {
-    if (!parsedSets || parsedSets.length === 0) {
+    // Only validate sets if they were explicitly provided; absent = metadata-only update
+    if (payload.sets !== undefined && (!parsedSets || parsedSets.length === 0)) {
       errors.push("sets must be provided for completed matches.");
     }
   }
@@ -314,6 +315,32 @@ export async function PATCH(
   }
 
   if (validation.value.status === "completed") {
+    // No sets provided → metadata-only update; skip sets/ratings recalculation
+    if (validation.value.sets === undefined) {
+      const { data: updatedMatchRow, error: matchUpdateError } = await supabase
+        .from("matches")
+        .update(matchUpdates)
+        .eq("match_id", matchId)
+        .select("match_id")
+        .maybeSingle();
+
+      if (matchUpdateError || !updatedMatchRow) {
+        return NextResponse.json(
+          {
+            error:
+              matchUpdateError?.message ||
+              "Failed to update match. Ensure admin write permissions are configured.",
+          },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json(
+        { matchId, message: "Match updated successfully." },
+        { status: 200 },
+      );
+    }
+
     const { data: currentMatchRow, error: currentMatchError } = await supabase
       .from("matches")
         .select("status,event_id,date_local,time_local,venue,type,winner_team")
