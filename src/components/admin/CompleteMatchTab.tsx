@@ -666,7 +666,8 @@ export function CompleteMatchTab() {
               disabled={
                 completingMatch ||
                 !completeMatchCalculated ||
-                !ratingPreviewWithRows
+                !ratingPreviewWithRows ||
+                !!completionResult
               }
               className="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >

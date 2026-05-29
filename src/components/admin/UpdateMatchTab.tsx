@@ -108,7 +108,7 @@ export function UpdateMatchTab() {
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [listRefreshKey, setListRefreshKey] = useState(0);
-  const [onlyScheduled, setOnlyScheduled] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<"all" | "scheduled" | "cancelled" | "completed">("scheduled");
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -160,9 +160,10 @@ export function UpdateMatchTab() {
     append: boolean,
     signal: { cancelled: boolean },
   ) {
-    const statuses = onlyScheduled
-      ? ["scheduled"]
-      : ["scheduled", "cancelled", "completed"];
+    const statuses =
+      statusFilter === "all"
+        ? ["scheduled", "cancelled", "completed", "forfeit"]
+        : [statusFilter];
 
     const { data: matchData, error: matchErr } = await supabase
       .from("matches")
@@ -261,7 +262,7 @@ export function UpdateMatchTab() {
       signal.cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listRefreshKey, onlyScheduled]);
+  }, [listRefreshKey, statusFilter]);
 
   const loadMore = () => {
     const signal = { cancelled: false };
@@ -592,28 +593,16 @@ export function UpdateMatchTab() {
                 Loading…
               </span>
             )}
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                Only scheduled
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={onlyScheduled}
-                onClick={() => setOnlyScheduled((v) => !v)}
-                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 ${
-                  onlyScheduled
-                    ? "bg-[#00C8DC]"
-                    : "bg-slate-300 dark:bg-slate-600"
-                }`}
-              >
-                <span
-                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
-                    onlyScheduled ? "translate-x-4" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40"
+            >
+              <option value="scheduled">Scheduled</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="all">All statuses</option>
+            </select>
           </div>
         </div>
         {listError && (
