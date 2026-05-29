@@ -33,6 +33,28 @@ export function normalizeOptionalPositiveInteger(value: unknown): number | null 
   return normalizeRequiredPositiveInteger(value);
 }
 
+export function normalizeOptionalNonNegativeInteger(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) {
+      const parsed = Number.parseInt(trimmed, 10);
+      if (Number.isInteger(parsed) && parsed >= 0) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function normalizeOptionalString(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;

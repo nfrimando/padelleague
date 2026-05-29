@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import {
   getAuthorizedAdminClient,
   isRecord,
-  normalizeOptionalPositiveInteger,
+  normalizeOptionalNonNegativeInteger,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
 
 type TeamUpdate = {
   player1Id: number;
   player2Id: number;
-  setsWon: number | null;
+  setsWon: number | null | undefined; // undefined = not provided, preserve existing
 };
 
 type ExistingTeamRow = {
@@ -47,7 +47,15 @@ function validatePayload(payload: unknown): ValidationResult {
 
     const player1Id = normalizeRequiredPositiveInteger(value.player1Id);
     const player2Id = normalizeRequiredPositiveInteger(value.player2Id);
-    const setsWon = normalizeOptionalPositiveInteger(value.setsWon);
+
+    // setsWon absent from payload → undefined (preserve existing DB value)
+    let setsWon: number | null | undefined = undefined;
+    if (value.setsWon !== undefined) {
+      setsWon = normalizeOptionalNonNegativeInteger(value.setsWon);
+      if (value.setsWon !== null && value.setsWon !== "" && setsWon === null) {
+        errors.push(`${label}.setsWon must be a non-negative integer or null.`);
+      }
+    }
 
     if (player1Id === null) {
       errors.push(`${label}.player1Id must be a positive integer.`);
@@ -55,15 +63,6 @@ function validatePayload(payload: unknown): ValidationResult {
 
     if (player2Id === null) {
       errors.push(`${label}.player2Id must be a positive integer.`);
-    }
-
-    if (
-      value.setsWon !== undefined &&
-      value.setsWon !== null &&
-      value.setsWon !== "" &&
-      setsWon === null
-    ) {
-      errors.push(`${label}.setsWon must be a positive integer or null.`);
     }
 
     if (player1Id !== null && player2Id !== null && player1Id === player2Id) {
@@ -227,13 +226,17 @@ export async function PATCH(
     const existingRow = teamNumber === 1 ? existingTeam1Rows[0] : existingTeam2Rows[0];
 
     if (existingRow) {
+      const updateFields: Record<string, unknown> = {
+        player_1_id: team.player1Id,
+        player_2_id: team.player2Id,
+      };
+      if (team.setsWon !== undefined) {
+        updateFields.sets_won = team.setsWon;
+      }
+
       const { data, error } = await supabase
         .from("match_teams")
-        .update({
-          player_1_id: team.player1Id,
-          player_2_id: team.player2Id,
-          sets_won: team.setsWon,
-        })
+        .update(updateFields)
         .eq("uuid", existingRow.uuid)
         .select("uuid,match_id,team_number,player_1_id,player_2_id,sets_won")
         .maybeSingle();
@@ -248,7 +251,7 @@ export async function PATCH(
         team_number: teamNumber,
         player_1_id: team.player1Id,
         player_2_id: team.player2Id,
-        sets_won: team.setsWon,
+        sets_won: team.setsWon ?? null,
       })
       .select("uuid,match_id,team_number,player_1_id,player_2_id,sets_won")
       .maybeSingle();
