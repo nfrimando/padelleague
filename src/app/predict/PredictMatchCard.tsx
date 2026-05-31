@@ -479,7 +479,26 @@ export function PredictMatchCard({
         ) : pickedTeam !== null &&
           crowdCounts !== null &&
           match.status !== "scheduled" ? (
-          <CrowdBar pickedTeam={pickedTeam} crowdCounts={crowdCounts} />
+          <div className="space-y-2">
+            <CrowdBar pickedTeam={pickedTeam} crowdCounts={crowdCounts} />
+            {match.winningTeam !== null && (
+              <div
+                className={`rounded-xl px-4 py-2.5 flex items-center gap-2 ${
+                  match.winningTeam === 1
+                    ? "bg-sky-500/10 border border-sky-500/20"
+                    : "bg-amber-500/10 border border-amber-500/20"
+                }`}
+              >
+                <span
+                  className={`text-[10px] font-black uppercase tracking-widest ${
+                    match.winningTeam === 1 ? "text-sky-400" : "text-amber-400"
+                  }`}
+                >
+                  Team {match.winningTeam} won
+                </span>
+              </div>
+            )}
+          </div>
         ) : pickedTeam !== null && match.status === "scheduled" ? (
           <div className="space-y-2.5">
             <div className="flex items-center justify-center">
