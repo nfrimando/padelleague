@@ -129,7 +129,7 @@ function buildEmailHtml({
       </a>
 
       <p style="margin-top: 32px; color: #aaa; font-size: 12px;">
-        Padel League PH &mdash; notifications@padelsense.app
+        Padel League PH &mdash; hello@padelph.com
       </p>
       <p style="margin-top: 8px; color: #aaa; font-size: 11px;">
         You're receiving this because you're a Padel League PH member.
