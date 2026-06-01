@@ -94,6 +94,34 @@ function IconTrash() {
   );
 }
 
+function IconEnvelope() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="h-4 w-4"
+    >
+      <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+      <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+    </svg>
+  );
+}
+
+function IconSpinner() {
+  return (
+    <svg
+      className="h-4 w-4 animate-spin"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
 export function UpdateMatchTab() {
   const {
     players,
@@ -154,6 +182,14 @@ export function UpdateMatchTab() {
   const [deleteTarget, setDeleteTarget] = useState<MatchListRow | null>(null);
   const [deletingMatch, setDeletingMatch] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Resend emails state
+  const [resendingMatchId, setResendingMatchId] = useState<number | null>(null);
+  const [resendResult, setResendResult] = useState<{
+    matchId: number;
+    emails: EmailNotifResult;
+  } | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   async function fetchPage(
     pageOffset: number,
@@ -333,6 +369,45 @@ export function UpdateMatchTab() {
     (loadedMatchDetails?.team2.player2
       ? String(loadedMatchDetails.team2.player2.player_id)
       : "");
+
+  const handleResendEmails = async (matchId: number) => {
+    setResendingMatchId(matchId);
+    setResendResult(null);
+    setResendError(null);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setResendError("No active session. Please sign in again.");
+        return;
+      }
+
+      const response = await fetch(`/api/admin/matches/${matchId}/resend-emails`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      const result = (await response.json()) as {
+        matchId?: number;
+        emails?: EmailNotifResult;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setResendError(result.error || "Failed to resend emails.");
+        return;
+      }
+
+      setResendResult({ matchId, emails: result.emails ?? null });
+    } catch {
+      setResendError("Unexpected error while resending emails.");
+    } finally {
+      setResendingMatchId(null);
+    }
+  };
 
   const openEditModal = (row: MatchListRow) => {
     setEditMatchId(String(row.match_id));
@@ -608,6 +683,30 @@ export function UpdateMatchTab() {
         {listError && (
           <p className="px-4 py-3 text-sm text-rose-500">{listError}</p>
         )}
+        {resendError && (
+          <div className="mx-4 mt-2 rounded-md border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-sm text-rose-700 dark:text-rose-300 flex items-center justify-between gap-2">
+            <span>{resendError}</span>
+            <button type="button" onClick={() => setResendError(null)} className="shrink-0 text-rose-400 hover:text-rose-600 dark:hover:text-rose-300">✕</button>
+          </div>
+        )}
+        {resendResult && (
+          <div className="mx-4 mt-2 rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="font-medium">Emails resent for match #{resendResult.matchId}</span>
+              <button type="button" onClick={() => setResendResult(null)} className="shrink-0 text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300">✕</button>
+            </div>
+            {resendResult.emails && (
+              <div className="space-y-0.5 text-xs font-mono">
+                {resendResult.emails.sent.map((s) => (
+                  <div key={s.player_id} className="text-emerald-600 dark:text-emerald-400">✓ {s.displayName}</div>
+                ))}
+                {resendResult.emails.skipped.map((s) => (
+                  <div key={s.player_id} className="text-slate-500 dark:text-slate-400">– {s.displayName} ({s.reason})</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="overflow-y-auto max-h-72 divide-y divide-slate-100 dark:divide-slate-800">
           {listRows.map((row) => {
             const t1 = `${resolvePlayerName(row.team1p1Id, playerNameById)} & ${resolvePlayerName(row.team1p2Id, playerNameById)}`;
@@ -646,6 +745,17 @@ export function UpdateMatchTab() {
                   >
                     <IconPencil />
                   </button>
+                  {row.status === "completed" && (
+                    <button
+                      type="button"
+                      onClick={() => void handleResendEmails(row.match_id)}
+                      disabled={resendingMatchId === row.match_id}
+                      title="Resend completion emails"
+                      className="rounded p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:cursor-not-allowed"
+                    >
+                      {resendingMatchId === row.match_id ? <IconSpinner /> : <IconEnvelope />}
+                    </button>
+                  )}
                   {row.status !== "completed" && (
                     <button
                       type="button"
