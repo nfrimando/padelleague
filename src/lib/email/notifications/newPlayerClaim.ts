@@ -1,4 +1,4 @@
-import { sendEmail } from "../send";
+import { sendEmail, NOTIFICATIONS_EMAIL } from "../send";
 
 type Claim = {
   claimantName: string | null;
@@ -58,7 +58,7 @@ export async function notifyNewPlayerClaim(claim: Claim): Promise<void> {
       </a>
 
       <p style="margin-top: 32px; color: #aaa; font-size: 12px;">
-        Padel League PH &mdash; notifications@padelsense.app
+        Padel League PH &mdash; ${NOTIFICATIONS_EMAIL}
       </p>
     </div>
   `;

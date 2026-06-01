@@ -1,4 +1,4 @@
-import { sendEmail } from "../send";
+import { sendEmail, NOTIFICATIONS_EMAIL } from "../send";
 import { buildUnsubscribeUrl } from "../unsubscribeToken";
 import { fetchPlayerPrefsMap } from "@/lib/notificationPreferences";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
@@ -144,7 +144,7 @@ function buildEmailHtml({
       </a>
 
       <p style="margin-top: 32px; color: #aaa; font-size: 12px;">
-        Padel League PH &mdash; notifications@padelsense.app
+        Padel League PH &mdash; ${NOTIFICATIONS_EMAIL}
       </p>
       <p style="margin-top: 8px; color: #aaa; font-size: 11px;">
         <a href="${unsubscribeMatchUrl}" style="color: #aaa;">Unsubscribe from match result emails</a>
