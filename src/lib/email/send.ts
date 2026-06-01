@@ -1,6 +1,6 @@
 import { resend } from "./client";
 
-export const NOTIFICATIONS_EMAIL = "notifications@padelsense.app";
+export const NOTIFICATIONS_EMAIL = "hello@padelph.com";
 const DEFAULT_FROM = `Padel League PH <${NOTIFICATIONS_EMAIL}>`;
 // Resend rate limit is 2 req/s; enforce 1.5s minimum gap between sends globally.
 const MIN_SEND_INTERVAL_MS = 1500;
