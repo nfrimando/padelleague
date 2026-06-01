@@ -1,6 +1,6 @@
 import { resend } from "./client";
 
-const DEFAULT_FROM = "Padel League PH <notifications@padelsense.app>";
+const DEFAULT_FROM = "Padel League PH <hello@padelph.com>";
 // Resend rate limit is 2 req/s; enforce 1.5s minimum gap between sends globally.
 const MIN_SEND_INTERVAL_MS = 1500;
 let lastSendTime = 0;
