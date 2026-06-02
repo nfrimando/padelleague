@@ -139,7 +139,7 @@ export async function POST(request: Request) {
   if (existing) {
     const { data: updated, error: updateErr } = await serviceClient
       .from("predictions")
-      .update({ prediction, pick_probability: pickProbability, voided_at: null })
+      .update({ prediction, pick_probability: pickProbability, voided_at: null, void_reason: null })
       .eq("id", existing.id)
       .select("id,prediction")
       .single();
