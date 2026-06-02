@@ -38,7 +38,8 @@ export function useUnvotedUpcomingCount(email: string | null): number {
         .from("predictions")
         .select("match_id")
         .eq("email", email)
-        .in("match_id", matchIds);
+        .in("match_id", matchIds)
+        .is("voided_at", null);
 
       if (cancelled) return;
 
