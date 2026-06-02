@@ -140,7 +140,8 @@ export async function POST(request: Request) {
 
   // 23505 = unique constraint: an active (non-voided) prediction already exists.
   // This can happen if the roster changed but the old prediction wasn't voided yet.
-  // Update the existing active row to the new pick.
+  // Update the existing active row to the new pick. Use maybeSingle in case the
+  // row was voided between the failed insert and this update (race condition).
   if (insertErr.code === "23505") {
     const { data: updated, error: updateErr } = await serviceClient
       .from("predictions")
@@ -150,14 +151,37 @@ export async function POST(request: Request) {
       .eq("type", type)
       .is("voided_at", null)
       .select("id,prediction")
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       console.error("[predictions] update error:", updateErr.message);
       return NextResponse.json({ error: "Failed to save prediction." }, { status: 500 });
     }
 
-    return NextResponse.json({ id: updated.id, prediction: updated.prediction }, { status: 201 });
+    if (updated) {
+      return NextResponse.json({ id: updated.id, prediction: updated.prediction }, { status: 201 });
+    }
+
+    // Active row was voided between the failed insert and this update — retry insert.
+    const { data: retried, error: retryErr } = await serviceClient
+      .from("predictions")
+      .insert({
+        email: user.email,
+        player_id: playerRow.player_id,
+        match_id: matchId,
+        type,
+        prediction,
+        pick_probability: pickProbability,
+      })
+      .select("id,prediction")
+      .single();
+
+    if (retryErr) {
+      console.error("[predictions] retry insert error:", retryErr.message);
+      return NextResponse.json({ error: "Failed to save prediction." }, { status: 500 });
+    }
+
+    return NextResponse.json({ id: retried.id, prediction: retried.prediction }, { status: 201 });
   }
 
   console.error("[predictions] insert error:", insertErr.message);
