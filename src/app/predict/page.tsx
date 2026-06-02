@@ -25,6 +25,7 @@ import type { User } from "@supabase/supabase-js";
 type PendingPick = {
   match: PredictableMatch;
   team: 1 | 2;
+  isRevote: boolean;
 };
 
 function GoogleIcon() {
@@ -189,7 +190,8 @@ export default function PredictPage() {
       next.delete(match.match_id);
       return next;
     });
-    setPendingPick({ match, team });
+    const isRevote = picks.get(match.match_id)?.voidedAt != null;
+    setPendingPick({ match, team, isRevote });
   };
 
   const handleConfirm = () => {
@@ -442,6 +444,7 @@ export default function PredictPage() {
         <ConfirmPredictionModal
           match={pendingPick.match}
           team={pendingPick.team}
+          isRevote={pendingPick.isRevote}
           onConfirm={handleConfirm}
           onCancel={() => setPendingPick(null)}
         />

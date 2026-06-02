@@ -7,6 +7,7 @@ import type { PredictableMatch } from "@/lib/usePredictableMatches";
 type Props = {
   match: PredictableMatch;
   team: 1 | 2;
+  isRevote?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -19,7 +20,7 @@ function teamLabel(match: PredictableMatch, team: 1 | 2): string {
   return `${name1} & ${name2}`;
 }
 
-export function ConfirmPredictionModal({ match, team, onConfirm, onCancel }: Props) {
+export function ConfirmPredictionModal({ match, team, isRevote = false, onConfirm, onCancel }: Props) {
   const colorClass = team === 1 ? "text-sky-400" : "text-amber-400";
 
   return (
@@ -50,7 +51,9 @@ export function ConfirmPredictionModal({ match, team, onConfirm, onCancel }: Pro
           to win.
         </p>
         <p className="text-xs text-[#687FA3] mb-5">
-          Predictions are final and cannot be changed after submission.
+          {isRevote
+            ? "This will replace your cancelled prediction."
+            : "Predictions are final and cannot be changed after submission."}
         </p>
 
         <div className="flex gap-2">
