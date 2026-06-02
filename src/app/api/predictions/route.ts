@@ -121,37 +121,6 @@ export async function POST(request: Request) {
     }
   }
 
-  // Check for an existing voided prediction — if found, reactivate it instead of inserting
-  const { data: existingVoided } = await serviceClient
-    .from("predictions")
-    .select("id")
-    .eq("email", user.email)
-    .eq("match_id", matchId)
-    .eq("type", type)
-    .not("voided_at", "is", null)
-    .maybeSingle();
-
-  if (existingVoided) {
-    const { data: updated, error: updateErr } = await serviceClient
-      .from("predictions")
-      .update({
-        prediction,
-        pick_probability: pickProbability,
-        voided_at: null,
-        void_reason: null,
-      })
-      .eq("id", existingVoided.id)
-      .select("id,prediction")
-      .single();
-
-    if (updateErr) {
-      console.error("[predictions] update error:", updateErr.message);
-      return NextResponse.json({ error: "Failed to save prediction." }, { status: 500 });
-    }
-
-    return NextResponse.json({ id: updated.id, prediction: updated.prediction }, { status: 201 });
-  }
-
   const { data: inserted, error: insertErr } = await serviceClient
     .from("predictions")
     .insert({
@@ -165,17 +134,32 @@ export async function POST(request: Request) {
     .select("id,prediction")
     .single();
 
-  if (insertErr) {
-    // Unique constraint violation — already predicted
-    if (insertErr.code === "23505") {
-      return NextResponse.json(
-        { error: "You have already submitted a prediction for this match." },
-        { status: 409 },
-      );
-    }
-    console.error("[predictions] insert error:", insertErr.message);
-    return NextResponse.json({ error: "Failed to save prediction." }, { status: 500 });
+  if (!insertErr) {
+    return NextResponse.json({ id: inserted.id, prediction: inserted.prediction }, { status: 201 });
   }
 
-  return NextResponse.json({ id: inserted.id, prediction: inserted.prediction }, { status: 201 });
+  // 23505 = unique constraint: an active (non-voided) prediction already exists.
+  // This can happen if the roster changed but the old prediction wasn't voided yet.
+  // Update the existing active row to the new pick.
+  if (insertErr.code === "23505") {
+    const { data: updated, error: updateErr } = await serviceClient
+      .from("predictions")
+      .update({ prediction, pick_probability: pickProbability })
+      .eq("email", user.email)
+      .eq("match_id", matchId)
+      .eq("type", type)
+      .is("voided_at", null)
+      .select("id,prediction")
+      .single();
+
+    if (updateErr) {
+      console.error("[predictions] update error:", updateErr.message);
+      return NextResponse.json({ error: "Failed to save prediction." }, { status: 500 });
+    }
+
+    return NextResponse.json({ id: updated.id, prediction: updated.prediction }, { status: 201 });
+  }
+
+  console.error("[predictions] insert error:", insertErr.message);
+  return NextResponse.json({ error: "Failed to save prediction." }, { status: 500 });
 }
