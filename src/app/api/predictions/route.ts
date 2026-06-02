@@ -121,6 +121,37 @@ export async function POST(request: Request) {
     }
   }
 
+  // Check for an existing voided prediction — if found, reactivate it instead of inserting
+  const { data: existingVoided } = await serviceClient
+    .from("predictions")
+    .select("id")
+    .eq("email", user.email)
+    .eq("match_id", matchId)
+    .eq("type", type)
+    .not("voided_at", "is", null)
+    .maybeSingle();
+
+  if (existingVoided) {
+    const { data: updated, error: updateErr } = await serviceClient
+      .from("predictions")
+      .update({
+        prediction,
+        pick_probability: pickProbability,
+        voided_at: null,
+        void_reason: null,
+      })
+      .eq("id", existingVoided.id)
+      .select("id,prediction")
+      .single();
+
+    if (updateErr) {
+      console.error("[predictions] update error:", updateErr.message);
+      return NextResponse.json({ error: "Failed to save prediction." }, { status: 500 });
+    }
+
+    return NextResponse.json({ id: updated.id, prediction: updated.prediction }, { status: 201 });
+  }
+
   const { data: inserted, error: insertErr } = await serviceClient
     .from("predictions")
     .insert({
