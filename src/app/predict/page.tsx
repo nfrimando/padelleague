@@ -201,7 +201,7 @@ export default function PredictPage() {
     // Optimistic update — close modal immediately
     setPicks((prev) => {
       const next = new Map(prev);
-      next.set(match.match_id, { id: "", prediction: team, pickProbability });
+      next.set(match.match_id, { id: "", prediction: team, pickProbability, voidedAt: null });
       return next;
     });
     setSavingMatchIds((prev) => new Set([...prev, match.match_id]));
@@ -240,7 +240,7 @@ export default function PredictPage() {
         const { id } = (await res.json()) as { id: string };
         setPicks((prev) => {
           const next = new Map(prev);
-          next.set(match.match_id, { id, prediction: team, pickProbability });
+          next.set(match.match_id, { id, prediction: team, pickProbability, voidedAt: null });
           return next;
         });
       } catch (err) {

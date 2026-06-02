@@ -5,6 +5,8 @@ import {
   normalizeOptionalNonNegativeInteger,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import { voidMatchPredictions } from "@/lib/predictions/voidMatchPredictions";
+import { notifyPredictionsVoided } from "@/lib/email/notifications/predictionVoided";
 
 type TeamUpdate = {
   player1Id: number;
@@ -153,7 +155,7 @@ export async function PATCH(
 
   const { data: matchRow, error: matchError } = await supabase
     .from("matches")
-    .select("match_id")
+    .select("match_id,status,date_local,event_id")
     .eq("match_id", matchId)
     .maybeSingle();
 
@@ -298,6 +300,55 @@ export async function PATCH(
     );
   }
 
+  // Void predictions if any player changed and the match is still scheduled
+  let voidedPredictions = 0;
+  if (matchRow.status === "scheduled") {
+    const oldPlayerIds = new Set(
+      [
+        existingTeam1Rows[0]?.player_1_id,
+        existingTeam1Rows[0]?.player_2_id,
+        existingTeam2Rows[0]?.player_1_id,
+        existingTeam2Rows[0]?.player_2_id,
+      ].filter((id): id is number => id !== null && id !== undefined),
+    );
+    const newPlayerIds = [
+      validation.value.team1.player1Id,
+      validation.value.team1.player2Id,
+      validation.value.team2.player1Id,
+      validation.value.team2.player2Id,
+    ];
+    const playersChanged = newPlayerIds.some((id) => !oldPlayerIds.has(id));
+
+    if (playersChanged) {
+      const voided = await voidMatchPredictions(supabase, matchId, "roster_change").catch((err) => {
+        console.error("[teams] voidMatchPredictions failed:", err);
+        return [];
+      });
+      voidedPredictions = voided.length;
+
+      if (voided.length > 0) {
+        // Build team labels from updated rosters for email context
+        const { data: playerRows } = await supabase
+          .from("players")
+          .select("player_id,name,nickname")
+          .in("player_id", newPlayerIds);
+        const nameOf = (id: number) => {
+          const p = (playerRows ?? []).find((r) => Number(r.player_id) === id);
+          return p?.nickname ?? p?.name ?? String(id);
+        };
+        const team1Label = `${nameOf(validation.value.team1.player1Id)} & ${nameOf(validation.value.team1.player2Id)}`;
+        const team2Label = `${nameOf(validation.value.team2.player1Id)} & ${nameOf(validation.value.team2.player2Id)}`;
+
+        await notifyPredictionsVoided(voided, {
+          matchId,
+          dateLocal: matchRow.date_local ?? null,
+          team1Label,
+          team2Label,
+        }).catch((err) => console.error("[email] notifyPredictionsVoided failed:", err));
+      }
+    }
+  }
+
   return NextResponse.json(
     {
       matchId,
@@ -305,6 +356,7 @@ export async function PATCH(
         team1: team1Result.data,
         team2: team2Result.data,
       },
+      voidedPredictions,
       message: "Match teams updated successfully.",
     },
     { status: 200 },

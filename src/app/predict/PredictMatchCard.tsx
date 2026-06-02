@@ -188,8 +188,10 @@ export function PredictMatchCard({
   const team1Favored = team1WinProbability > team2WinProbability;
 
   const isForfeit = match.status === "forfeit";
+  const isPickVoided = existingPick?.voidedAt != null;
   const pickedTeam = existingPick?.prediction ?? null;
-  const isCompletedNoVote = match.status !== "scheduled" && pickedTeam === null;
+  const activePickedTeam = isPickVoided ? null : pickedTeam;
+  const isCompletedNoVote = match.status !== "scheduled" && activePickedTeam === null;
 
   const [showRewardInfo, setShowRewardInfo] = useState(false);
 
@@ -452,18 +454,25 @@ export function PredictMatchCard({
         )}
 
         {/* Crowd prediction (after picking) or pick buttons or no-profile CTA */}
+        {isPickVoided && match.status === "scheduled" && (
+          <div className="rounded-xl px-3 py-2 mb-1 flex items-center gap-2 bg-amber-400/5 border border-amber-400/20">
+            <span className="text-[10px] text-amber-400/80 leading-snug">
+              Your prediction was cancelled — the roster changed. Pick again below.
+            </span>
+          </div>
+        )}
         {isForfeit ? (
           <>
-            {pickedTeam !== null && (
+            {activePickedTeam !== null && (
               <div className="flex items-center justify-center gap-2 py-1">
                 <span
                   className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${
-                    pickedTeam === 1
+                    activePickedTeam === 1
                       ? "text-sky-400 bg-sky-400/10 border-sky-400/30"
                       : "text-amber-400 bg-amber-400/10 border-amber-400/30"
                   }`}
                 >
-                  Your pick: Team {pickedTeam}
+                  Your pick: Team {activePickedTeam}
                 </span>
               </div>
             )}
@@ -476,11 +485,11 @@ export function PredictMatchCard({
               </span>
             </div>
           </>
-        ) : pickedTeam !== null &&
+        ) : activePickedTeam !== null &&
           crowdCounts !== null &&
           match.status !== "scheduled" ? (
           <div className="space-y-2">
-            <CrowdBar pickedTeam={pickedTeam} crowdCounts={crowdCounts} />
+            <CrowdBar pickedTeam={activePickedTeam} crowdCounts={crowdCounts} />
             {match.winningTeam !== null && (
               <div
                 className={`rounded-xl px-4 py-2.5 flex items-center gap-2 ${
@@ -499,17 +508,17 @@ export function PredictMatchCard({
               </div>
             )}
           </div>
-        ) : pickedTeam !== null && match.status === "scheduled" ? (
+        ) : activePickedTeam !== null && match.status === "scheduled" ? (
           <div className="space-y-2.5">
             <div className="flex items-center justify-center">
               <span
                 className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${
-                  pickedTeam === 1
+                  activePickedTeam === 1
                     ? "text-sky-400 bg-sky-400/10 border-sky-400/30"
                     : "text-amber-400 bg-amber-400/10 border-amber-400/30"
                 }`}
               >
-                Your pick: Team {pickedTeam}
+                Your pick: Team {activePickedTeam}
                 {isSaving ? (
                   <Loader2 size={9} className="animate-spin" />
                 ) : (
@@ -523,16 +532,16 @@ export function PredictMatchCard({
               </p>
             )}
           </div>
-        ) : pickedTeam !== null ? (
+        ) : activePickedTeam !== null ? (
           <div className="flex items-center justify-center gap-2 py-2">
             <span
               className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${
-                pickedTeam === 1
+                activePickedTeam === 1
                   ? "text-sky-400 bg-sky-400/10 border-sky-400/30"
                   : "text-amber-400 bg-amber-400/10 border-amber-400/30"
               }`}
             >
-              Your pick: Team {pickedTeam} ✓
+              Your pick: Team {activePickedTeam} ✓
             </span>
           </div>
         ) : match.status !== "scheduled" ? (

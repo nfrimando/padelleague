@@ -266,6 +266,7 @@ export function useUserPredictionHistory(email: string | null) {
             id: pred.id,
             prediction: pred.prediction,
             pickProbability: pred.pick_probability,
+            voidedAt: null,
           },
           result,
         });

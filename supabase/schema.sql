@@ -161,12 +161,16 @@ CREATE TABLE public.predictions (
   type text NOT NULL DEFAULT 'winning_team'::text,
   prediction smallint NOT NULL CHECK (prediction = ANY (ARRAY[1, 2])),
   pick_probability numeric NOT NULL,
+  voided_at timestamp with time zone,
+  void_reason text NOT NULL DEFAULT '',
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT predictions_pkey PRIMARY KEY (id),
   CONSTRAINT predictions_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(match_id),
   CONSTRAINT predictions_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
 );
+-- Partial unique index: only one active (non-voided) prediction per user per match per type
+CREATE UNIQUE INDEX predictions_uniq_active ON public.predictions (email, match_id, type) WHERE voided_at IS NULL;
 CREATE TABLE public.signups_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id bigint,

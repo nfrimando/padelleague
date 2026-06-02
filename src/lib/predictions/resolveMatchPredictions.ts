@@ -31,7 +31,8 @@ export async function resolveMatchPredictions(
     .from("predictions")
     .select("id,prediction,pick_probability,email,player_id")
     .eq("match_id", matchId)
-    .eq("type", "winning_team");
+    .eq("type", "winning_team")
+    .is("voided_at", null);
 
   if (predErr) throw new Error("Failed to fetch predictions.");
 
