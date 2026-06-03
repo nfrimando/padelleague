@@ -398,7 +398,6 @@ const WinProbabilityCalculator = forwardRef<
 ) {
   const { players: allPlayers, loading: playersLoading } = usePlayers({
     orderByName: true,
-    onlyActivePlayers: true,
   });
 
   const [editScheduleOpen, setEditScheduleOpen] = useState(false);

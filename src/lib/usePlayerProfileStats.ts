@@ -108,13 +108,18 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
       const playerTeams = (playerTeamsData ?? []) as PlayerTeamRow[];
       if (playerTeams.length === 0) {
         if (!cancelled) {
+          const { data: playerRow } = await supabase
+            .from("players")
+            .select("initial_rating")
+            .eq("player_id", playerId)
+            .maybeSingle();
           setLightMatches([]);
           setTeamsByMatchId(new Map());
           setMatchCount(0);
           setWins(0);
           setWinRate(0);
           setPartnerStats([]);
-          setLatestRating(null);
+          setLatestRating(playerRow?.initial_rating ?? null);
           setRatingHistory([]);
           setLoading(false);
         }

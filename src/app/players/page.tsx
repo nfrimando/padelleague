@@ -20,7 +20,6 @@ function PlayersPageContent() {
   }, []);
 
   const { players, loading } = usePlayers({
-    onlyActivePlayers: true,
     select: "player_id,name,nickname,image_link",
   });
   const filteredPlayers = usePlayerSearch(players, search);

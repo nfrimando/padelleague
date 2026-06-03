@@ -77,28 +77,13 @@ function PlayerProfilePageContent() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [viewerIsMember, setViewerIsMember] = useState(false);
   const [avatarLightboxOpen, setAvatarLightboxOpen] = useState(false);
-  const [playerOverlay, setPlayerOverlay] = useState<{
-    country: string | null;
-    phone_country_code: string | null;
-    phone_number: string | null;
-    is_public: boolean;
-    preferred_side: "left" | "right" | "both" | null;
-  } | null>(null);
 
-  const { players, loading: loadingPlayers } = usePlayers({
-    onlyActivePlayers: true,
-  });
+  const { players, loading: loadingPlayers } = usePlayers();
   const selectedPlayer = useMemo(
     () => players.find((p) => String(p.player_id) === playerId) ?? null,
     [players, playerId],
   );
-  const effectivePlayer = useMemo(
-    () =>
-      selectedPlayer && playerOverlay
-        ? { ...selectedPlayer, ...playerOverlay }
-        : selectedPlayer,
-    [selectedPlayer, playerOverlay],
-  );
+  const effectivePlayer = selectedPlayer;
 
   const {
     lightMatches,
@@ -165,19 +150,6 @@ function PlayerProfilePageContent() {
       if (data) setViewerIsMember(true);
     });
   }, []);
-
-  // Fetch profile fields not included in the active_players view
-  useEffect(() => {
-    if (!playerId) return;
-    void supabase
-      .from("players")
-      .select("country, phone_country_code, phone_number, is_public, preferred_side")
-      .eq("player_id", playerId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setPlayerOverlay(data as typeof playerOverlay);
-      });
-  }, [playerId]);
 
   // ── Filtering ──────────────────────────────────────────────────────────────
 
@@ -375,7 +347,7 @@ function PlayerProfilePageContent() {
       <div className="min-h-screen bg-[#0E1523] flex flex-col items-center justify-center gap-4 px-4">
         <h1 className="text-xl font-black text-white">Player not found</h1>
         <p className="text-sm text-[#687FA3]">
-          This player does not exist or is not currently active.
+          This player does not exist.
         </p>
         <Link
           href="/players"
@@ -403,12 +375,7 @@ function PlayerProfilePageContent() {
     ? COUNTRY_LIST.find((c) => c.code === effectivePlayer.country) ?? null
     : null;
 
-  const displayRating =
-    latestRating !== null
-      ? latestRating.toFixed(2)
-      : effectivePlayer.latest_rating != null
-        ? Number(effectivePlayer.latest_rating).toFixed(2)
-        : null;
+  const displayRating = latestRating !== null ? latestRating.toFixed(2) : null;
 
   return (
     <div className="min-h-screen bg-[#0E1523]">
