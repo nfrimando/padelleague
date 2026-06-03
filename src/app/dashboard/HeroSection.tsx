@@ -415,7 +415,7 @@ export default function HeroSection({
               <span>
                 {player.preferred_side.charAt(0).toUpperCase() +
                   player.preferred_side.slice(1)}{" "}
-                side
+                {player.preferred_side === "both" ? "sides" : "side"}
               </span>
             ) : (
               <span className="text-xs">

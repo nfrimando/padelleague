@@ -448,7 +448,7 @@ function PlayerProfilePageContent() {
                     <span>
                       {effectivePlayer.preferred_side.charAt(0).toUpperCase() +
                         effectivePlayer.preferred_side.slice(1)}{" "}
-                      side
+                      {effectivePlayer.preferred_side === "both" ? "sides" : "side"}
                     </span>
                   )}
                 </p>
