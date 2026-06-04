@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Info, Loader2 } from "lucide-react";
 import type { PredictableMatch } from "@/lib/usePredictableMatches";
 import type { UserPick } from "@/lib/usePredictions";
@@ -81,6 +81,18 @@ const MONTHS = [
   "Nov",
   "Dec",
 ];
+
+const VOTE_CUTOFF_MS = 2 * 60 * 60 * 1000; // 2 hours in ms
+
+function formatTimeRemaining(ms: number): string {
+  if (ms < 60_000) return "< 1m";
+  const totalMinutes = Math.floor(ms / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${minutes}m`;
+}
 
 function formatDate(
   dateLocal: string | null,
@@ -194,6 +206,26 @@ export function PredictMatchCard({
   const isCompletedNoVote = match.status !== "scheduled" && activePickedTeam === null;
 
   const [showRewardInfo, setShowRewardInfo] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const matchStartPH =
+    match.date_local && match.time_local
+      ? new Date(`${match.date_local}T${match.time_local}+08:00`)
+      : null;
+  const voteDeadline = matchStartPH
+    ? new Date(matchStartPH.getTime() - VOTE_CUTOFF_MS)
+    : null;
+  const isVotingLocked =
+    match.status === "scheduled" && voteDeadline !== null && now >= voteDeadline;
+  const msUntilMatchStart =
+    matchStartPH !== null ? matchStartPH.getTime() - now.getTime() : null;
+  const msUntilVoteDeadline =
+    voteDeadline !== null ? voteDeadline.getTime() - now.getTime() : null;
 
   const team1Reward = getPickReward(team1WinProbability);
   const team2Reward = getPickReward(team2WinProbability);
@@ -574,8 +606,27 @@ export function PredictMatchCard({
               Claim a profile or join the league →
             </a>
           </div>
+        ) : isVotingLocked ? (
+          <div className="rounded-xl px-4 py-3 flex items-center justify-between bg-[#687FA3]/5 border border-[#687FA3]/15">
+            <div className="flex items-center gap-2">
+              <span className="text-[#687FA3]/60 text-sm">🔒</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60">
+                Predictions locked
+              </span>
+            </div>
+            {msUntilMatchStart !== null && msUntilMatchStart > 0 && (
+              <span className="text-[10px] tabular-nums text-[#687FA3]/50">
+                Match in {formatTimeRemaining(msUntilMatchStart)}
+              </span>
+            )}
+          </div>
         ) : (
           <div className="space-y-2">
+            {msUntilVoteDeadline !== null && msUntilVoteDeadline <= 24 * 60 * 60 * 1000 && (
+              <p className="text-center text-[10px] text-amber-400/70">
+                Vote closes in {formatTimeRemaining(msUntilVoteDeadline)}
+              </p>
+            )}
             {pickError && (
               <p className="text-[10px] text-rose-400 text-center">
                 {pickError}

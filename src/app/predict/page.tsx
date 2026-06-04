@@ -166,17 +166,18 @@ export default function PredictPage() {
   const handlePickRequest = (match: PredictableMatch, team: 1 | 2) => {
     if (!user) return;
 
-    // Block if current Philippines time (UTC+8) is past the match start time
+    // Block if current time is within 2 hours of match start (Philippines time, UTC+8)
     if (match.date_local && match.time_local) {
       const matchTimePH = new Date(
         `${match.date_local}T${match.time_local}+08:00`,
       );
-      if (new Date() >= matchTimePH) {
+      const voteDeadline = new Date(matchTimePH.getTime() - 2 * 60 * 60 * 1000);
+      if (new Date() >= voteDeadline) {
         setPickErrors((prev) => {
           const next = new Map(prev);
           next.set(
             match.match_id,
-            "This match is already underway. Predictions are closed.",
+            "Predictions are locked 2 hours before match start.",
           );
           return next;
         });

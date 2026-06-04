@@ -108,14 +108,15 @@ export async function POST(request: Request) {
     );
   }
 
-  // Block predictions once the match start time (Philippines time, UTC+8) has passed
+  // Block predictions 2 hours before match start (Philippines time, UTC+8)
   if (match.date_local && match.time_local) {
     const matchTimePH = new Date(
       `${match.date_local}T${match.time_local}+08:00`,
     );
-    if (new Date() >= matchTimePH) {
+    const voteDeadline = new Date(matchTimePH.getTime() - 2 * 60 * 60 * 1000);
+    if (new Date() >= voteDeadline) {
       return NextResponse.json(
-        { error: "This match is already underway. Predictions are closed." },
+        { error: "Predictions are locked 2 hours before match start." },
         { status: 409 },
       );
     }
