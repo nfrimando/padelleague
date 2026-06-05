@@ -60,6 +60,17 @@ export async function DELETE(
     );
   }
 
+  const { error: deletePredictionsError } = await supabase
+    .from("predictions")
+    .delete()
+    .eq("match_id", matchId);
+  if (deletePredictionsError) {
+    return NextResponse.json(
+      { error: deletePredictionsError.message || "Failed to delete match predictions." },
+      { status: 500 },
+    );
+  }
+
   const { error: deleteSetsError } = await supabase
     .from("match_sets")
     .delete()
