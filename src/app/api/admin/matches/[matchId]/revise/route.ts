@@ -4,23 +4,14 @@ import {
   isRecord,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
-import {
-  calculateRatings,
-  type RatingFormulaVersion,
-} from "@/lib/ratingCalculator";
+import { calculateRatings } from "@/lib/ratingCalculator";
+import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
+import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
+import { resolveMatchPredictions } from "@/lib/predictions/resolveMatchPredictions";
 
 type SetScoreInput = {
   team1Games: number;
   team2Games: number;
-};
-
-type RatingRow = {
-  player_id: number;
-  match_id: number;
-  rating_pre: number;
-  rating_post: number;
-  result: "win" | "loss";
-  formula_name: string;
 };
 
 // Mirrors toPriority from resolvePreMatchRatings.ts — keep in sync if formula priorities change
@@ -38,10 +29,6 @@ function compareNullableStringDesc(a: string | null, b: string | null): number {
 
 type MatchMeta = {
   priority: number;
-  ratingPre: number;
-  ratingPost: number;
-  result: "win" | "loss";
-  formulaName: string;
   dateLocal: string | null;
   timeLocal: string | null;
 };
@@ -129,7 +116,7 @@ export async function PATCH(
   // Verify match exists and is completed
   const { data: matchRow, error: matchError } = await supabase
     .from("matches")
-    .select("match_id, status, winner_team")
+    .select("match_id, status, winner_team, date_local, time_local, venue")
     .eq("match_id", matchId)
     .maybeSingle();
 
@@ -190,7 +177,7 @@ export async function PATCH(
   // Uses same priority + date/time/id ordering as the client hook and resolvePreMatchRatings.ts.
   const { data: allRatings, error: allRatingsError } = await supabase
     .from("match_player_ratings")
-    .select("player_id, match_id, formula_name, rating_pre, rating_post, result, matches(date_local, time_local)")
+    .select("player_id, match_id, formula_name, matches(date_local, time_local)")
     .in("player_id", playerIds);
 
   if (allRatingsError) {
@@ -200,7 +187,6 @@ export async function PATCH(
     );
   }
 
-  // Build per-player, per-match preferred rating (highest-priority formula wins)
   type PlayerMatchMap = Map<number, MatchMeta>;
   const preferredByPlayerAndMatch = new Map<number, PlayerMatchMap>();
 
@@ -208,9 +194,6 @@ export async function PATCH(
     player_id: number | null;
     match_id: number | null;
     formula_name: string | null;
-    rating_pre: number | null;
-    rating_post: number | null;
-    result: string | null;
     matches:
       | { date_local?: string | null; time_local?: string | null }
       | Array<{ date_local?: string | null; time_local?: string | null }>
@@ -218,10 +201,7 @@ export async function PATCH(
   }>) {
     const pId = typeof row.player_id === "number" ? row.player_id : null;
     const mId = typeof row.match_id === "number" ? row.match_id : null;
-    const rPre = typeof row.rating_pre === "number" ? row.rating_pre : null;
-    const rPost = typeof row.rating_post === "number" ? row.rating_post : null;
-    if (pId === null || mId === null || rPre === null || rPost === null) continue;
-    if (row.result !== "win" && row.result !== "loss") continue;
+    if (pId === null || mId === null) continue;
 
     const matchMeta = Array.isArray(row.matches) ? row.matches[0] : row.matches;
     const dateLocal = matchMeta?.date_local ?? null;
@@ -231,20 +211,11 @@ export async function PATCH(
     const playerMap = preferredByPlayerAndMatch.get(pId) ?? new Map<number, MatchMeta>();
     const existing = playerMap.get(mId);
     if (!existing || priority >= existing.priority) {
-      playerMap.set(mId, {
-        priority,
-        ratingPre: rPre,
-        ratingPost: rPost,
-        result: row.result,
-        formulaName: row.formula_name ?? "",
-        dateLocal,
-        timeLocal,
-      });
+      playerMap.set(mId, { priority, dateLocal, timeLocal });
     }
     preferredByPlayerAndMatch.set(pId, playerMap);
   }
 
-  // For each player, find their latest match by date/time/id
   const findLatestMatchId = (perMatch: PlayerMatchMap): number | null => {
     const sorted = Array.from(perMatch.entries()).sort(([aId, aVal], [bId, bVal]) => {
       const byDate = compareNullableStringDesc(aVal.dateLocal, bVal.dateLocal);
@@ -277,85 +248,22 @@ export async function PATCH(
     }
   }
 
-  // Fetch current ratings for this match to get rating_pre per player and determine formula
-  const currentRatingsByPlayer = new Map<number, MatchMeta>();
-  for (const playerId of playerIds) {
-    const perMatch = preferredByPlayerAndMatch.get(playerId);
-    const currentEntry = perMatch?.get(matchId);
-    if (!currentEntry) {
-      return NextResponse.json(
-        {
-          error: `No ratings found for player ${playerId} in this match. Cannot revise.`,
-        },
-        { status: 400 },
-      );
-    }
-    currentRatingsByPlayer.set(playerId, currentEntry);
-  }
-
-  // Determine which formula to use for recalculation (highest priority across all 4 players)
-  const formulaName = Array.from(currentRatingsByPlayer.values()).sort(
-    (a, b) => b.priority - a.priority,
-  )[0].formulaName;
-
-  // Validate the formula is supported by ratingCalculator
-  const SUPPORTED_FORMULAS: RatingFormulaVersion[] = ["v3"];
-  if (!(SUPPORTED_FORMULAS as string[]).includes(formulaName)) {
-    return NextResponse.json(
-      {
-        error: `Formula "${formulaName}" is not supported for recalculation. Supported: ${SUPPORTED_FORMULAS.join(", ")}.`,
-      },
-      { status: 422 },
-    );
-  }
-  const formula = formulaName as RatingFormulaVersion;
-
-  // Determine new winner
+  // Validate sets produce a clear winner
   let team1SetsWon = 0;
   let team2SetsWon = 0;
   for (const set of sets) {
     if (set.team1Games > set.team2Games) team1SetsWon++;
     else team2SetsWon++;
   }
-  const winnerTeam =
-    team1SetsWon > team2SetsWon ? 1 : team2SetsWon > team1SetsWon ? 2 : null;
-  if (!winnerTeam) {
+  if (team1SetsWon === team2SetsWon) {
     return NextResponse.json(
       { error: "Sets must produce a clear winner." },
       { status: 400 },
     );
   }
 
-  const get = (id: number) => currentRatingsByPlayer.get(id)!;
+  // --- Snapshot for rollback ---
 
-  const calculation = calculateRatings(
-    {
-      sets,
-      team1: {
-        player1: {
-          playerId: team1.player_1_id,
-          preMatchRating: get(team1.player_1_id).ratingPre,
-        },
-        player2: {
-          playerId: team1.player_2_id,
-          preMatchRating: get(team1.player_2_id).ratingPre,
-        },
-      },
-      team2: {
-        player1: {
-          playerId: team2.player_1_id,
-          preMatchRating: get(team2.player_1_id).ratingPre,
-        },
-        player2: {
-          playerId: team2.player_2_id,
-          preMatchRating: get(team2.player_2_id).ratingPre,
-        },
-      },
-    },
-    formula,
-  );
-
-  // Snapshot for rollback
   const { data: existingSetsRows } = await supabase
     .from("match_sets")
     .select("set_number, team_1_games, team_2_games")
@@ -367,8 +275,23 @@ export async function PATCH(
     .select("player_id, match_id, rating_pre, rating_post, result, formula_name")
     .eq("match_id", matchId);
 
+  const { data: predictionRows } = await supabase
+    .from("predictions")
+    .select("id")
+    .eq("match_id", matchId);
+
+  const predictionIds = (predictionRows ?? []).map((p) => p.id as string);
+
+  const { data: predictionResultsRows } = predictionIds.length > 0
+    ? await supabase
+        .from("prediction_results")
+        .select("user_pick_id, was_correct, points_awarded, reward_system_version, prediction_model_version")
+        .in("user_pick_id", predictionIds)
+    : { data: [] as never[] };
+
   const setsSnapshot = existingSetsRows ?? [];
-  const ratingsSnapshot = (existingRatingsRows ?? []) as RatingRow[];
+  const ratingsSnapshot = existingRatingsRows ?? [];
+  const predictionResultsSnapshot = predictionResultsRows ?? [];
   const team1SetsWonSnapshot = team1.sets_won ?? null;
   const team2SetsWonSnapshot = team2.sets_won ?? null;
   const winnerTeamSnapshot = matchRow.winner_team;
@@ -378,7 +301,7 @@ export async function PATCH(
 
     const { error: e1 } = await supabase
       .from("matches")
-      .update({ winner_team: winnerTeamSnapshot })
+      .update({ status: "completed", winner_team: winnerTeamSnapshot })
       .eq("match_id", matchId);
     if (e1) rollbackErrors.push(e1.message);
 
@@ -425,22 +348,48 @@ export async function PATCH(
       if (e7) rollbackErrors.push(e7.message);
     }
 
+    if (predictionResultsSnapshot.length > 0) {
+      const { error: e8 } = await supabase
+        .from("prediction_results")
+        .delete()
+        .in("user_pick_id", predictionResultsSnapshot.map((r) => r.user_pick_id));
+      if (e8) rollbackErrors.push(e8.message);
+
+      const { error: e9 } = await supabase
+        .from("prediction_results")
+        .insert(predictionResultsSnapshot);
+      if (e9) rollbackErrors.push(e9.message);
+    }
+
     return NextResponse.json({ error: reason, rollbackErrors }, { status: 500 });
   };
 
-  // Apply updates
-  const { error: matchUpdateError } = await supabase
-    .from("matches")
-    .update({ winner_team: calculation.winnerTeam })
-    .eq("match_id", matchId);
+  // --- Teardown ---
 
-  if (matchUpdateError) {
-    return NextResponse.json(
-      { error: matchUpdateError.message || "Failed to update match winner." },
-      { status: 500 },
-    );
+  // 1. Delete prediction_results (before other teardown; if this fails, DB is still clean)
+  if (predictionIds.length > 0) {
+    const { error: deletePredResultsError } = await supabase
+      .from("prediction_results")
+      .delete()
+      .in("user_pick_id", predictionIds);
+    if (deletePredResultsError) {
+      return NextResponse.json(
+        { error: deletePredResultsError.message || "Failed to clear prediction results." },
+        { status: 500 },
+      );
+    }
   }
 
+  // 2. Delete match_player_ratings
+  const { error: deleteRatingsError } = await supabase
+    .from("match_player_ratings")
+    .delete()
+    .eq("match_id", matchId);
+  if (deleteRatingsError) {
+    return rollback(deleteRatingsError.message || "Failed to clear existing ratings.");
+  }
+
+  // 3. Delete match_sets
   const { error: deleteSetsError } = await supabase
     .from("match_sets")
     .delete()
@@ -449,18 +398,95 @@ export async function PATCH(
     return rollback(deleteSetsError.message || "Failed to clear existing sets.");
   }
 
-  const { error: insertSetsError } = await supabase.from("match_sets").insert(
-    sets.map((set, i) => ({
-      match_id: matchId,
-      set_number: i + 1,
-      team_1_games: set.team1Games,
-      team_2_games: set.team2Games,
-    })),
+  // 4. Reset match_teams.sets_won
+  const { error: team1ResetError } = await supabase
+    .from("match_teams")
+    .update({ sets_won: null })
+    .eq("uuid", team1.uuid);
+  if (team1ResetError) {
+    return rollback(team1ResetError.message || "Failed to reset team 1 sets won.");
+  }
+
+  const { error: team2ResetError } = await supabase
+    .from("match_teams")
+    .update({ sets_won: null })
+    .eq("uuid", team2.uuid);
+  if (team2ResetError) {
+    return rollback(team2ResetError.message || "Failed to reset team 2 sets won.");
+  }
+
+  // 5. Reset match to scheduled
+  const { error: matchResetError } = await supabase
+    .from("matches")
+    .update({ status: "scheduled", winner_team: null })
+    .eq("match_id", matchId);
+  if (matchResetError) {
+    return rollback(matchResetError.message || "Failed to reset match status.");
+  }
+
+  // --- Re-complete ---
+
+  // 6. Resolve pre-match ratings (now that this match's ratings are cleared, resolvePreMatchRatings
+  //    finds each player's most recent prior match — giving the same rating_pre as the original completion)
+  let preRatingsMap: Map<number, number | null>;
+  try {
+    preRatingsMap = await resolvePreMatchRatings(supabase, matchId, playerIds);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return rollback(msg || "Failed to resolve pre-match ratings.");
+  }
+
+  const missingPreRatingPlayers = playerIds.filter((id) => (preRatingsMap.get(id) ?? null) === null);
+  if (missingPreRatingPlayers.length > 0) {
+    return rollback(
+      `Missing prior ratings for players: ${missingPreRatingPlayers.join(", ")}. Cannot re-complete match.`,
+    );
+  }
+
+  // 7. Calculate ratings with new sets
+  const calculation = calculateRatings(
+    {
+      sets,
+      team1: {
+        player1: {
+          playerId: team1.player_1_id,
+          preMatchRating: preRatingsMap.get(team1.player_1_id) as number,
+        },
+        player2: {
+          playerId: team1.player_2_id,
+          preMatchRating: preRatingsMap.get(team1.player_2_id) as number,
+        },
+      },
+      team2: {
+        player1: {
+          playerId: team2.player_1_id,
+          preMatchRating: preRatingsMap.get(team2.player_1_id) as number,
+        },
+        player2: {
+          playerId: team2.player_2_id,
+          preMatchRating: preRatingsMap.get(team2.player_2_id) as number,
+        },
+      },
+    },
+    "v3",
   );
+
+  // 8. Insert new match_sets
+  const newSetRows = sets.map((set, i) => ({
+    match_id: matchId,
+    set_number: i + 1,
+    team_1_games: set.team1Games,
+    team_2_games: set.team2Games,
+  }));
+
+  const { error: insertSetsError } = await supabase
+    .from("match_sets")
+    .insert(newSetRows);
   if (insertSetsError) {
     return rollback(insertSetsError.message || "Failed to insert new sets.");
   }
 
+  // 9. Update match_teams.sets_won
   const { error: team1UpdateError } = await supabase
     .from("match_teams")
     .update({ sets_won: calculation.team1SetsWon })
@@ -477,37 +503,76 @@ export async function PATCH(
     return rollback(team2UpdateError.message || "Failed to update team 2 sets won.");
   }
 
-  // Delete all existing ratings for this match (all formulas) and reinsert recalculated ones
-  const { error: deleteRatingsError } = await supabase
-    .from("match_player_ratings")
-    .delete()
-    .eq("match_id", matchId);
-  if (deleteRatingsError) {
-    return rollback(
-      deleteRatingsError.message || "Failed to clear existing ratings.",
-    );
-  }
-
-  const newRatingRows = calculation.ratings.map((r) => ({
+  // 10. Insert new match_player_ratings
+  const ratingRows = calculation.ratings.map((r) => ({
     player_id: r.playerId,
     match_id: matchId,
-    // Preserve each player's original rating_pre (pre-ratings don't change on revision)
-    rating_pre: get(r.playerId as number).ratingPre,
+    rating_pre: r.ratingPre,
     rating_post: r.ratingPost,
     result: r.team === calculation.winnerTeam ? "win" : "loss",
-    // Preserve each player's original formula_name
-    formula_name: get(r.playerId as number).formulaName,
+    formula_name: "v3",
   }));
 
   const { data: insertedRatings, error: insertRatingsError } = await supabase
     .from("match_player_ratings")
-    .insert(newRatingRows)
+    .insert(ratingRows)
     .select("rating_id, player_id, match_id, rating_pre, rating_post, result, formula_name");
 
   if (insertRatingsError) {
-    return rollback(
-      insertRatingsError.message || "Failed to insert revised ratings.",
-    );
+    return rollback(insertRatingsError.message || "Failed to insert revised ratings.");
+  }
+
+  // 11. Mark match as completed with new winner
+  const { error: matchCompleteError } = await supabase
+    .from("matches")
+    .update({ status: "completed", winner_team: calculation.winnerTeam })
+    .eq("match_id", matchId);
+  if (matchCompleteError) {
+    return rollback(matchCompleteError.message || "Failed to mark match as completed.");
+  }
+
+  // --- Post-complete (non-fatal) ---
+
+  // 12. Re-resolve predictions against the new winner
+  await resolveMatchPredictions(supabase, matchId, { force: true })
+    .catch((err) => console.error("[predictions] revise re-resolve failed:", err));
+
+  // 13. Notify players of the revised result
+  const { data: playerRows } = await supabase
+    .from("players")
+    .select("player_id, name, nickname, email, is_notifications_subscribed")
+    .in("player_id", playerIds);
+
+  if (playerRows && playerRows.length === 4) {
+    const byId = new Map(playerRows.map((p) => [p.player_id as number, p]));
+    const toPlayerInfo = (id: number) => ({
+      player_id: id,
+      name: (byId.get(id)?.name as string | null) ?? null,
+      nickname: (byId.get(id)?.nickname as string | null) ?? null,
+      email: (byId.get(id)?.email as string | null) ?? null,
+      is_notifications_subscribed:
+        (byId.get(id)?.is_notifications_subscribed as boolean | null) ?? null,
+    });
+
+    await notifyMatchCompleted({
+      matchId,
+      dateLocal: (matchRow.date_local as string | null) ?? null,
+      timeLocal: (matchRow.time_local as string | null) ?? null,
+      venue: (matchRow.venue as string | null) ?? null,
+      team1Players: [toPlayerInfo(team1.player_1_id), toPlayerInfo(team1.player_2_id)],
+      team2Players: [toPlayerInfo(team2.player_1_id), toPlayerInfo(team2.player_2_id)],
+      sets: newSetRows.map((s) => ({
+        team_1_games: s.team_1_games,
+        team_2_games: s.team_2_games,
+      })),
+      ratings: (insertedRatings ?? []).map((r) => ({
+        player_id: r.player_id as number,
+        rating_pre: r.rating_pre as number,
+        rating_post: r.rating_post as number,
+        result: r.result as "win" | "loss",
+      })),
+      winnerTeam: calculation.winnerTeam as 1 | 2,
+    }).catch((err) => console.error("[email] notifyMatchCompleted (revise) failed:", err));
   }
 
   return NextResponse.json(
