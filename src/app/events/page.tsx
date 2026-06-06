@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import EventCard from "@/components/EventCard";
+import ProposeEventModal from "@/components/ProposeEventModal";
+import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { Event } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
@@ -31,6 +33,8 @@ function buildSections(events: Event[]): Section[] {
 }
 
 export default function EventsPage() {
+  const { player, isLinked } = useCurrentPlayer();
+  const [showProposeModal, setShowProposeModal] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [acceptedEventIds, setAcceptedEventIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -105,13 +109,24 @@ export default function EventsPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-20">
         {/* Page heading */}
-        <div className="mb-10">
-          <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-slate-100">
-            Events
-          </h1>
-          <p className="mt-2 text-slate-500 dark:text-slate-400">
-            All seasons, tournaments, and other events -- past and present.
-          </p>
+        <div className="mb-10 flex flex-col sm:flex-row sm:items-end gap-4">
+          <div className="flex-1">
+            <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-slate-100">
+              Events
+            </h1>
+            <p className="mt-2 text-slate-500 dark:text-slate-400">
+              All seasons, tournaments, and other events -- past and present.
+            </p>
+          </div>
+          {isLinked && (
+            <button
+              type="button"
+              onClick={() => setShowProposeModal(true)}
+              className="self-start sm:self-auto inline-flex items-center gap-1.5 rounded-full border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-400 hover:text-slate-100 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              + Propose an Event
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -151,6 +166,7 @@ export default function EventsPage() {
                       key={event.event_id}
                       event={event}
                       isAccepted={acceptedEventIds.has(event.event_id)}
+                      currentPlayerRating={player?.latest_rating ?? undefined}
                     />
                   ))}
                 </div>
@@ -159,6 +175,10 @@ export default function EventsPage() {
           </div>
         )}
       </main>
+
+      {showProposeModal && (
+        <ProposeEventModal onClose={() => setShowProposeModal(false)} />
+      )}
     </div>
   );
 }

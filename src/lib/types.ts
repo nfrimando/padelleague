@@ -35,6 +35,12 @@ export type Player = {
   updated_at?: string;
 };
 
+export type EventRestrictions = {
+  min_rating?: number | null;
+  max_rating?: number | null;
+  max_games_per_player?: number | null;
+};
+
 export type Event = {
   event_id: number;
   name?: string | null;
@@ -48,7 +54,31 @@ export type Event = {
   registration_fee?: number | null;
   payment_instructions?: string | null;
   url_link?: string | null;
+  event_url?: string | null;
+  restrictions?: EventRestrictions | null;
   deleted_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventProposal = {
+  proposal_id: number;
+  name: string;
+  start_date: string;
+  end_date?: string | null;
+  description?: string | null;
+  format?: string | null;
+  player_limit?: number | null;
+  event_url?: string | null;
+  restrictions?: EventRestrictions | null;
+  proposed_by_player_id: number;
+  proposed_by_auth_id: string;
+  proposer_notes?: string | null;
+  status: "pending" | "approved" | "rejected";
+  admin_notes?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  event_id?: number | null;
   created_at: string;
   updated_at: string;
 };

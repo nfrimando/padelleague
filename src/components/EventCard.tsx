@@ -6,6 +6,7 @@ import { Event } from "@/lib/types";
 type Props = {
   event: Event;
   isAccepted?: boolean;
+  currentPlayerRating?: number;
 };
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -51,10 +52,41 @@ const STATUS_STYLES: Record<Event["status"], { badge: string; label: string }> =
     },
   };
 
-export default function EventCard({ event, isAccepted = false }: Props) {
+function buildRestrictionTags(event: Event): string[] {
+  const r = event.restrictions;
+  if (!r) return [];
+  const tags: string[] = [];
+  if (r.min_rating != null && r.max_rating != null) {
+    tags.push(`Rating ${r.min_rating}–${r.max_rating}`);
+  } else if (r.min_rating != null) {
+    tags.push(`Rating ≥ ${r.min_rating}`);
+  } else if (r.max_rating != null) {
+    tags.push(`Rating ≤ ${r.max_rating}`);
+  }
+  if (r.max_games_per_player != null) {
+    tags.push(`Max ${r.max_games_per_player} game${r.max_games_per_player !== 1 ? "s" : ""}/player`);
+  }
+  return tags;
+}
+
+function getEligibilityHint(event: Event, rating?: number): string | null {
+  const r = event.restrictions;
+  if (!r || rating == null) return null;
+  if (r.min_rating != null && rating < r.min_rating) {
+    return `Your rating (${Math.round(rating)}) is below the minimum`;
+  }
+  if (r.max_rating != null && rating > r.max_rating) {
+    return `Your rating (${Math.round(rating)}) exceeds the maximum`;
+  }
+  return null;
+}
+
+export default function EventCard({ event, isAccepted = false, currentPlayerRating }: Props) {
   const statusStyle = STATUS_STYLES[event.status];
   const isOpen = event.registration_status === "open";
   const dateRange = formatDateRange(event.start_date, event.end_date);
+  const restrictionTags = buildRestrictionTags(event);
+  const eligibilityHint = isOpen ? getEligibilityHint(event, currentPlayerRating) : null;
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -108,12 +140,33 @@ export default function EventCard({ event, isAccepted = false }: Props) {
           <span>📅 {dateRange}</span>
         </div>
 
+        {/* Restriction tags */}
+        {restrictionTags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {restrictionTags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Eligibility hint */}
+        {eligibilityHint && (
+          <p className="text-[11px] text-amber-600 dark:text-amber-400">
+            {eligibilityHint}
+          </p>
+        )}
+
         {/* CTA */}
         <div className="mt-auto pt-1">
           {isOpen ? (
             <Link
               href={`/events/register?eventId=${event.event_id}`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition-colors"
+              className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition-colors${eligibilityHint ? " opacity-50" : ""}`}
             >
               Register Now
             </Link>
