@@ -1,5 +1,17 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
+import { EventRestrictions } from "@/lib/types";
+
+function parseRestrictions(value: unknown): EventRestrictions | null {
+  if (!value || typeof value !== "object") return null;
+  const r = value as Record<string, unknown>;
+  const restrictions: EventRestrictions = {};
+  if (typeof r.min_rating === "number") restrictions.min_rating = r.min_rating;
+  if (typeof r.max_rating === "number") restrictions.max_rating = r.max_rating;
+  if (typeof r.max_games_per_player === "number")
+    restrictions.max_games_per_player = r.max_games_per_player;
+  return Object.keys(restrictions).length > 0 ? restrictions : null;
+}
 
 /** GET /api/admin/events — list all events */
 export async function GET(request: Request) {
@@ -26,7 +38,7 @@ export async function GET(request: Request) {
 }
 
 /** POST /api/admin/events — create an event
- *  Body: { name?, event_type?, start_date, end_date, registration_fee?, registration_status?, status? }
+ *  Body: { name?, event_type?, start_date, end_date, registration_fee?, registration_status?, status?, restrictions? }
  */
 export async function POST(request: Request) {
   const authResult = await getAuthorizedAdminClient(request);
@@ -70,6 +82,7 @@ export async function POST(request: Request) {
     status: typeof body.status === "string" ? body.status : "upcoming",
     image_url: typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null,
     description: typeof body.description === "string" && body.description.trim() ? body.description.trim() : null,
+    restrictions: parseRestrictions(body.restrictions),
   };
 
   const { supabase } = authResult;
@@ -124,6 +137,9 @@ export async function PATCH(request: Request) {
   }
   if (typeof body.registration_fee === "number" && body.registration_fee > 0) {
     update.registration_fee = body.registration_fee;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "restrictions")) {
+    update.restrictions = parseRestrictions(body.restrictions);
   }
   if (Object.prototype.hasOwnProperty.call(body, "deleted_at") && body.deleted_at === null) {
     update.deleted_at = null;

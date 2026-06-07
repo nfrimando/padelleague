@@ -24,6 +24,8 @@ export function CreateEventTab() {
   const [newEventRegStatus, setNewEventRegStatus] = useState<"open" | "closed">(
     "open",
   );
+  const [newEventMinRating, setNewEventMinRating] = useState("");
+  const [newEventMaxRating, setNewEventMaxRating] = useState("");
   const [newEventStatus, setNewEventStatus] = useState<
     "upcoming" | "ongoing" | "completed"
   >("upcoming");
@@ -40,6 +42,12 @@ export function CreateEventTab() {
     setCreating(true);
     setError(null);
     setSuccess(null);
+
+    const minRating = parseFloat(newEventMinRating);
+    const maxRating = parseFloat(newEventMaxRating);
+    const restrictions: Record<string, number> = {};
+    if (!isNaN(minRating)) restrictions.min_rating = minRating;
+    if (!isNaN(maxRating)) restrictions.max_rating = maxRating;
 
     const {
       data: { session },
@@ -67,6 +75,7 @@ export function CreateEventTab() {
         image_url: newEventImageUrl || undefined,
         description: newEventDescription || undefined,
         payment_instructions: newEventPaymentInstructions || undefined,
+        restrictions: Object.keys(restrictions).length > 0 ? restrictions : undefined,
       }),
     });
 
@@ -93,6 +102,8 @@ export function CreateEventTab() {
       setNewEventPaymentInstructions("");
       setNewEventRegStatus("open");
       setNewEventStatus("upcoming");
+      setNewEventMinRating("");
+      setNewEventMaxRating("");
     }
 
     setCreating(false);
@@ -218,6 +229,34 @@ export function CreateEventTab() {
               placeholder="e.g. Bank: BDO&#10;Account: 1234567890&#10;Name: Padel League PH&#10;GCash: 0917-xxx-xxxx"
               value={newEventPaymentInstructions}
               onChange={(ev) => setNewEventPaymentInstructions(ev.target.value)}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          Restrictions (optional)
+        </h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={labelCls}>Minimum Rating</label>
+            <input
+              type="number"
+              className={inputCls}
+              placeholder="e.g. 1000"
+              value={newEventMinRating}
+              onChange={(ev) => setNewEventMinRating(ev.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Maximum Rating</label>
+            <input
+              type="number"
+              className={inputCls}
+              placeholder="e.g. 2000"
+              value={newEventMaxRating}
+              onChange={(ev) => setNewEventMaxRating(ev.target.value)}
             />
           </div>
         </div>
