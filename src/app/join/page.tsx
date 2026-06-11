@@ -8,6 +8,9 @@ import EmailAuthForm from "@/components/EmailAuthForm";
 import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabase";
 import { fetchPlayerByEmail } from "@/lib/playerLookup";
+import { usePlayers } from "@/lib/usePlayers";
+import { usePlayerSearch } from "@/lib/usePlayerSearch";
+import type { Player } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 
 type ExistingPlayerLookup = {
@@ -30,6 +33,98 @@ const COUNTRY_CODES = [
   { value: "other", label: "Other" },
 ] as const;
 
+function ReferrerSearchInput({
+  value,
+  suggestions,
+  onChange,
+  onSelect,
+  onClear,
+}: {
+  value: string;
+  suggestions: Player[];
+  onChange: (value: string) => void;
+  onSelect: (player: Player) => void;
+  onClear: () => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const visibleSuggestions = suggestions.slice(0, 6);
+  const showDropdown = value.trim().length > 0 && visibleSuggestions.length > 0;
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => {
+          setActiveIndex(-1);
+          onChange(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            if (showDropdown) {
+              setActiveIndex((prev) =>
+                prev < visibleSuggestions.length - 1 ? prev + 1 : 0,
+              );
+            }
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            if (showDropdown) {
+              setActiveIndex((prev) =>
+                prev > 0 ? prev - 1 : visibleSuggestions.length - 1,
+              );
+            }
+          } else if (e.key === "Enter") {
+            if (showDropdown && activeIndex >= 0) {
+              e.preventDefault();
+              const selected = visibleSuggestions[activeIndex];
+              if (selected) onSelect(selected);
+            }
+          } else if (e.key === "Escape") {
+            setActiveIndex(-1);
+          }
+        }}
+        placeholder="Search by name or nickname..."
+        className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 pr-10 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+      />
+
+      {value.trim().length > 0 && (
+        <button
+          type="button"
+          aria-label="Clear referrer search"
+          onClick={onClear}
+          className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-[#687FA3] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+        >
+          ×
+        </button>
+      )}
+
+      {showDropdown && (
+        <div className="absolute left-0 right-0 top-full mt-2 z-50 border border-[#687FA3]/20 rounded-xl shadow-2xl overflow-hidden bg-[#0E1523]">
+          {visibleSuggestions.map((player, index) => (
+            <button
+              key={player.player_id}
+              type="button"
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => onSelect(player)}
+              className={`w-full text-left px-4 py-2.5 transition-colors cursor-pointer ${
+                index === activeIndex ? "bg-white/10" : "hover:bg-white/5"
+              }`}
+            >
+              <div className="text-sm font-medium text-white">
+                {player.name}
+              </div>
+              {player.nickname && (
+                <div className="text-xs text-[#687FA3]">{player.nickname}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function JoinPageContent() {
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
@@ -42,9 +137,17 @@ function JoinPageContent() {
   const [countryCode, setCountryCode] = useState<string>("+63");
   const [customCountryCode, setCustomCountryCode] = useState("");
   const [contact, setContact] = useState("");
+  const [referrerSearch, setReferrerSearch] = useState("");
+  const [referrerPlayer, setReferrerPlayer] = useState<Player | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+
+  const { players: referrerCandidates } = usePlayers({
+    orderByName: true,
+    select: "player_id, name, nickname",
+  });
+  const referrerSuggestions = usePlayerSearch(referrerCandidates, referrerSearch);
 
   useEffect(() => {
     async function lookupPlayer(currentUser: User) {
@@ -129,6 +232,11 @@ function JoinPageContent() {
       return;
     }
 
+    if (!referrerPlayer) {
+      setError("Please select which league member told you about the league.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -152,6 +260,7 @@ function JoinPageContent() {
           name: fullName.trim(),
           nickname: nickname.trim(),
           contact: `${normalizedPrefix} ${normalizedContact}`,
+          referrer_id: Number(referrerPlayer.player_id),
         }),
       });
 
@@ -368,6 +477,47 @@ function JoinPageContent() {
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-2">
+                    Which league member told you about the league?
+                  </label>
+                  {referrerPlayer ? (
+                    <div className="flex items-center justify-between gap-3 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5">
+                      <div>
+                        <div className="text-sm font-medium text-white">
+                          {referrerPlayer.name}
+                        </div>
+                        {referrerPlayer.nickname && (
+                          <div className="text-xs text-[#687FA3]">
+                            {referrerPlayer.nickname}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReferrerPlayer(null);
+                          setReferrerSearch("");
+                        }}
+                        className="text-xs font-bold text-[#687FA3] hover:text-white transition-colors cursor-pointer"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <ReferrerSearchInput
+                      value={referrerSearch}
+                      suggestions={referrerSuggestions}
+                      onChange={setReferrerSearch}
+                      onSelect={(player) => {
+                        setReferrerPlayer(player);
+                        setReferrerSearch("");
+                      }}
+                      onClear={() => setReferrerSearch("")}
+                    />
+                  )}
+                </div>
+
                 {error && (
                   <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
                     {error}
@@ -381,7 +531,8 @@ function JoinPageContent() {
                     !fullName.trim() ||
                     !nickname.trim() ||
                     (countryCode === "other" && !customCountryCode.trim()) ||
-                    !contact.trim()
+                    !contact.trim() ||
+                    !referrerPlayer
                   }
                   className="w-full bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >

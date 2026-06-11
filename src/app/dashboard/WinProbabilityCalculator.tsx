@@ -532,7 +532,10 @@ const WinProbabilityCalculator = forwardRef<
       currentPlayerRating != null
     )
       return currentPlayerRating;
-    return latestRatings[String(p.player_id)] ?? null;
+    const fromRpc = latestRatings[String(p.player_id)] ?? null;
+    if (fromRpc != null) return fromRpc;
+    const initial = p.initial_rating;
+    return initial != null && Number.isFinite(Number(initial)) ? Number(initial) : null;
   };
 
   const r = {

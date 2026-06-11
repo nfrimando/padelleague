@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     nickname?: unknown;
     contact?: unknown;
     email?: unknown;
+    referrer_id?: unknown;
   };
 
   try {
@@ -29,10 +30,14 @@ export async function POST(request: Request) {
   const nickname = normalizeString(body.nickname);
   const contact = normalizeString(body.contact);
   let email = normalizeString(body.email);
+  const referrerId =
+    typeof body.referrer_id === "number" && Number.isFinite(body.referrer_id)
+      ? body.referrer_id
+      : null;
 
-  if (!name || !nickname || !contact) {
+  if (!name || !nickname || !contact || !referrerId) {
     return NextResponse.json(
-      { error: "name, nickname, and contact are required." },
+      { error: "name, nickname, contact, and referrer_id are required." },
       { status: 400 },
     );
   }
@@ -76,6 +81,7 @@ export async function POST(request: Request) {
       applicant_nickname: nickname,
       applicant_contact: contact,
       applicant_email: email,
+      referrer_id: referrerId,
     })
     .select("id")
     .single();

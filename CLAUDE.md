@@ -14,6 +14,14 @@ Core tables: `players`, `matches`, `match_teams`, `match_sets`, `match_player_ra
 - Events are stored in `events` table. "Seasons" are main events, but other types exist.
 - Admin access is checked against the `admin_users` table
 
+## Player Rating Resolution
+
+A player's effective rating is always resolved as:
+1. **Latest `rating_post`** from `match_player_ratings`, joined to `matches` and ordered by `date_local` descending (most recent completed match). Prefer `formula_name = 'v3'` over `v2` over others.
+2. **Fallback**: if the player has no rows in `match_player_ratings`, use `players.initial_rating`.
+
+Never treat a missing RPC or query result as "no rating" without also checking `players.initial_rating`. Apply this rule everywhere ratings are read — win probability calculations, schedule alignment, leaderboard, and player profiles.
+
 ## Rating System
 
 V3 is an ELO-inspired algorithm in `src/lib/ratings/v3/calculate.ts`:

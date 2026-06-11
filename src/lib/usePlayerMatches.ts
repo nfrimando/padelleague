@@ -47,11 +47,25 @@ export function usePlayerMatches(playerId: string | null) {
       setLoading(true);
 
       try {
-        // Phase 1: lightweight lookup to find which matches this player was in
-        const { data: playerTeamsData, error: playerTeamsError } = await supabase
-          .from("match_teams")
-          .select("match_id")
-          .or(`player_1_id.eq.${playerId},player_2_id.eq.${playerId}`);
+        // Fetch initial_rating alongside match data — used as fallback when no match ratings exist
+        const [{ data: playerTeamsData, error: playerTeamsError }, { data: playerData }] =
+          await Promise.all([
+            supabase
+              .from("match_teams")
+              .select("match_id")
+              .or(`player_1_id.eq.${playerId},player_2_id.eq.${playerId}`),
+            supabase
+              .from("players")
+              .select("initial_rating")
+              .eq("player_id", playerId)
+              .single(),
+          ]);
+
+        const initialRating =
+          playerData?.initial_rating != null &&
+          Number.isFinite(Number(playerData.initial_rating))
+            ? Number(playerData.initial_rating)
+            : null;
 
         if (playerTeamsError) {
           console.error("Error fetching teams:", playerTeamsError);
@@ -68,7 +82,7 @@ export function usePlayerMatches(playerId: string | null) {
         if (matchIds.length === 0) {
           if (!isCancelled) {
             setMatches([]);
-            setLatestRating(null);
+            setLatestRating(initialRating);
             setRatingHistory([]);
           }
           return;
@@ -201,7 +215,7 @@ export function usePlayerMatches(playerId: string | null) {
 
         if (!isCancelled) {
           setMatches(nextMatches);
-          setLatestRating(nextLatestRating);
+          setLatestRating(nextLatestRating ?? initialRating);
           setRatingHistory(nextRatingHistory);
         }
       } catch (error) {
