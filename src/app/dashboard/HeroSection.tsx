@@ -38,7 +38,6 @@ type Props = {
   onRegister: (eventId: number) => void;
   registering: boolean;
   loading: boolean;
-  isViewingAs?: boolean;
   payingSignupId: string | null;
   onPayingSignupIdChange: (id: string | null) => void;
   onRefreshSignups: () => void;
@@ -156,7 +155,6 @@ export default function HeroSection({
   onRegister,
   registering,
   loading,
-  isViewingAs = false,
   payingSignupId,
   onPayingSignupIdChange,
   onRefreshSignups,
@@ -306,95 +304,80 @@ export default function HeroSection({
       {/* ── Player identity row ── */}
       <div className="px-6 pt-6 pb-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
         <div className="shrink-0">
-          {!isViewingAs ? (
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void handleAvatarUpload(file);
-                  e.target.value = "";
-                }}
-              />
-              <div
-                className="relative group cursor-pointer w-16 h-16"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {imgSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={imgSrc}
-                    alt={player.name}
-                    className="w-16 h-16 rounded-full border-2 border-[#00C8DC]/30 shadow-lg object-cover"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-[#1a2540] border border-[#687FA3]/20 flex items-center justify-center">
-                    <span className="text-xl font-black text-[#687FA3]">
-                      {initials}
-                    </span>
-                  </div>
-                )}
-                <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  {uploading ? (
-                    <svg
-                      className="w-6 h-6 text-white animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
-                      />
-                    </svg>
-                  ) : (
-                    <svg
-                      className="w-6 h-6 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : imgSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imgSrc}
-              alt={player.name}
-              className="w-16 h-16 rounded-full border-2 border-[#00C8DC]/30 shadow-lg object-cover"
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleAvatarUpload(file);
+                e.target.value = "";
+              }}
             />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-[#1a2540] border border-[#687FA3]/20 flex items-center justify-center">
-              <span className="text-xl font-black text-[#687FA3]">
-                {initials}
-              </span>
+            <div
+              className="relative group cursor-pointer w-16 h-16"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {imgSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={imgSrc}
+                  alt={player.name}
+                  className="w-16 h-16 rounded-full border-2 border-[#00C8DC]/30 shadow-lg object-cover"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-[#1a2540] border border-[#687FA3]/20 flex items-center justify-center">
+                  <span className="text-xl font-black text-[#687FA3]">
+                    {initials}
+                  </span>
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                {uploading ? (
+                  <svg
+                    className="w-6 h-6 text-white animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-6 h-6 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                )}
+              </div>
             </div>
-          )}
+          </>
         </div>
 
         <div className="flex-1 min-w-0">
@@ -460,7 +443,7 @@ export default function HeroSection({
       </div>
 
       {/* ── Pending verification banner ── */}
-      {!player.is_profile_complete && !isViewingAs && (
+      {!player.is_profile_complete && (
         <div className="mx-6 mb-4 bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 flex gap-3">
           <span className="text-lg">⏳</span>
           <div>
@@ -534,7 +517,7 @@ export default function HeroSection({
                       <span className="text-xs font-bold text-white/80 whitespace-nowrap">
                         {label}
                       </span>
-                      {isPendingPayment && !isViewingAs ? (
+                      {isPendingPayment ? (
                         <button
                           type="button"
                           onClick={() => {

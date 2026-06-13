@@ -29,7 +29,6 @@ import WinProbabilityCalculator, {
 } from "./WinProbabilityCalculator";
 import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
-import { useViewAs } from "@/contexts/ViewAsContext";
 import DashboardBanner from "./DashboardBanner";
 import PredictionsTab from "./PredictionsTab";
 import { useUnviewedPredictionResults } from "@/lib/useUnviewedPredictionResults";
@@ -79,7 +78,6 @@ function LockedSection({ skeletonRows = 3 }: { skeletonRows?: number }) {
 function DashboardPageContent() {
   const router = useRouter();
 
-  const { isAdmin, viewAsPlayer, isViewingAs, setViewAsPlayer } = useViewAs();
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [player, setPlayer] = useState<Player | null>(null);
   const [signups, setSignups] = useState<SignupRow[]>([]);
@@ -162,10 +160,7 @@ function DashboardPageContent() {
 
   const calcRef = useRef<WinProbabilityCalculatorHandle>(null);
 
-  const [viewAsSignups, setViewAsSignups] = useState<SignupRow[]>([]);
-
-  // The player whose data we display — guarded: only use viewAsPlayer when isAdmin
-  const displayPlayer = isViewingAs ? viewAsPlayer : player;
+  const displayPlayer = player;
 
   const {
     handleSignup,
@@ -274,23 +269,6 @@ function DashboardPageContent() {
     if (signupResult === "registered") void load();
   }, [signupResult, load]);
 
-  // ── Fetch signups for the viewed player (admin View As) ───────────────────
-  useEffect(() => {
-    if (!viewAsPlayer) {
-      setViewAsSignups([]);
-      return;
-    }
-    void (async () => {
-      const result = await supabase
-        .from("signups_events")
-        .select(
-          "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status, registration_fee, payment_instructions)",
-        )
-        .eq("player_id", viewAsPlayer.player_id)
-        .order("created_at", { ascending: false });
-      setViewAsSignups((result.data ?? []) as unknown as SignupRow[]);
-    })();
-  }, [viewAsPlayer]);
 
   // ── Match data (always for displayPlayer) ────────────────────────────────
   const {
@@ -343,12 +321,8 @@ function DashboardPageContent() {
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
   const isLoading = dataLoading || matchesLoading;
 
-  // In viewAs mode, show the viewed player's signups (not the admin's own)
-  const heroSignups = isViewingAs ? viewAsSignups : signups;
-  const heroOpenEvents = isViewingAs ? [] : openEvents;
-
   const pendingPaymentSignup =
-    heroSignups.find((s) => s.status === "pending_payment") ?? null;
+    signups.find((s: SignupRow) => s.status === "pending_payment") ?? null;
 
   // Reset to overview when payment is pending
   useEffect(() => {
@@ -469,7 +443,7 @@ function DashboardPageContent() {
               <>
                 <HeroSection
                   player={displayPlayer}
-                  avatarUrl={isViewingAs ? undefined : avatarUrl}
+                  avatarUrl={avatarUrl}
                   currentRating={latestRating}
                   stats={{
                     totalMatches: stats.totalMatches,
@@ -477,21 +451,17 @@ function DashboardPageContent() {
                     losses: stats.losses,
                     winRate: stats.winRate,
                   }}
-                  signups={heroSignups}
-                  openEvents={heroOpenEvents}
+                  signups={signups}
+                  openEvents={openEvents}
                   eventMap={eventMap}
                   matchEventIds={matchEventIds}
                   onRegister={(eventId) => void handleSignup(eventId)}
                   registering={payLoading}
                   loading={isLoading}
-                  isViewingAs={isViewingAs}
                   payingSignupId={payingSignupId}
                   onPayingSignupIdChange={setPayingSignupId}
                   onRefreshSignups={() => void load()}
-                  showEditProfile={!isViewingAs || isAdmin}
-                  adminTargetPlayerId={
-                    isViewingAs ? Number(displayPlayer.player_id) : undefined
-                  }
+                  showEditProfile
                   onPlayerSaved={(updated) => setPlayer(updated)}
                 />
                 {pendingPaymentSignup ? (

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
-import { useViewAs } from "@/contexts/ViewAsContext";
 import { supabase } from "@/lib/supabase";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
@@ -844,7 +843,6 @@ function RecruitModal({
 
 export default function RecruitPage() {
   const { signupId } = useParams<{ signupId: string }>();
-  const { isViewingAs, viewAsPlayer } = useViewAs();
   const [state, setState] = useState<RecruitPageState>({ stage: "loading" });
   const [currentPlayerId, setCurrentPlayerId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1004,11 +1002,8 @@ export default function RecruitPage() {
   const readyToRecruit = ratedCount >= MIN_REFERRER_RATINGS;
   const isLocked = signup.status === "accepted" || recruited;
 
-  // When viewing as another player, show the page from their perspective
-  const effectivePlayerId = isViewingAs && viewAsPlayer
-    ? Number(viewAsPlayer.player_id)
-    : currentPlayerId;
-  const effectiveIsAdmin = isViewingAs ? false : isAdmin;
+  const effectivePlayerId = currentPlayerId;
+  const effectiveIsAdmin = isAdmin;
 
   const currentUserIsReferrer =
     effectivePlayerId !== null &&

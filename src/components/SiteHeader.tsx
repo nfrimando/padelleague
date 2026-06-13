@@ -7,7 +7,6 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import EmailAuthForm from "@/components/EmailAuthForm";
 import { useUnvotedUpcomingCount } from "@/lib/useUnvotedUpcomingCount";
-import AdminViewAsControl from "@/components/AdminViewAsControl";
 
 type SiteHeaderProps = {
   activePath?: string;
@@ -185,7 +184,6 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                 </div>
               )
             )}
-            <AdminViewAsControl />
             {rightSlot}
           </div>
 
@@ -224,8 +222,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               </div>
             </div>
             <div className="flex-shrink-0 font-bold text-[11px] uppercase tracking-[0.12em] flex items-center gap-2">
-              <AdminViewAsControl />
-              {rightSlot ?? (loading ? (
+                {rightSlot ?? (loading ? (
                 <div className="h-6 w-10 rounded-full bg-[#22304a] animate-pulse" />
               ) : user ? (
                 <a
