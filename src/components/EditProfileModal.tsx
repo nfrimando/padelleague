@@ -25,6 +25,7 @@ type FormState = {
   is_notifications_subscribed: boolean;
   notif_match_results: boolean;
   notif_match_scheduled: boolean;
+  notif_recruit_invitation: boolean;
   preferred_side: "left" | "right" | "both" | "";
   shirt_size: string;
   ig_handle: string;
@@ -89,6 +90,7 @@ export default function EditProfileModal({
     is_notifications_subscribed: player.is_notifications_subscribed ?? false,
     notif_match_results: true,
     notif_match_scheduled: true,
+    notif_recruit_invitation: true,
     preferred_side: player.preferred_side ?? "",
     shirt_size: player.shirt_size ?? "",
     ig_handle: player.ig_handle ?? "",
@@ -129,13 +131,14 @@ export default function EditProfileModal({
         });
         if (!res.ok) return;
         const json = (await res.json()) as {
-          notification_preferences?: { match_results?: boolean; match_scheduled?: boolean };
+          notification_preferences?: { match_results?: boolean; match_scheduled?: boolean; recruit_invitation?: boolean };
         };
         const prefs = json.notification_preferences ?? {};
         setForm((prev) => ({
           ...prev,
           notif_match_results: prefs.match_results ?? true,
           notif_match_scheduled: prefs.match_scheduled ?? true,
+          notif_recruit_invitation: prefs.recruit_invitation ?? true,
         }));
       } catch {
         // silently ignore; defaults stay true
@@ -192,6 +195,7 @@ export default function EditProfileModal({
           notification_preferences: {
             match_results: form.notif_match_results,
             match_scheduled: form.notif_match_scheduled,
+            recruit_invitation: form.notif_recruit_invitation,
           },
         }),
       });
@@ -397,7 +401,7 @@ export default function EditProfileModal({
             />
             <div
               className={`overflow-hidden transition-all duration-200 ${
-                form.is_notifications_subscribed ? "max-h-64 opacity-100" : "max-h-0 opacity-0"
+                form.is_notifications_subscribed ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
               }`}
             >
               <div className="pl-4 border-l border-[#687FA3]/20 space-y-3 pt-1">
@@ -412,6 +416,12 @@ export default function EditProfileModal({
                   onChange={(v) => setForm((f) => ({ ...f, notif_match_scheduled: v }))}
                   label="Match Schedule / Update"
                   description="When a match you're in is scheduled or its details change — date, time, venue, and opponent."
+                />
+                <Toggle
+                  checked={form.notif_recruit_invitation}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_recruit_invitation: v }))}
+                  label="Recruit Invitations"
+                  description="When you're named as a referrer for a new member application."
                 />
               </div>
             </div>

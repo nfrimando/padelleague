@@ -79,6 +79,15 @@ export async function notifyRecruitInvitation(data: RecruitInvitationData): Prom
 
   if (player?.is_notifications_subscribed === false) return;
 
+  const { data: prefRow } = await supabase
+    .from("player_notification_preferences")
+    .select("subscribed")
+    .eq("player_id", referrerPlayerId)
+    .eq("notif_type", "recruit_invitation")
+    .maybeSingle();
+
+  if (prefRow?.subscribed === false) return;
+
   const displayName = referrerName ?? "Member";
   const recruitUrl = `https://www.padelph.com/recruit/${signupId}`;
   const unsubscribeAllUrl = buildUnsubscribeUrl(referrerPlayerId, "all");

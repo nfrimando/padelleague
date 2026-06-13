@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { getAuthorizedPlayer } from "@/app/api/recruit/_lib/auth";
+import { notifyRecruitInvitation } from "@/lib/email/notifications/recruitInvitation";
 
 export async function POST(
   request: Request,
@@ -90,6 +91,37 @@ export async function POST(
       );
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Email the newly-added named referrer so they know to assess the applicant
+  if (isNamedReferrer) {
+    const [{ data: referrerPlayer }, { data: signupRow }] = await Promise.all([
+      serviceClient
+        .from("players")
+        .select("name, email")
+        .eq("player_id", playerId)
+        .maybeSingle(),
+      serviceClient
+        .from("signups_players")
+        .select("applicant_name")
+        .eq("id", signupId)
+        .maybeSingle(),
+    ]);
+
+    if (referrerPlayer?.email && signupRow?.applicant_name) {
+      await notifyRecruitInvitation({
+        referrerPlayerId: playerId,
+        referrerEmail: referrerPlayer.email as string,
+        referrerName: referrerPlayer.name as string | null,
+        applicantName: signupRow.applicant_name as string,
+        signupId,
+      }).catch((err) =>
+        console.error(
+          `[email] notifyRecruitInvitation failed for referrer_player_id=${playerId}:`,
+          err,
+        ),
+      );
+    }
   }
 
   return NextResponse.json({ referrer: data }, { status: 201 });
