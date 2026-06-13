@@ -921,6 +921,13 @@ export default function RecruitPage() {
 
       <div className="flex-1 px-4 py-8 max-w-xl mx-auto w-full space-y-6">
         <div>
+          <a
+            href="/recruit"
+            className="inline-flex items-center gap-1.5 text-sm text-[#687FA3] hover:text-white transition-colors mb-3 cursor-pointer"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Back to Recruits
+          </a>
           <h1 className="text-2xl font-black italic uppercase tracking-tighter">
             Recruit Assessment
           </h1>
