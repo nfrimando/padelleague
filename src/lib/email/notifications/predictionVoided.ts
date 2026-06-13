@@ -2,6 +2,7 @@ import { sendEmail, NOTIFICATIONS_EMAIL } from "../send";
 import { buildUnsubscribeUrl } from "../unsubscribeToken";
 import { fetchPlayerPrefsMap } from "@/lib/notificationPreferences";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
+import { SITE_URL } from "@/lib/siteConfig";
 import type { VoidedPredictor } from "@/lib/predictions/voidMatchPredictions";
 
 type MatchContext = {
@@ -104,7 +105,7 @@ export async function notifyPredictionsVoided(
     }
   }
 
-  const predictUrl = "https://www.padelph.com/predict";
+  const predictUrl = `${SITE_URL}/predict`;
   const datePart = match.dateLocal ? ` on ${match.dateLocal}` : "";
   const matchLabel = `${match.team1Label} vs ${match.team2Label}${datePart}`;
 

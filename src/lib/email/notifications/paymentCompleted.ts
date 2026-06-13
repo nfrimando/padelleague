@@ -1,4 +1,5 @@
 import { sendEmail, NOTIFICATIONS_EMAIL } from "../send";
+import { SITE_URL } from "@/lib/siteConfig";
 
 type PaymentCompletedData = {
   playerName: string | null;
@@ -21,7 +22,7 @@ export async function notifyPaymentCompleted(data: PaymentCompletedData): Promis
   const sourceLabel =
     data.source === "webhook" ? "via PayMongo (webhook)" : "via Admin";
   const subject = `Payment Completed: ${displayName}`;
-  const adminUrl = "https://www.padelph.com/admin?tab=MEMBERS";
+  const adminUrl = `${SITE_URL}/admin?tab=MEMBERS`;
 
   const html = `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">

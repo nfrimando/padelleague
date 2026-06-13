@@ -1,6 +1,7 @@
 import { sendEmail, NOTIFICATIONS_EMAIL } from "../send";
 import { buildUnsubscribeUrl } from "../unsubscribeToken";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
+import { SITE_URL } from "@/lib/siteConfig";
 
 type ClaimApprovedData = {
   playerId: number;
@@ -77,7 +78,7 @@ export async function notifyClaimApproved(data: ClaimApprovedData): Promise<void
 
   const profileDisplayName = displayName(playerName, playerNickname);
   const recipientName = claimedByName ?? profileDisplayName;
-  const profileUrl = `https://www.padelph.com/players/${playerId}`;
+  const profileUrl = `${SITE_URL}/players/${playerId}`;
   const unsubscribeAllUrl = buildUnsubscribeUrl(playerId, "all");
 
   const subject = `Your Padel League PH profile has been approved, ${recipientName}!`;

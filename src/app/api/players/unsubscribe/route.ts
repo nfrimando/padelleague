@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { verifyUnsubscribeToken } from "@/lib/email/unsubscribeToken";
 import { setPlayerPref } from "@/lib/notificationPreferences";
+import { SITE_URL } from "@/lib/siteConfig";
 
 const VALID_TYPES = ["all", "match_results", "match_scheduled", "recruit_invitation"] as const;
 type UnsubscribeType = (typeof VALID_TYPES)[number];
@@ -13,7 +14,7 @@ const TYPE_LABELS: Record<UnsubscribeType, string> = {
   recruit_invitation: "recruit assessment invitation emails",
 };
 
-const DASHBOARD_URL = "https://www.padelph.com/dashboard";
+const DASHBOARD_URL = `${SITE_URL}/dashboard`;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;

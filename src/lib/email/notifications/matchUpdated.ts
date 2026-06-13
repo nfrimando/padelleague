@@ -2,6 +2,7 @@ import { sendEmail, NOTIFICATIONS_EMAIL } from "../send";
 import { buildUnsubscribeUrl } from "../unsubscribeToken";
 import { fetchPlayerPrefsMap } from "@/lib/notificationPreferences";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
+import { SITE_URL } from "@/lib/siteConfig";
 
 type PlayerInfo = {
   player_id: number;
@@ -148,7 +149,7 @@ function buildEmailHtml({
 
 export async function notifyMatchUpdated(data: MatchUpdatedData): Promise<NotifyResult> {
   const { team1Players, team2Players } = data;
-  const dashboardUrl = "https://www.padelph.com/dashboard";
+  const dashboardUrl = `${SITE_URL}/dashboard`;
 
   const t1n1 = displayName(team1Players[0]);
   const t1n2 = displayName(team1Players[1]);

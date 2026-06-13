@@ -1,6 +1,7 @@
 import crypto from "crypto";
+import { SITE_URL } from "@/lib/siteConfig";
 
-const BASE_URL = "https://www.padelph.com";
+const BASE_URL = SITE_URL;
 
 type UnsubscribeType = "all" | "match_results" | "match_scheduled" | "predictions";
 

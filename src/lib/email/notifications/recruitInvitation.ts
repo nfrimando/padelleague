@@ -1,6 +1,7 @@
 import { sendEmail, NOTIFICATIONS_EMAIL } from "../send";
 import { buildUnsubscribeUrl } from "../unsubscribeToken";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
+import { SITE_URL } from "@/lib/siteConfig";
 
 type RecruitInvitationData = {
   referrerPlayerId: number;
@@ -89,7 +90,7 @@ export async function notifyRecruitInvitation(data: RecruitInvitationData): Prom
   if (prefRow?.subscribed === false) return;
 
   const displayName = referrerName ?? "Member";
-  const recruitUrl = `https://www.padelph.com/recruit/${signupId}`;
+  const recruitUrl = `${SITE_URL}/recruit/${signupId}`;
   const unsubscribeAllUrl = buildUnsubscribeUrl(referrerPlayerId, "all");
 
   const subject = `Padel League PH – Assess New Recruit: ${applicantName}`;
