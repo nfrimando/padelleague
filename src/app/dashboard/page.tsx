@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, Lock, LogOut, X } from "lucide-react";
+import { Lock, LogOut } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
 import {
@@ -20,7 +20,6 @@ import { supabase } from "@/lib/supabase";
 import { useEventSignup } from "@/lib/useEventSignup";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
 import { useEventMap } from "@/lib/useEventMap";
-import { usePlayers } from "@/lib/usePlayers";
 import { useDashboardStats } from "@/lib/useDashboardStats";
 import HeroSection from "./HeroSection";
 import ProgressionSection from "./ProgressionSection";
@@ -30,7 +29,7 @@ import WinProbabilityCalculator, {
 } from "./WinProbabilityCalculator";
 import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
-import ViewAsSelector from "./ViewAsSelector";
+import { useViewAs } from "@/contexts/ViewAsContext";
 import DashboardBanner from "./DashboardBanner";
 import PredictionsTab from "./PredictionsTab";
 import { useUnviewedPredictionResults } from "@/lib/useUnviewedPredictionResults";
@@ -53,19 +52,6 @@ type SignupRow = {
   } | null;
 };
 
-// ── Admin check (mirrors admin/page.tsx pattern) ───────────────────────────────
-async function resolveAdminStatus(
-  userId: string | undefined,
-): Promise<boolean> {
-  if (!userId) return false;
-  const { data, error } = await supabase
-    .from("admin_users")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) return false;
-  return !!data;
-}
 
 function LockedSection({ skeletonRows = 3 }: { skeletonRows?: number }) {
   return (
@@ -93,8 +79,8 @@ function LockedSection({ skeletonRows = 3 }: { skeletonRows?: number }) {
 function DashboardPageContent() {
   const router = useRouter();
 
+  const { isAdmin, viewAsPlayer, isViewingAs, setViewAsPlayer } = useViewAs();
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [player, setPlayer] = useState<Player | null>(null);
   const [signups, setSignups] = useState<SignupRow[]>([]);
   const [openEvents, setOpenEvents] = useState<Event[]>([]);
@@ -176,10 +162,7 @@ function DashboardPageContent() {
 
   const calcRef = useRef<WinProbabilityCalculatorHandle>(null);
 
-  // Admin-only: player to view as (null = view as self)
-  const [viewAsPlayer, setViewAsPlayer] = useState<Player | null>(null);
   const [viewAsSignups, setViewAsSignups] = useState<SignupRow[]>([]);
-  const isViewingAs = isAdmin && viewAsPlayer !== null;
 
   // The player whose data we display — guarded: only use viewAsPlayer when isAdmin
   const displayPlayer = isViewingAs ? viewAsPlayer : player;
@@ -206,12 +189,7 @@ function DashboardPageContent() {
     async function init() {
       const { data } = await supabase.auth.getUser();
       if (!isMounted) return;
-      const currentUser = data.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        const adminStatus = await resolveAdminStatus(currentUser.id);
-        if (isMounted) setIsAdmin(adminStatus);
-      }
+      setUser(data.user ?? null);
     }
 
     void init();
@@ -341,12 +319,6 @@ function DashboardPageContent() {
     return ids;
   }, [matches]);
 
-  // ── All players list (only for admins, for ViewAsSelector) ────────────────
-  const { players: allPlayers } = usePlayers({
-    enabled: isAdmin,
-    orderByName: true,
-  });
-
   // ── Auto-populate p1 with current player when opening peers tab ───────────
   useEffect(() => {
     if (!displayPlayer) return;
@@ -400,57 +372,18 @@ function DashboardPageContent() {
       <SiteHeader
         activePath="/dashboard"
         rightSlot={
-          <div className="flex items-center gap-3">
-            {isAdmin && (
-              <ViewAsSelector
-                players={allPlayers}
-                selected={viewAsPlayer}
-                onSelect={setViewAsPlayer}
-              />
-            )}
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors"
-            >
-              <LogOut size={13} />
-              <span className="hidden sm:inline">Sign out</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors"
+          >
+            <LogOut size={13} />
+            <span className="hidden sm:inline">Sign out</span>
+          </button>
         }
       />
 
       <div className="max-w-5xl mx-auto sm:px-6 py-10 md:py-14 space-y-6">
-        {/* ── View As banner ── */}
-        {isViewingAs && viewAsPlayer && (
-          <div className="bg-[#00C8DC]/5 border border-[#00C8DC]/20 sm:rounded-2xl px-5 py-3 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <Eye size={15} className="text-[#00C8DC] shrink-0" />
-              <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#00C8DC]">
-                  Admin · View As
-                </p>
-                <p className="text-sm font-bold truncate">
-                  {viewAsPlayer.name}
-                  {viewAsPlayer.nickname && (
-                    <span className="text-[#687FA3] font-normal ml-1.5">
-                      &ldquo;{viewAsPlayer.nickname}&rdquo;
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setViewAsPlayer(null)}
-              className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors shrink-0"
-            >
-              <X size={13} />
-              <span>Exit</span>
-            </button>
-          </div>
-        )}
-
         {dataLoading && !player ? (
           <div className="flex items-center justify-center py-32">
             <div className="w-8 h-8 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />

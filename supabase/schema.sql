@@ -197,7 +197,7 @@ CREATE TABLE public.signups_players (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   notes text,
   CONSTRAINT signups_players_pkey PRIMARY KEY (id),
-  CONSTRAINT signups_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
+  CONSTRAINT signups_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id) ON DELETE SET NULL
 );
 CREATE TABLE public.teams (
   team_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,

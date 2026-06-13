@@ -100,7 +100,7 @@ export default function ViewAsSelector({ players, selected, onSelect }: Props) {
           className="w-72 bg-[#162032] border border-[#687FA3]/20 rounded-2xl shadow-2xl p-3"
         >
           <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#687FA3] mb-2.5 px-1">
-            View dashboard as&hellip;
+            View site as&hellip;
           </p>
           <PlayerSearchBox
             value={query}

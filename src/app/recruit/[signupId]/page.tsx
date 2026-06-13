@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
+import { useViewAs } from "@/contexts/ViewAsContext";
 import { supabase } from "@/lib/supabase";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
@@ -36,6 +37,23 @@ type RecruitPageState =
       signup: RecruitSignup;
       referrers: SignupPlayersReferrer[];
     };
+
+function obfuscateEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "***@***";
+  const obfLocal =
+    local.length > 2
+      ? local[0] + "*".repeat(Math.min(local.length - 1, 4))
+      : local[0] + "*";
+  const domainParts = domain.split(".");
+  const domainName = domainParts[0];
+  const tld = domainParts.slice(1).join(".");
+  const obfDomain =
+    domainName.length > 2
+      ? domainName[0] + "*".repeat(Math.min(domainName.length - 1, 3)) + "." + tld
+      : domainName + "." + tld;
+  return `${obfLocal}@${obfDomain}`;
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-PH", {
@@ -101,8 +119,8 @@ function ApplicantCard({
         {signup.applicant_email && (
           <div>
             <p className="text-xs text-[#687FA3]">Email</p>
-            <p className="text-white break-all blur-sm select-none">
-              {signup.applicant_email}
+            <p className="text-white/70 break-all">
+              {obfuscateEmail(signup.applicant_email)}
             </p>
           </div>
         )}
@@ -238,11 +256,11 @@ function ReferrerCard({
   const ratingDisplay =
     referrer.initial_rating !== null ? String(referrer.initial_rating) : null;
 
-  // Own entry: compact read-only display + delete
+  // Own entry: editable when not locked
   if (isOwn) {
     return (
-      <div className="border border-[#00C8DC]/20 bg-[#00C8DC]/5 rounded-xl px-4 py-3 flex items-center gap-3">
-        <div className="flex-1 min-w-0 space-y-0.5">
+      <div className="border border-[#00C8DC]/20 bg-[#00C8DC]/5 rounded-xl px-4 py-3 space-y-3">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="text-xs font-bold text-[#00C8DC]">Your assessment</p>
             {!referrer.is_named_referrer && (
@@ -251,36 +269,69 @@ function ReferrerCard({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            {ratingDisplay !== null ? (
-              <span className="text-white font-semibold">{ratingDisplay}</span>
-            ) : (
-              <span className="text-[#687FA3] italic text-xs">
-                No rating given
-              </span>
-            )}
-            {referrer.notes && (
-              <span className="text-white/50 text-xs truncate">
-                {referrer.notes}
-              </span>
-            )}
-          </div>
-        </div>
-        {!isLocked && (
-          <div className="shrink-0 flex flex-col items-end gap-1">
+          {!isLocked && (
             <button
               type="button"
               onClick={handleDelete}
               disabled={deleting}
-              className="text-xs text-[#687FA3] hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-xs text-[#687FA3] hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
               {deleting ? "Removing…" : "Remove"}
             </button>
-            {deleteError && (
-              <span className="text-red-400 text-xs">{deleteError}</span>
+          )}
+        </div>
+        {!isLocked ? (
+          <div className="space-y-2">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+                  Your Rating
+                </label>
+                <InitialRatingInput
+                  value={rating}
+                  onChange={setRating}
+                  className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+                />
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                {saved && <span className="text-emerald-400 text-xs">Saved</span>}
+                {saveError && <span className="text-red-400 text-xs text-right">{saveError}</span>}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+                Notes
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional — playing style, strengths, context..."
+                rows={2}
+                className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors resize-none"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 text-sm">
+            {ratingDisplay !== null ? (
+              <span className="text-white font-semibold">{ratingDisplay}</span>
+            ) : (
+              <span className="text-[#687FA3] italic text-xs">No rating given</span>
+            )}
+            {referrer.notes && (
+              <span className="text-white/50 text-xs truncate">{referrer.notes}</span>
             )}
           </div>
         )}
+        {deleteError && <span className="text-red-400 text-xs">{deleteError}</span>}
       </div>
     );
   }
@@ -309,15 +360,35 @@ function ReferrerCard({
 
       <div className="space-y-2">
         {canAdminEdit ? (
-          <div>
-            <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
-              Initial Rating
-            </label>
-            <InitialRatingInput
-              value={rating}
-              onChange={setRating}
-              className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
-            />
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+                Initial Rating
+              </label>
+              <InitialRatingInput
+                value={rating}
+                onChange={setRating}
+                className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+              />
+            </div>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+              {saved && (
+                <span className="text-emerald-400 text-xs">Saved</span>
+              )}
+              {saveError && (
+                <span className="text-red-400 text-xs text-right">
+                  {saveError}
+                </span>
+              )}
+            </div>
           </div>
         ) : (
           <div className="flex items-center gap-3 text-sm">
@@ -358,23 +429,6 @@ function ReferrerCard({
           )}
         </div>
       </div>
-
-      {canAdminEdit && (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-          {saved && <span className="text-emerald-400 text-sm">Saved</span>}
-          {saveError && (
-            <span className="text-red-400 text-sm">{saveError}</span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -580,7 +634,7 @@ function SelfVotePanel({
   }
 
   return (
-    <div className="border border-dashed border-violet-400/20 rounded-2xl p-5 space-y-4">
+    <div className="border border-dashed border-violet-400/20 rounded-2xl p-4 space-y-3">
       <div>
         <p className="text-sm font-semibold text-white">
           Submit your assessment
@@ -600,40 +654,41 @@ function SelfVotePanel({
         </p>
       </div>
 
-      <div>
-        <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1.5">
-          Initial Rating
-        </label>
-        <InitialRatingInput
-          value={rating}
-          onChange={setRating}
-          className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
-        />
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+            Initial Rating
+          </label>
+          <InitialRatingInput
+            value={rating}
+            onChange={setRating}
+            className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={adding}
+          className="shrink-0 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
+        >
+          {adding ? "Submitting…" : "Submit"}
+        </button>
       </div>
 
       <div>
-        <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1.5">
+        <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
           Notes
         </label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Optional — playing style, strengths, context..."
-          rows={3}
-          className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors resize-none"
+          rows={2}
+          className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors resize-none"
         />
       </div>
 
-      {addError && <p className="text-red-400 text-sm">{addError}</p>}
-
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={adding}
-        className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm px-5 py-2 rounded-xl transition-colors cursor-pointer"
-      >
-        {adding ? "Submitting…" : "Submit Assessment"}
-      </button>
+      {addError && <p className="text-red-400 text-xs">{addError}</p>}
     </div>
   );
 }
@@ -789,6 +844,7 @@ function RecruitModal({
 
 export default function RecruitPage() {
   const { signupId } = useParams<{ signupId: string }>();
+  const { isViewingAs, viewAsPlayer } = useViewAs();
   const [state, setState] = useState<RecruitPageState>({ stage: "loading" });
   const [currentPlayerId, setCurrentPlayerId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -948,17 +1004,23 @@ export default function RecruitPage() {
   const readyToRecruit = ratedCount >= MIN_REFERRER_RATINGS;
   const isLocked = signup.status === "accepted" || recruited;
 
+  // When viewing as another player, show the page from their perspective
+  const effectivePlayerId = isViewingAs && viewAsPlayer
+    ? Number(viewAsPlayer.player_id)
+    : currentPlayerId;
+  const effectiveIsAdmin = isViewingAs ? false : isAdmin;
+
   const currentUserIsReferrer =
-    currentPlayerId !== null &&
-    referrers.some((r) => r.referrer_player_id === currentPlayerId);
+    effectivePlayerId !== null &&
+    referrers.some((r) => r.referrer_player_id === effectivePlayerId);
 
   const currentUserIsNamedReferrer =
-    currentPlayerId !== null &&
+    effectivePlayerId !== null &&
     referrers.some(
-      (r) => r.referrer_player_id === currentPlayerId && r.is_named_referrer,
+      (r) => r.referrer_player_id === effectivePlayerId && r.is_named_referrer,
     );
 
-  const canSeeContact = isAdmin || currentUserIsNamedReferrer;
+  const canSeeContact = effectiveIsAdmin || currentUserIsNamedReferrer;
 
   const avgRating =
     ratedCount > 0
@@ -1021,6 +1083,14 @@ export default function RecruitPage() {
             </span>
           </div>
 
+          {namedReferrers.length > 0 && (
+            <p className="text-xs text-[#687FA3] leading-relaxed -mt-1">
+              These are the members listed by the applicant as referrers. Each
+              referrer submits their own skill assessment, and we take the
+              average across all inputs.
+            </p>
+          )}
+
           {namedReferrers.length === 0 && (
             <p className="text-sm text-[#687FA3] italic">
               No referrers listed by the applicant.
@@ -1031,8 +1101,8 @@ export default function RecruitPage() {
             <ReferrerCard
               key={referrer.id}
               referrer={referrer}
-              isOwn={referrer.referrer_player_id === currentPlayerId}
-              isAdmin={isAdmin}
+              isOwn={referrer.referrer_player_id === effectivePlayerId}
+              isAdmin={effectiveIsAdmin}
               isLocked={isLocked}
               signupId={signupId}
               onUpdated={updateReferrer}
@@ -1040,7 +1110,7 @@ export default function RecruitPage() {
             />
           ))}
 
-          {isAdmin && !isLocked && (
+          {effectiveIsAdmin && !isLocked && (
             <AddReferrerPanel
               signupId={signupId}
               existingPlayerIds={existingReferrerPlayerIds}
@@ -1076,8 +1146,8 @@ export default function RecruitPage() {
             <ReferrerCard
               key={referrer.id}
               referrer={referrer}
-              isOwn={referrer.referrer_player_id === currentPlayerId}
-              isAdmin={isAdmin}
+              isOwn={referrer.referrer_player_id === effectivePlayerId}
+              isAdmin={effectiveIsAdmin}
               isLocked={isLocked}
               signupId={signupId}
               onUpdated={updateReferrer}
@@ -1085,7 +1155,7 @@ export default function RecruitPage() {
             />
           ))}
 
-          {!isLocked && !currentUserIsReferrer && currentPlayerId !== null && (
+          {!isLocked && !currentUserIsReferrer && effectivePlayerId !== null && (
             <SelfVotePanel signupId={signupId} onAdded={addReferrer} />
           )}
         </div>
@@ -1112,17 +1182,17 @@ export default function RecruitPage() {
               </p>
               <button
                 type="button"
-                disabled={!isAdmin || !readyToRecruit}
+                disabled={!effectiveIsAdmin || !readyToRecruit}
                 onClick={() => setShowModal(true)}
                 className={`w-full py-3 px-6 rounded-xl font-black text-sm transition-colors ${
                   readyToRecruit
-                    ? isAdmin
+                    ? effectiveIsAdmin
                       ? "bg-green-700 hover:bg-green-600 text-white cursor-pointer"
                       : "bg-transparent border-2 border-green-700 text-green-500 cursor-not-allowed"
                     : "bg-white/5 border border-white/10 text-white/30 cursor-not-allowed"
                 }`}
               >
-                Recruit{isAdmin ? "" : " (Admin Only)"}
+                Recruit{effectiveIsAdmin ? "" : " (Admin Only)"}
               </button>
             </div>
           )}
