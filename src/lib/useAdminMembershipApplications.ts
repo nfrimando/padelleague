@@ -13,6 +13,8 @@ export type AdminMembershipApplication = {
   player_id: number | null;
   created_at: string;
   updated_at: string;
+  referrer_count: number;
+  rated_count: number;
 };
 
 export function useAdminMembershipApplications(enabled = true) {

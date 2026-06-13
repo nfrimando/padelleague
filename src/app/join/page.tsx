@@ -11,6 +11,7 @@ import { fetchPlayerByEmail } from "@/lib/playerLookup";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import type { Player } from "@/lib/types";
+import { useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 
 type ExistingPlayerLookup = {
@@ -22,6 +23,11 @@ type ExistingPlayerLookup = {
 type ApplyResponse = {
   applied?: boolean;
   error?: string;
+};
+
+type ReferrerRow = {
+  search: string;
+  player: Player | null;
 };
 
 const COUNTRY_CODES = [
@@ -125,6 +131,68 @@ function ReferrerSearchInput({
   );
 }
 
+function ReferrerRowItem({
+  row,
+  candidates,
+  showRemove,
+  onUpdate,
+  onRemove,
+}: {
+  row: ReferrerRow;
+  candidates: Player[];
+  showRemove: boolean;
+  onUpdate: (patch: Partial<ReferrerRow>) => void;
+  onRemove: () => void;
+}) {
+  const suggestions = usePlayerSearch(candidates, row.search);
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1">
+        {row.player ? (
+          <div className="flex items-center justify-between gap-3 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5">
+            <div>
+              <div className="text-sm font-medium text-white">
+                {row.player.name}
+              </div>
+              {row.player.nickname && (
+                <div className="text-xs text-[#687FA3]">
+                  {row.player.nickname}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => onUpdate({ player: null, search: "" })}
+              className="text-xs font-bold text-[#687FA3] hover:text-white transition-colors cursor-pointer"
+            >
+              Change
+            </button>
+          </div>
+        ) : (
+          <ReferrerSearchInput
+            value={row.search}
+            suggestions={suggestions}
+            onChange={(v) => onUpdate({ search: v })}
+            onSelect={(player) => onUpdate({ player, search: "" })}
+            onClear={() => onUpdate({ search: "" })}
+          />
+        )}
+      </div>
+      {showRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove row"
+          className="text-[#687FA3] hover:text-red-400 transition-colors cursor-pointer text-lg leading-none px-1"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
 function JoinPageContent() {
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
@@ -137,8 +205,16 @@ function JoinPageContent() {
   const [countryCode, setCountryCode] = useState<string>("+63");
   const [customCountryCode, setCustomCountryCode] = useState("");
   const [contact, setContact] = useState("");
-  const [referrerSearch, setReferrerSearch] = useState("");
-  const [referrerPlayer, setReferrerPlayer] = useState<Player | null>(null);
+  const [referrerRows, setReferrerRows] = useState<ReferrerRow[]>([
+    { search: "", player: null },
+    { search: "", player: null },
+    { search: "", player: null },
+  ]);
+  const [applicantImageUrl, setApplicantImageUrl] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -147,7 +223,6 @@ function JoinPageContent() {
     orderByName: true,
     select: "player_id, name, nickname",
   });
-  const referrerSuggestions = usePlayerSearch(referrerCandidates, referrerSearch);
 
   useEffect(() => {
     async function lookupPlayer(currentUser: User) {
@@ -207,6 +282,35 @@ function JoinPageContent() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const handleImageSelect = async (file: File) => {
+    setImageError(null);
+    const preview = URL.createObjectURL(file);
+    setImagePreview(preview);
+    setImageUploading(true);
+
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+      const res = await fetch("/api/membership/upload-image", {
+        method: "POST",
+        body: form,
+      });
+      const json = await res.json() as { imageUrl?: string; error?: string };
+      if (!res.ok || !json.imageUrl) {
+        setImageError(json.error ?? "Upload failed. Your application can still be submitted without a photo.");
+        setApplicantImageUrl(null);
+      } else {
+        setApplicantImageUrl(json.imageUrl);
+      }
+    } catch {
+      setImageError("Upload failed. Your application can still be submitted without a photo.");
+      setApplicantImageUrl(null);
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -216,6 +320,26 @@ function JoinPageContent() {
       },
     });
   };
+
+  const selectedPlayerIds = new Set(
+    referrerRows
+      .filter((r) => r.player !== null)
+      .map((r) => String(r.player!.player_id)),
+  );
+
+  function updateReferrerRow(index: number, patch: Partial<ReferrerRow>) {
+    setReferrerRows((rows) =>
+      rows.map((r, i) => (i === index ? { ...r, ...patch } : r)),
+    );
+  }
+
+  function addReferrerRow() {
+    setReferrerRows((rows) => [...rows, { search: "", player: null }]);
+  }
+
+  function removeReferrerRow(index: number) {
+    setReferrerRows((rows) => rows.filter((_, i) => i !== index));
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,8 +356,12 @@ function JoinPageContent() {
       return;
     }
 
-    if (!referrerPlayer) {
-      setError("Please select which league member told you about the league.");
+    const selectedReferrers = referrerRows
+      .map((r) => r.player)
+      .filter((p): p is Player => p !== null);
+
+    if (selectedReferrers.length === 0) {
+      setError("Please select at least one league member you've played with.");
       return;
     }
 
@@ -260,7 +388,8 @@ function JoinPageContent() {
           name: fullName.trim(),
           nickname: nickname.trim(),
           contact: `${normalizedPrefix} ${normalizedContact}`,
-          referrer_id: Number(referrerPlayer.player_id),
+          referrer_ids: selectedReferrers.map((p) => Number(p.player_id)),
+          ...(applicantImageUrl ? { applicant_image_url: applicantImageUrl } : {}),
         }),
       });
 
@@ -299,6 +428,8 @@ function JoinPageContent() {
     !isPendingVerification &&
     !existingPlayer &&
     !showAuthenticatedApplication;
+
+  const hasAtLeastOneReferrer = referrerRows.some((r) => r.player !== null);
 
   return (
     <div className="min-h-screen bg-[#0E1523] text-white flex flex-col">
@@ -356,8 +487,9 @@ function JoinPageContent() {
                 ✓ Application submitted
               </div>
               <p className="text-white/70 text-sm leading-relaxed">
-                Thanks for applying. An admin will review your membership and
-                verify your profile.
+                Thanks for applying. The members you listed will be asked to
+                assess your skill level before an admin finalizes your
+                membership.
               </p>
               <Link
                 href="/register"
@@ -478,44 +610,127 @@ function JoinPageContent() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-2">
-                    Which league member told you about the league?
+                  <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+                    Profile photo
+                    <span className="ml-2 normal-case font-normal text-[#687FA3]/60">
+                      optional
+                    </span>
                   </label>
-                  {referrerPlayer ? (
-                    <div className="flex items-center justify-between gap-3 bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5">
-                      <div>
-                        <div className="text-sm font-medium text-white">
-                          {referrerPlayer.name}
+                  <p className="text-xs text-white/40 mb-3">
+                    A photo helps the members you listed identify you faster and
+                    makes the assessment smoother.
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleImageSelect(file);
+                    }}
+                  />
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={imageUploading}
+                      className="relative w-20 h-20 rounded-2xl border-2 border-dashed border-[#687FA3]/30 hover:border-[#00C8DC]/50 transition-colors flex items-center justify-center overflow-hidden cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      {imagePreview ? (
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <svg
+                          className="w-7 h-7 text-[#687FA3]/50"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
+                          />
+                        </svg>
+                      )}
+                      {imageUploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         </div>
-                        {referrerPlayer.nickname && (
-                          <div className="text-xs text-[#687FA3]">
-                            {referrerPlayer.nickname}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReferrerPlayer(null);
-                          setReferrerSearch("");
-                        }}
-                        className="text-xs font-bold text-[#687FA3] hover:text-white transition-colors cursor-pointer"
-                      >
-                        Change
-                      </button>
+                      )}
+                    </button>
+                    <div className="flex-1 text-xs text-[#687FA3]">
+                      {imageUploading ? (
+                        <p>Uploading…</p>
+                      ) : applicantImageUrl ? (
+                        <p className="text-emerald-400">Photo uploaded</p>
+                      ) : (
+                        <p>
+                          Click to upload · JPEG, PNG, WebP, GIF · max 5 MB
+                        </p>
+                      )}
+                      {imageError && (
+                        <p className="text-amber-400 mt-1">{imageError}</p>
+                      )}
+                      {imagePreview && !imageUploading && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImagePreview(null);
+                            setApplicantImageUrl(null);
+                            setImageError(null);
+                            if (fileInputRef.current) fileInputRef.current.value = "";
+                          }}
+                          className="mt-2 text-[#687FA3] hover:text-red-400 transition-colors cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <ReferrerSearchInput
-                      value={referrerSearch}
-                      suggestions={referrerSuggestions}
-                      onChange={setReferrerSearch}
-                      onSelect={(player) => {
-                        setReferrerPlayer(player);
-                        setReferrerSearch("");
-                      }}
-                      onClear={() => setReferrerSearch("")}
-                    />
-                  )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+                    Which league members have you played with before?
+                  </label>
+                  <p className="text-xs text-white/40 mb-3">
+                    Name at least one — adding up to three helps us assess your
+                    level faster.
+                  </p>
+
+                  <div className="space-y-3">
+                    {referrerRows.map((row, index) => (
+                      <ReferrerRowItem
+                        key={index}
+                        row={row}
+                        candidates={referrerCandidates.filter(
+                          (p) => !selectedPlayerIds.has(String(p.player_id)),
+                        )}
+                        showRemove={referrerRows.length > 1}
+                        onUpdate={(patch) => updateReferrerRow(index, patch)}
+                        onRemove={() => removeReferrerRow(index)}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addReferrerRow}
+                    className="mt-3 text-xs text-[#00C8DC] hover:text-white transition-colors cursor-pointer"
+                  >
+                    + Add another member
+                  </button>
                 </div>
 
                 {error && (
@@ -532,7 +747,7 @@ function JoinPageContent() {
                     !nickname.trim() ||
                     (countryCode === "other" && !customCountryCode.trim()) ||
                     !contact.trim() ||
-                    !referrerPlayer
+                    !hasAtLeastOneReferrer
                   }
                   className="w-full bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >

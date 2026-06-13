@@ -6,6 +6,7 @@ import { useAdminPlayerClaims } from "@/lib/useAdminPlayerClaims";
 import { useAdminMembershipApplications } from "@/lib/useAdminMembershipApplications";
 import type { AdminPlayerClaim } from "@/lib/useAdminPlayerClaims";
 import type { AdminMembershipApplication } from "@/lib/useAdminMembershipApplications";
+import { InitialRatingInput } from "@/components/InitialRatingInput";
 
 type ReviewTarget = {
   id: string;
@@ -214,8 +215,8 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
             Membership Applications
           </h3>
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
-            New player applications submitted via the Join page. Approving
-            creates a new row in players table.
+            New player applications submitted via the Join page. Referrers
+            assess the recruit, then an admin finalizes via the Review page.
           </p>
         </div>
 
@@ -229,85 +230,59 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
           </div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            {applications.map((a: AdminMembershipApplication) => {
-              const isReviewing = reviewing?.id === a.id;
-              return (
-                <div
-                  key={a.id}
-                  className="bg-white dark:bg-slate-900"
-                >
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 shrink-0 flex items-center justify-center text-slate-400 font-bold text-sm">
-                      {(a.applicant_name ?? "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {a.applicant_name ?? "Unknown applicant"}
-                        {a.applicant_nickname ? ` "${a.applicant_nickname}"` : ""}
-                      </p>
-                      {a.applicant_email && (
-                        <p className="text-slate-500 dark:text-slate-400 text-xs truncate">
-                          {a.applicant_email}
-                        </p>
-                      )}
-                      {a.applicant_contact && (
-                        <p className="text-slate-500 dark:text-slate-400 text-xs truncate">
-                          Contact: {a.applicant_contact}
-                        </p>
-                      )}
-                      <p className="text-slate-400 dark:text-slate-500 text-xs">
-                        Submitted{" "}
-                        {new Date(a.created_at).toLocaleDateString("en-PH", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                    {!isReviewing && (
-                      <div className="flex gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            startReview(a.id, "application", true)
-                          }
-                          className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            startReview(a.id, "application", false)
-                          }
-                          className="inline-flex items-center rounded-md bg-slate-200 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
+            {applications.map((a: AdminMembershipApplication) => (
+              <div key={a.id} className="bg-white dark:bg-slate-900">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 shrink-0 flex items-center justify-center text-slate-400 font-bold text-sm">
+                    {(a.applicant_name ?? "?").charAt(0).toUpperCase()}
                   </div>
-                  {isReviewing && (
-                    <NotesPanel
-                      approved={reviewing.approved}
-                      notes={reviewing.notes}
-                      submitting={submitting}
-                      error={submitError}
-                      showInitialRating={reviewing.approved}
-                      initialRating={reviewing.initialRating}
-                      onInitialRatingChange={(v) =>
-                        setReviewing((r) => r && { ...r, initialRating: v })
-                      }
-                      onChange={(notes) =>
-                        setReviewing((r) => r && { ...r, notes })
-                      }
-                      onConfirm={() => void handleConfirm()}
-                      onCancel={cancelReview}
-                    />
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {a.applicant_name ?? "Unknown applicant"}
+                      {a.applicant_nickname ? ` "${a.applicant_nickname}"` : ""}
+                    </p>
+                    {a.applicant_email && (
+                      <p className="text-slate-500 dark:text-slate-400 text-xs truncate">
+                        {a.applicant_email}
+                      </p>
+                    )}
+                    {a.applicant_contact && (
+                      <p className="text-slate-500 dark:text-slate-400 text-xs truncate">
+                        Contact: {a.applicant_contact}
+                      </p>
+                    )}
+                    <p className="text-slate-400 dark:text-slate-500 text-xs">
+                      Submitted{" "}
+                      {new Date(a.created_at).toLocaleDateString("en-PH", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                    <p className="text-slate-400 dark:text-slate-500 text-xs mt-0.5">
+                      Assessments:{" "}
+                      <span
+                        className={
+                          a.rated_count >= 3
+                            ? "text-emerald-600 dark:text-emerald-400 font-medium"
+                            : "text-amber-600 dark:text-amber-400"
+                        }
+                      >
+                        {a.rated_count} / {a.referrer_count} rated
+                      </span>
+                    </p>
+                  </div>
+                  <a
+                    href={`/recruit/${a.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  >
+                    Review ↗
+                  </a>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -355,14 +330,10 @@ function NotesPanel({
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
             Initial Rating <span className="text-red-400">*</span>
           </label>
-          <input
-            type="number"
-            step="0.0001"
-            min="0"
+          <InitialRatingInput
+            value={initialRating ?? ""}
+            onChange={(v) => onInitialRatingChange?.(v)}
             required
-            value={initialRating}
-            onChange={(e) => onInitialRatingChange?.(e.target.value)}
-            placeholder="e.g. 1500"
             className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-500"
           />
         </div>

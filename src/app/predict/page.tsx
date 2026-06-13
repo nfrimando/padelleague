@@ -9,16 +9,10 @@ import {
 import { usePredictions } from "@/lib/usePredictions";
 import { usePredictionCounts } from "@/lib/usePredictionCounts";
 import type { PredictableMatch } from "@/lib/usePredictableMatches";
-import dynamic from "next/dynamic";
 import { PredictMatchCard } from "./PredictMatchCard";
 import { ConfirmPredictionModal } from "./ConfirmPredictionModal";
 import EmailAuthForm from "@/components/EmailAuthForm";
-
-const PredictorLeaderboard = dynamic(
-  () =>
-    import("./PredictorLeaderboard").then((m) => m.PredictorLeaderboard),
-  { ssr: false },
-);
+import { PredictorLeaderboard } from "./PredictorLeaderboard";
 import SiteHeader from "@/components/SiteHeader";
 import type { User } from "@supabase/supabase-js";
 

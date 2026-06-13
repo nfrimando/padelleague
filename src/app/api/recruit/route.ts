@@ -1,28 +1,28 @@
 import { NextResponse } from "next/server";
-import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
+import { getAuthorizedPlayer } from "@/app/api/recruit/_lib/auth";
 
-/** GET /api/admin/membership-applications — list pending membership applications */
+/** GET /api/recruit — list pending member applications (members only) */
 export async function GET(request: Request) {
-  const authResult = await getAuthorizedAdminClient(request);
-  if (!authResult.ok) return authResult.response;
+  const auth = await getAuthorizedPlayer(request);
+  if (!auth.ok) return auth.response;
 
   const serviceClient = getServerServiceClient();
 
-  const { data, error } = await serviceClient
+  const { data: signups, error: signupsError } = await serviceClient
     .from("signups_players")
     .select(
-      "id, status, applicant_name, applicant_nickname, applicant_contact, applicant_email, player_id, created_at, updated_at",
+      "id, applicant_name, applicant_nickname, applicant_image_url, created_at",
     )
     .eq("status", "registered")
     .is("player_id", null)
     .order("created_at", { ascending: true });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (signupsError) {
+    return NextResponse.json({ error: signupsError.message }, { status: 500 });
   }
 
-  const applications = data ?? [];
+  const applications = signups ?? [];
 
   if (applications.length === 0) {
     return NextResponse.json({ applications: [] });
@@ -35,7 +35,6 @@ export async function GET(request: Request) {
     .select("signup_id, initial_rating")
     .in("signup_id", signupIds);
 
-  // Build stats map: signup_id → { referrer_count, rated_count }
   const statsMap = new Map<string, { referrer_count: number; rated_count: number }>();
   for (const row of referrerRows ?? []) {
     const id = row.signup_id as string;

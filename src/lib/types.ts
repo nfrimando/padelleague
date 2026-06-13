@@ -111,6 +111,22 @@ export type MembershipApplication = {
   player_id: number | null;
   created_at: string;
   updated_at: string;
+  // Referrer stats — populated by admin list endpoint
+  referrer_count?: number;
+  rated_count?: number;
+};
+
+// Maps to rows in `signups_players_referrers`.
+export type SignupPlayersReferrer = {
+  id: string;
+  signup_id: string;
+  referrer_player_id: number;
+  initial_rating: number | null;
+  notes: string | null;
+  is_named_referrer: boolean;
+  created_at: string;
+  updated_at: string;
+  referrer?: Pick<Player, "player_id" | "name" | "nickname" | "image_link">;
 };
 
 // Maps to the `player_claims` table.
