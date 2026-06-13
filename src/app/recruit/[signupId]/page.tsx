@@ -8,7 +8,11 @@ import { supabase } from "@/lib/supabase";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { MIN_REFERRER_RATINGS } from "@/lib/recruitConfig";
-import type { SignupPlayersReferrer, MembershipApplication, Player } from "@/lib/types";
+import type {
+  SignupPlayersReferrer,
+  MembershipApplication,
+  Player,
+} from "@/lib/types";
 import { InitialRatingInput } from "@/components/InitialRatingInput";
 
 type RecruitSignup = Pick<
@@ -27,7 +31,11 @@ type RecruitPageState =
   | { stage: "unauthenticated" }
   | { stage: "not-member" }
   | { stage: "error"; message: string }
-  | { stage: "loaded"; signup: RecruitSignup; referrers: SignupPlayersReferrer[] };
+  | {
+      stage: "loaded";
+      signup: RecruitSignup;
+      referrers: SignupPlayersReferrer[];
+    };
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-PH", {
@@ -37,7 +45,13 @@ function formatDate(iso: string) {
   });
 }
 
-function ApplicantCard({ signup, canSeeContact }: { signup: RecruitSignup; canSeeContact: boolean }) {
+function ApplicantCard({
+  signup,
+  canSeeContact,
+}: {
+  signup: RecruitSignup;
+  canSeeContact: boolean;
+}) {
   const initials = (signup.applicant_name ?? "?")
     .split(" ")
     .map((w) => w[0])
@@ -63,9 +77,13 @@ function ApplicantCard({ signup, canSeeContact }: { signup: RecruitSignup; canSe
           </div>
         )}
         <div>
-          <p className="text-xl font-bold text-white">{signup.applicant_name ?? "—"}</p>
+          <p className="text-xl font-bold text-white">
+            {signup.applicant_name ?? "—"}
+          </p>
           {signup.applicant_nickname && (
-            <p className="text-sm text-[#687FA3]">{signup.applicant_nickname}</p>
+            <p className="text-sm text-[#687FA3]">
+              {signup.applicant_nickname}
+            </p>
           )}
         </div>
       </div>
@@ -73,7 +91,9 @@ function ApplicantCard({ signup, canSeeContact }: { signup: RecruitSignup; canSe
         {signup.applicant_contact && (
           <div>
             <p className="text-xs text-[#687FA3]">Contact</p>
-            <p className={`text-white${canSeeContact ? "" : " blur-sm select-none"}`}>
+            <p
+              className={`text-white${canSeeContact ? "" : " blur-sm select-none"}`}
+            >
               {signup.applicant_contact}
             </p>
           </div>
@@ -81,7 +101,9 @@ function ApplicantCard({ signup, canSeeContact }: { signup: RecruitSignup; canSe
         {signup.applicant_email && (
           <div>
             <p className="text-xs text-[#687FA3]">Email</p>
-            <p className="text-white break-all blur-sm select-none">{signup.applicant_email}</p>
+            <p className="text-white break-all blur-sm select-none">
+              {signup.applicant_email}
+            </p>
           </div>
         )}
         <div>
@@ -200,7 +222,7 @@ function ReferrerCard({
     setDeleting(false);
 
     if (!res.ok) {
-      const json = await res.json().catch(() => ({})) as { error?: string };
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
       setDeleteError(json.error ?? "Failed to remove assessment.");
       return;
     }
@@ -233,10 +255,14 @@ function ReferrerCard({
             {ratingDisplay !== null ? (
               <span className="text-white font-semibold">{ratingDisplay}</span>
             ) : (
-              <span className="text-[#687FA3] italic text-xs">No rating given</span>
+              <span className="text-[#687FA3] italic text-xs">
+                No rating given
+              </span>
             )}
             {referrer.notes && (
-              <span className="text-white/50 text-xs truncate">{referrer.notes}</span>
+              <span className="text-white/50 text-xs truncate">
+                {referrer.notes}
+              </span>
             )}
           </div>
         </div>
@@ -263,7 +289,7 @@ function ReferrerCard({
   const canAdminEdit = isAdmin && !isLocked;
 
   return (
-    <div className="border border-white/10 rounded-2xl p-5 space-y-4">
+    <div className="border border-white/10 rounded-xl p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="font-semibold text-white text-sm">{displayName}</p>
@@ -281,28 +307,38 @@ function ReferrerCard({
         )}
       </div>
 
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1.5">
-            Initial Rating
-          </label>
-          {canAdminEdit ? (
+      <div className="space-y-2">
+        {canAdminEdit ? (
+          <div>
+            <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+              Initial Rating
+            </label>
             <InitialRatingInput
               value={rating}
               onChange={setRating}
-              className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+              className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
             />
-          ) : ratingDisplay !== null ? (
-            <p className="blur-sm select-none text-white bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm">
-              {ratingDisplay}
-            </p>
-          ) : (
-            <p className="text-sm text-[#687FA3] italic">Awaiting assessment</p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 text-sm">
+            {ratingDisplay !== null ? (
+              <span className="bg-[#0E1523] border border-[#687FA3]/20 rounded-full px-3 py-1 text-sm font-semibold text-white">
+                {ratingDisplay}
+              </span>
+            ) : (
+              <span className="text-[#687FA3] italic text-xs">Awaiting</span>
+            )}
+
+            {referrer.notes && (
+              <span className="text-white/60 text-xs truncate max-w-[16rem]">
+                {referrer.notes}
+              </span>
+            )}
+          </div>
+        )}
 
         <div>
-          <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1.5">
+          <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
             Notes
           </label>
           {canAdminEdit ? (
@@ -310,8 +346,8 @@ function ReferrerCard({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Optional — playing style, strengths, context..."
-              rows={3}
-              className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors resize-none"
+              rows={2}
+              className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors resize-none"
             />
           ) : (
             <p className="text-sm text-white/70 whitespace-pre-wrap">
@@ -329,13 +365,11 @@ function ReferrerCard({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-5 py-2 rounded-xl transition-colors cursor-pointer"
+            className="bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
           >
             {saving ? "Saving…" : "Save"}
           </button>
-          {saved && (
-            <span className="text-emerald-400 text-sm">Saved</span>
-          )}
+          {saved && <span className="text-emerald-400 text-sm">Saved</span>}
           {saveError && (
             <span className="text-red-400 text-sm">{saveError}</span>
           )}
@@ -360,7 +394,10 @@ function AddReferrerPanel({
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  const { players } = usePlayers({ orderByName: true, select: "player_id, name, nickname" });
+  const { players } = usePlayers({
+    orderByName: true,
+    select: "player_id, name, nickname",
+  });
   const filtered = players.filter(
     (p) => !existingPlayerIds.includes(Number(p.player_id)),
   );
@@ -446,9 +483,7 @@ function AddReferrerPanel({
           placeholder="Search by name or nickname..."
         />
       )}
-      {addError && (
-        <p className="text-red-400 text-sm">{addError}</p>
-      )}
+      {addError && <p className="text-red-400 text-sm">{addError}</p>}
       <div className="flex gap-2">
         <button
           type="button"
@@ -547,12 +582,18 @@ function SelfVotePanel({
   return (
     <div className="border border-dashed border-violet-400/20 rounded-2xl p-5 space-y-4">
       <div>
-        <p className="text-sm font-semibold text-white">Submit your assessment</p>
+        <p className="text-sm font-semibold text-white">
+          Submit your assessment
+        </p>
         <p className="text-xs text-[#687FA3] mt-1">
-          You can voluntarily rate this applicant even if they didn&apos;t list you as a referrer.
-          Your vote will be counted equally.{" "}
-          See your peers{" "}
-          <a href="/dashboard?tab=peers" target="_blank" rel="noopener noreferrer" className="text-[#00C8DC] hover:underline">
+          You can voluntarily rate this applicant even if they didn&apos;t list
+          you as a referrer. Your vote will be counted equally. See your peers{" "}
+          <a
+            href="/dashboard?tab=peers"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#00C8DC] hover:underline"
+          >
             here
           </a>
           .
@@ -583,9 +624,7 @@ function SelfVotePanel({
         />
       </div>
 
-      {addError && (
-        <p className="text-red-400 text-sm">{addError}</p>
-      )}
+      {addError && <p className="text-red-400 text-sm">{addError}</p>}
 
       <button
         type="button"
@@ -672,11 +711,15 @@ function RecruitModal({
             {namedRated.map((r) => {
               const referrerPlayer = r.referrer as Player | undefined;
               const name =
-                referrerPlayer?.nickname ?? referrerPlayer?.name ?? `#${r.referrer_player_id}`;
+                referrerPlayer?.nickname ??
+                referrerPlayer?.name ??
+                `#${r.referrer_player_id}`;
               return (
                 <div key={r.id} className="flex justify-between text-sm">
                   <span className="text-[#687FA3]">{name}</span>
-                  <span className="text-white font-medium">{r.initial_rating}</span>
+                  <span className="text-white font-medium">
+                    {r.initial_rating}
+                  </span>
                 </div>
               );
             })}
@@ -692,11 +735,15 @@ function RecruitModal({
                 {voluntaryRated.map((r) => {
                   const referrerPlayer = r.referrer as Player | undefined;
                   const name =
-                    referrerPlayer?.nickname ?? referrerPlayer?.name ?? `#${r.referrer_player_id}`;
+                    referrerPlayer?.nickname ??
+                    referrerPlayer?.name ??
+                    `#${r.referrer_player_id}`;
                   return (
                     <div key={r.id} className="flex justify-between text-sm">
                       <span className="text-violet-300/70">{name}</span>
-                      <span className="text-white font-medium">{r.initial_rating}</span>
+                      <span className="text-white font-medium">
+                        {r.initial_rating}
+                      </span>
                     </div>
                   );
                 })}
@@ -705,7 +752,9 @@ function RecruitModal({
           </div>
           <div className="border-t border-white/10 pt-3 flex justify-between text-sm font-bold">
             <span className="text-white">Average Initial Rating</span>
-            <span className="text-[#00C8DC] text-base">{avgRating.toFixed(2)}</span>
+            <span className="text-[#00C8DC] text-base">
+              {avgRating.toFixed(2)}
+            </span>
           </div>
         </div>
 
@@ -773,7 +822,10 @@ export default function RecruitPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setState({ stage: "error", message: body.error ?? `Server error (${res.status})` });
+        setState({
+          stage: "error",
+          message: body.error ?? `Server error (${res.status})`,
+        });
         return;
       }
 
@@ -830,7 +882,10 @@ export default function RecruitPage() {
 
   function removeReferrer(id: string) {
     if (state.stage !== "loaded") return;
-    setState({ ...state, referrers: state.referrers.filter((r) => r.id !== id) });
+    setState({
+      ...state,
+      referrers: state.referrers.filter((r) => r.id !== id),
+    });
   }
 
   if (state.stage === "loading") {
@@ -875,7 +930,9 @@ export default function RecruitPage() {
         <SiteHeader />
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="text-center space-y-2 max-w-sm">
-            <p className="text-white/60 text-sm">Something went wrong loading this page.</p>
+            <p className="text-white/60 text-sm">
+              Something went wrong loading this page.
+            </p>
             <p className="text-white/30 text-xs font-mono">{state.message}</p>
           </div>
         </div>
@@ -897,7 +954,9 @@ export default function RecruitPage() {
 
   const currentUserIsNamedReferrer =
     currentPlayerId !== null &&
-    referrers.some((r) => r.referrer_player_id === currentPlayerId && r.is_named_referrer);
+    referrers.some(
+      (r) => r.referrer_player_id === currentPlayerId && r.is_named_referrer,
+    );
 
   const canSeeContact = isAdmin || currentUserIsNamedReferrer;
 
@@ -925,7 +984,19 @@ export default function RecruitPage() {
             href="/recruit"
             className="inline-flex items-center gap-1.5 text-sm text-[#687FA3] hover:text-white transition-colors mb-3 cursor-pointer"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
             Back to Recruits
           </a>
           <h1 className="text-2xl font-black italic uppercase tracking-tighter">
@@ -945,7 +1016,8 @@ export default function RecruitPage() {
               Referrers
             </p>
             <span className="text-xs text-[#687FA3]">
-              {namedReferrers.filter((r) => r.initial_rating !== null).length} / {namedReferrers.length} rated
+              {namedReferrers.filter((r) => r.initial_rating !== null).length} /{" "}
+              {namedReferrers.length} rated
             </span>
           </div>
 
@@ -985,7 +1057,11 @@ export default function RecruitPage() {
             </p>
             {voluntaryVoters.length > 0 && (
               <span className="text-xs text-[#687FA3]">
-                {voluntaryVoters.filter((r) => r.initial_rating !== null).length} / {voluntaryVoters.length} rated
+                {
+                  voluntaryVoters.filter((r) => r.initial_rating !== null)
+                    .length
+                }{" "}
+                / {voluntaryVoters.length} rated
               </span>
             )}
           </div>
@@ -1022,9 +1098,12 @@ export default function RecruitPage() {
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-[#687FA3]">
-                {ratedCount} total vote{ratedCount === 1 ? "" : "s"} (named + community)
+                {ratedCount} total vote{ratedCount === 1 ? "" : "s"} (named +
+                community)
                 {readyToRecruit ? (
-                  <span className="text-emerald-400 ml-1">— ready for admin to recruit.</span>
+                  <span className="text-emerald-400 ml-1">
+                    — ready for admin to recruit.
+                  </span>
                 ) : (
                   <span className="ml-1">
                     — {MIN_REFERRER_RATINGS - ratedCount} more needed to unlock.

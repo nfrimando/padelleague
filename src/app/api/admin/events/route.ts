@@ -70,6 +70,7 @@ export async function POST(request: Request) {
         : "league_season",
     start_date: startDate,
     end_date: endDate,
+    signup_deadline: typeof body.signup_deadline === "string" && body.signup_deadline.trim() ? body.signup_deadline.trim() : null,
     registration_fee:
       typeof body.registration_fee === "number" && body.registration_fee > 0
         ? body.registration_fee
@@ -82,7 +83,11 @@ export async function POST(request: Request) {
     status: typeof body.status === "string" ? body.status : "upcoming",
     image_url: typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null,
     description: typeof body.description === "string" && body.description.trim() ? body.description.trim() : null,
+    format: typeof body.format === "string" && body.format.trim() ? body.format.trim() : null,
+    player_limit: typeof body.player_limit === "number" && body.player_limit > 0 ? body.player_limit : null,
+    notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
     restrictions: parseRestrictions(body.restrictions),
+    visibility: "published",
   };
 
   const { supabase } = authResult;
@@ -125,12 +130,24 @@ export async function PATCH(request: Request) {
   if (typeof body.name === "string") update.name = body.name;
   if (typeof body.event_type === "string") update.event_type = body.event_type;
   if (typeof body.start_date === "string" && body.start_date.trim()) update.start_date = body.start_date.trim();
-  if (typeof body.end_date === "string" && body.end_date.trim()) update.end_date = body.end_date.trim();
+  if (typeof body.end_date === "string") update.end_date = body.end_date.trim() || null;
+  if (Object.prototype.hasOwnProperty.call(body, "signup_deadline")) {
+    update.signup_deadline = typeof body.signup_deadline === "string" && body.signup_deadline.trim() ? body.signup_deadline.trim() : null;
+  }
   if (Object.prototype.hasOwnProperty.call(body, "image_url")) {
     update.image_url = typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null;
   }
   if (Object.prototype.hasOwnProperty.call(body, "description")) {
     update.description = typeof body.description === "string" && body.description.trim() ? body.description.trim() : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "format")) {
+    update.format = typeof body.format === "string" && body.format.trim() ? body.format.trim() : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "player_limit")) {
+    update.player_limit = typeof body.player_limit === "number" && body.player_limit > 0 ? body.player_limit : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "notes")) {
+    update.notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null;
   }
   if (Object.prototype.hasOwnProperty.call(body, "payment_instructions")) {
     update.payment_instructions = typeof body.payment_instructions === "string" && body.payment_instructions.trim() ? body.payment_instructions.trim() : null;
@@ -143,6 +160,9 @@ export async function PATCH(request: Request) {
   }
   if (Object.prototype.hasOwnProperty.call(body, "deleted_at") && body.deleted_at === null) {
     update.deleted_at = null;
+  }
+  if (typeof body.visibility === "string" && (body.visibility === "draft" || body.visibility === "published")) {
+    update.visibility = body.visibility;
   }
 
   if (Object.keys(update).length === 0) {

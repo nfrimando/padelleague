@@ -12,8 +12,6 @@ import { MembersTab } from "@/components/admin/MembersTab";
 import { ScheduleMatchTab } from "@/components/admin/ScheduleMatchTab";
 import { UpdateMatchTab } from "@/components/admin/UpdateMatchTab";
 import { ReviseScoreTab } from "@/components/admin/ReviseScoreTab";
-import { CreateEventTab } from "@/components/admin/CreateEventTab";
-import { EventProposalsTab } from "@/components/admin/EventProposalsTab";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
 import { useMatchEvents } from "@/lib/useMatchEvents";
@@ -22,8 +20,6 @@ import { usePlayers } from "@/lib/usePlayers";
 
 type TabValue =
   | "MEMBERS"
-  | "CREATE_EVENT"
-  | "EVENT_PROPOSALS"
   | "EVENTS"
   | "CREATE"
   | "EDIT"
@@ -56,8 +52,6 @@ const NAV_GROUPS: {
   {
     label: "Events",
     items: [
-      { value: "EVENT_PROPOSALS", label: "Proposals" },
-      { value: "CREATE_EVENT", label: "Create Event" },
       { value: "EVENTS", label: "Manage Events" },
     ],
   },
@@ -465,10 +459,6 @@ function AdminPageContent() {
                   <EditPlayerTab />
                 ) : activeTab === "MEMBERS" ? (
                   <MembersTab enabled={activeTab === "MEMBERS" && isAdmin} />
-                ) : activeTab === "EVENT_PROPOSALS" ? (
-                  <EventProposalsTab enabled={activeTab === "EVENT_PROPOSALS" && isAdmin} />
-                ) : activeTab === "CREATE_EVENT" ? (
-                  <CreateEventTab />
                 ) : activeTab === "EVENTS" ? (
                   <EventsTab enabled={activeTab === "EVENTS" && isAdmin} />
                 ) : null}

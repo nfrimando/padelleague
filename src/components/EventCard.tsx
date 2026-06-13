@@ -162,7 +162,7 @@ export default function EventCard({ event, isAccepted = false, currentPlayerRati
         )}
 
         {/* CTA */}
-        <div className="mt-auto pt-1">
+        <div className="mt-auto pt-1 flex items-center gap-3 flex-wrap">
           {isOpen ? (
             <Link
               href={`/events/register?eventId=${event.event_id}`}
@@ -188,6 +188,12 @@ export default function EventCard({ event, isAccepted = false, currentPlayerRati
               Registration closed
             </span>
           )}
+          <Link
+            href={`/events/${event.event_id}`}
+            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            View details →
+          </Link>
         </div>
       </div>
     </div>

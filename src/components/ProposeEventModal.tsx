@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 type Props = {
@@ -10,21 +11,30 @@ type Props = {
 const inputCls =
   "block w-full rounded border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
 const labelCls =
-  "block text-xs font-medium text-slate-400 uppercase tracking-wide mb-1.5";
+  "block text-xs font-medium text-slate-300 uppercase tracking-wide mb-1.5";
+const reqStar = <span className="text-rose-400 font-bold ml-0.5">*</span>;
 
 export default function ProposeEventModal({ onClose }: Props) {
+  // Required
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
+  const [signupDeadline, setSignupDeadline] = useState("");
+
+  // Optional
   const [endDate, setEndDate] = useState("");
-  const [description, setDescription] = useState("");
   const [format, setFormat] = useState("");
-  const [playerLimit, setPlayerLimit] = useState("");
-  const [eventUrl, setEventUrl] = useState("");
-  const [proposerNotes, setProposerNotes] = useState("");
+  const [playerPool, setPlayerPool] = useState("");
+  const [minRating, setMinRating] = useState("");
+  const [maxRating, setMaxRating] = useState("");
+  const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [createdEventId, setCreatedEventId] = useState<number | null>(null);
+
+  const canSubmit = name.trim() && startDate && signupDeadline;
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -35,6 +45,10 @@ export default function ProposeEventModal({ onClose }: Props) {
       setError("Start date is required.");
       return;
     }
+    if (!signupDeadline) {
+      setError("Signup deadline is required.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -42,7 +56,7 @@ export default function ProposeEventModal({ onClose }: Props) {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
     if (!token) {
-      setError("You must be signed in to propose an event.");
+      setError("You must be signed in to create an event.");
       setSubmitting(false);
       return;
     }
@@ -50,16 +64,21 @@ export default function ProposeEventModal({ onClose }: Props) {
     const body: Record<string, unknown> = {
       name: name.trim(),
       start_date: startDate,
+      signup_deadline: signupDeadline,
     };
     if (endDate) body.end_date = endDate;
-    if (description.trim()) body.description = description.trim();
     if (format.trim()) body.format = format.trim();
-    if (playerLimit && parseInt(playerLimit, 10) > 0)
-      body.player_limit = parseInt(playerLimit, 10);
-    if (eventUrl.trim()) body.event_url = eventUrl.trim();
-    if (proposerNotes.trim()) body.proposer_notes = proposerNotes.trim();
+    if (playerPool && parseInt(playerPool, 10) > 0)
+      body.player_limit = parseInt(playerPool, 10);
+    if (minRating && !isNaN(parseFloat(minRating)))
+      body.min_rating = parseFloat(minRating);
+    if (maxRating && !isNaN(parseFloat(maxRating)))
+      body.max_rating = parseFloat(maxRating);
+    if (description.trim()) body.description = description.trim();
+    if (notes.trim()) body.notes = notes.trim();
+    if (imageUrl.trim()) body.image_url = imageUrl.trim();
 
-    const res = await fetch("/api/event-proposals", {
+    const res = await fetch("/api/events", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -68,15 +87,18 @@ export default function ProposeEventModal({ onClose }: Props) {
       body: JSON.stringify(body),
     });
 
-    const json = (await res.json()) as { error?: string };
+    const json = (await res.json()) as {
+      error?: string;
+      event?: { event_id: number };
+    };
 
     if (!res.ok) {
-      setError(json.error ?? "Failed to submit proposal.");
+      setError(json.error ?? "Failed to create event.");
       setSubmitting(false);
       return;
     }
 
-    setSuccess(true);
+    setCreatedEventId(json.event?.event_id ?? null);
     setSubmitting(false);
   };
 
@@ -93,9 +115,12 @@ export default function ProposeEventModal({ onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
           <div>
-            <h2 className="text-base font-bold text-slate-100">Propose an Event</h2>
+            <h2 className="text-base font-bold text-slate-100">
+              Propose an Event
+            </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Submitted proposals are reviewed by the committee before going live.
+              Submitted proposals are reviewed by the committee before going
+              live.
             </p>
           </div>
           <button
@@ -108,128 +133,177 @@ export default function ProposeEventModal({ onClose }: Props) {
           </button>
         </div>
 
-        {success ? (
+        {createdEventId !== null ? (
           <div className="px-5 py-10 text-center space-y-3">
-            <div className="text-3xl">✓</div>
-            <p className="text-sm font-medium text-slate-100">
-              Proposal submitted!
+            <div className="text-3xl text-emerald-400">✓</div>
+            <p className="text-sm font-semibold text-slate-100">
+              Event proposal submitted!
             </p>
             <p className="text-xs text-slate-400">
-              The committee will review your proposal and get back to you.
+              The committee will review your proposal. In the meantime, you can
+              view and edit your event page.
             </p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-4 inline-flex items-center rounded-full bg-slate-700 px-5 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600 transition-colors cursor-pointer"
-            >
-              Done
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center mt-4">
+              <Link
+                href={`/events/${createdEventId}`}
+                onClick={onClose}
+                className="inline-flex items-center justify-center rounded-full bg-[#00C8DC] px-5 py-2 text-sm font-bold text-slate-900 hover:bg-[#00b5c8] transition-colors cursor-pointer"
+              >
+                View event page →
+              </Link>
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex items-center justify-center rounded-full bg-slate-700 px-5 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600 transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="px-5 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className={labelCls}>
-                  Event Name <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. Summer Open 2026"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+          <div className="max-h-[70vh] overflow-y-auto">
+            {/* Required section */}
+            <div className="px-5 pt-5 pb-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-rose-400 mb-3">
+                Required
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Event Name {reqStar}</label>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="e.g. Summer Open 2026"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Start Date {reqStar}</label>
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Signup Deadline {reqStar}</label>
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={signupDeadline}
+                    onChange={(e) => setSignupDeadline(e.target.value)}
+                  />
+                </div>
               </div>
+            </div>
 
-              <div>
-                <label className={labelCls}>
-                  Start Date <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
+            {/* Divider */}
+            <div className="border-t border-slate-700/60 mx-5" />
 
-              <div>
-                <label className={labelCls}>End Date</label>
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className={labelCls}>Format</label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. Doubles, Mixed"
-                  value={format}
-                  onChange={(e) => setFormat(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className={labelCls}>Player Limit</label>
-                <input
-                  type="number"
-                  min={1}
-                  className={inputCls}
-                  placeholder="e.g. 32"
-                  value={playerLimit}
-                  onChange={(e) => setPlayerLimit(e.target.value)}
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className={labelCls}>Event URL Slug</label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. summer-open-2026"
-                  value={eventUrl}
-                  onChange={(e) => setEventUrl(e.target.value)}
-                />
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Will become /events/{eventUrl || "your-slug"}
+            {/* Optional section */}
+            <div className="px-5 pt-4 pb-5">
+              <div className="flex items-baseline gap-2 mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Optional
                 </p>
+                <span className="text-[10px] text-slate-600 normal-case tracking-normal">
+                  — you can edit these after your proposal is accepted
+                </span>
               </div>
-
-              <div className="sm:col-span-2">
-                <label className={labelCls}>Description</label>
-                <textarea
-                  rows={3}
-                  className={inputCls}
-                  placeholder="Tell us about the event..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className={labelCls}>Notes for Committee</label>
-                <textarea
-                  rows={2}
-                  className={inputCls}
-                  placeholder="Any context or special requests..."
-                  value={proposerNotes}
-                  onChange={(e) => setProposerNotes(e.target.value)}
-                />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className={labelCls}>End Date</label>
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Format</label>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="E.g. Fixed Partners, Teams of 3, etc."
+                    value={format}
+                    onChange={(e) => setFormat(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Estimated Player Pool</label>
+                  <input
+                    type="number"
+                    min={1}
+                    className={inputCls}
+                    placeholder="e.g. 32"
+                    value={playerPool}
+                    onChange={(e) => setPlayerPool(e.target.value)}
+                  />
+                </div>
+                <div />
+                <div>
+                  <label className={labelCls}>Minimum Rating</label>
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="e.g. 2.00"
+                    value={minRating}
+                    onChange={(e) => setMinRating(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Maximum Rating</label>
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="e.g. 4.00"
+                    value={maxRating}
+                    onChange={(e) => setMaxRating(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Description</label>
+                  <textarea
+                    rows={3}
+                    className={inputCls}
+                    placeholder="Tell us about the event..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Other Notes</label>
+                  <textarea
+                    rows={2}
+                    className={inputCls}
+                    placeholder="Any context or special requests for the organizers..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Image URL</label>
+                  <input
+                    type="url"
+                    className={inputCls}
+                    placeholder="https://..."
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
             {error && (
-              <div className="rounded-md border border-rose-800/40 bg-rose-900/20 px-3 py-2 text-sm text-rose-300">
+              <div className="mx-5 mb-3 rounded-md border border-rose-800/40 bg-rose-900/20 px-3 py-2 text-sm text-rose-300">
                 {error}
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex justify-end gap-2 px-5 pb-5">
               <button
                 type="button"
                 onClick={onClose}
@@ -240,7 +314,7 @@ export default function ProposeEventModal({ onClose }: Props) {
               <button
                 type="button"
                 onClick={() => void handleSubmit()}
-                disabled={submitting || !name.trim() || !startDate}
+                disabled={submitting || !canSubmit}
                 className="inline-flex items-center rounded-full bg-[#00C8DC] px-5 py-1.5 text-sm font-bold text-slate-900 hover:bg-[#00b5c8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 {submitting ? "Submitting…" : "Submit Proposal"}

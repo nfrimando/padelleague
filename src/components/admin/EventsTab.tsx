@@ -14,10 +14,16 @@ type AdminEventRow = {
   event_type: string;
   start_date?: string | null;
   end_date?: string | null;
+  signup_deadline?: string | null;
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
+  visibility?: "draft" | "published";
+  created_by_player_id?: number | null;
   image_url?: string | null;
   description?: string | null;
+  format?: string | null;
+  player_limit?: number | null;
+  notes?: string | null;
   registration_fee?: number | null;
   payment_instructions?: string | null;
   deleted_at?: string | null;
@@ -51,10 +57,14 @@ type EventEditForm = {
   event_type: string;
   start_date: string;
   end_date: string;
+  signup_deadline: string;
   registration_status: "open" | "closed";
   status: "upcoming" | "ongoing" | "completed";
   image_url: string;
   description: string;
+  format: string;
+  player_limit: string;
+  notes: string;
   registration_fee: string;
   payment_instructions: string;
 };
@@ -76,10 +86,14 @@ function makeEditDraft(e: AdminEventRow): EventEditForm {
     event_type: e.event_type,
     start_date: e.start_date ?? "",
     end_date: e.end_date ?? "",
+    signup_deadline: e.signup_deadline ?? "",
     registration_status: e.registration_status,
     status: e.status,
     image_url: e.image_url ?? "",
     description: e.description ?? "",
+    format: e.format ?? "",
+    player_limit: e.player_limit != null ? String(e.player_limit) : "",
+    notes: e.notes ?? "",
     registration_fee: e.registration_fee != null ? String(e.registration_fee) : "",
     payment_instructions: e.payment_instructions ?? "",
   };
@@ -114,6 +128,7 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   const [statusFilter, setStatusFilter] = useState<EventStatusFilter>("non_completed");
 
   const [updatingEventId, setUpdatingEventId] = useState<number | null>(null);
+  const [publishingEventId, setPublishingEventId] = useState<number | null>(null);
 
   // Single selection — replaces editingEventId + expandedSignupsEventId
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
@@ -246,7 +261,10 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     });
   }, [players, bulkAddSearch, alreadySignedUpPlayerIds]);
 
+  const draftEvents = events.filter(event => event.visibility === "draft" && !event.deleted_at);
+
   const filteredEvents = events.filter(event => {
+    if (event.visibility === "draft") return false; // shown in separate section
     if (statusFilter === "all") return true;
     if (statusFilter === "non_completed") return event.status !== "completed";
     return event.status === statusFilter;
@@ -321,10 +339,14 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
         event_type: editDraft.event_type,
         start_date: editDraft.start_date || null,
         end_date: editDraft.end_date || null,
+        signup_deadline: editDraft.signup_deadline || null,
         registration_status: editDraft.registration_status,
         status: editDraft.status,
         image_url: editDraft.image_url || null,
         description: editDraft.description || null,
+        format: editDraft.format || null,
+        player_limit: editDraft.player_limit ? Number(editDraft.player_limit) : null,
+        notes: editDraft.notes || null,
         registration_fee: editDraft.registration_fee ? Number(editDraft.registration_fee) : null,
         payment_instructions: editDraft.payment_instructions || null,
       }),
@@ -577,6 +599,21 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setBulkAddLoading(false);
   };
 
+  const handlePublishDraft = async (eventId: number) => {
+    setPublishingEventId(eventId);
+    const token = await getAccessToken();
+    if (!token) { setPublishingEventId(null); return; }
+    const res = await fetch(`/api/admin/events/${eventId}/publish`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json()) as { event?: AdminEventRow };
+    if (res.ok && json.event) {
+      setEvents(prev => prev.map(e => e.event_id === eventId ? (json.event as AdminEventRow) : e));
+    }
+    setPublishingEventId(null);
+  };
+
   const regBadge = (s: string) =>
     s === "open"
       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -644,6 +681,49 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
       {success && (
         <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
           {success}
+        </div>
+      )}
+
+      {/* Pending Review (Drafts) */}
+      {!loading && draftEvents.length > 0 && (
+        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-amber-700/30">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
+              Pending Review ({draftEvents.length})
+            </p>
+          </div>
+          <div className="divide-y divide-amber-700/20">
+            {draftEvents.map(e => (
+              <div key={e.event_id} className="flex items-center gap-3 px-4 py-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-100 truncate">{e.name ?? `Event ${e.event_id}`}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {e.start_date ?? "No date"}
+                    {e.signup_deadline ? ` · Deadline: ${e.signup_deadline}` : ""}
+                    {e.format ? ` · ${e.format}` : ""}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <a
+                    href={`/events/${e.event_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium px-3 py-1.5 rounded-md border border-slate-600 text-slate-300 hover:border-slate-400 hover:text-slate-100 transition-colors"
+                  >
+                    View →
+                  </a>
+                  <button
+                    type="button"
+                    disabled={publishingEventId === e.event_id}
+                    onClick={() => void handlePublishDraft(e.event_id)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {publishingEventId === e.event_id ? "Publishing…" : "Publish"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -799,6 +879,23 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                       onChange={ev => handleEditDraftChange("end_date", ev.target.value)} />
                   </div>
                   <div>
+                    <label className={labelCls}>Signup Deadline</label>
+                    <input type="date" className={inputCls} value={editDraft.signup_deadline}
+                      onChange={ev => handleEditDraftChange("signup_deadline", ev.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Format (optional)</label>
+                    <input type="text" className={inputCls} placeholder="e.g. Doubles, Mixed"
+                      value={editDraft.format}
+                      onChange={ev => handleEditDraftChange("format", ev.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Estimated Player Pool (optional)</label>
+                    <input type="number" min="0" className={inputCls} placeholder="e.g. 32"
+                      value={editDraft.player_limit}
+                      onChange={ev => handleEditDraftChange("player_limit", ev.target.value)} />
+                  </div>
+                  <div>
                     <label className={labelCls}>Registration Fee (PHP)</label>
                     <input type="number" min="0" className={inputCls} placeholder="1000"
                       value={editDraft.registration_fee}
@@ -839,6 +936,12 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                       placeholder={"e.g. Bank: BDO\nAccount: 1234567890\nGCash: 0917-xxx-xxxx"}
                       value={editDraft.payment_instructions}
                       onChange={ev => handleEditDraftChange("payment_instructions", ev.target.value)} />
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label className={labelCls}>Creator Notes (optional, admin-visible)</label>
+                    <textarea rows={2} className={inputCls}
+                      value={editDraft.notes}
+                      onChange={ev => handleEditDraftChange("notes", ev.target.value)} />
                   </div>
                 </div>
                 <div className="mt-3">
