@@ -105,6 +105,7 @@ export type SignupPlayersReferrer = {
   id: string;
   signup_id: string;
   referrer_player_id: number;
+  submitted_by_player_id: number | null;
   initial_rating: number | null;
   notes: string | null;
   is_named_referrer: boolean;

@@ -43,7 +43,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const patch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+    submitted_by_player_id: auth.playerId,
+  };
 
   if (body.initial_rating !== undefined) {
     if (
@@ -75,7 +78,7 @@ export async function PATCH(
     .from("signups_players_referrers")
     .update(patch)
     .eq("id", referrerId)
-    .select("id, signup_id, referrer_player_id, initial_rating, notes, updated_at")
+    .select("id, signup_id, referrer_player_id, submitted_by_player_id, initial_rating, notes, updated_at")
     .single();
 
   if (error) {

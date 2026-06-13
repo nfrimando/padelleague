@@ -31,7 +31,7 @@ export async function GET(
   const { data: referrers, error: referrersError } = await serviceClient
     .from("signups_players_referrers")
     .select(
-      "id, signup_id, referrer_player_id, initial_rating, notes, is_named_referrer, created_at, updated_at, players:referrer_player_id (player_id, name, nickname, image_link)",
+      "id, signup_id, referrer_player_id, submitted_by_player_id, initial_rating, notes, is_named_referrer, created_at, updated_at, players:referrer_player_id (player_id, name, nickname, image_link)",
     )
     .eq("signup_id", signupId)
     .order("created_at", { ascending: true });
