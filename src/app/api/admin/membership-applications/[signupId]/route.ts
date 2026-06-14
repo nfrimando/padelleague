@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
 
+const ALLOWED_STATUS_CHANGES = ["cancelled", "waitlisted"] as const;
+
 /** PATCH /api/admin/membership-applications/[signupId]
- * Body: { approved: boolean }
+ * Body (approve/reject): { approved: boolean, notes?: string, initialRating?: number }
+ * Body (status change):  { status: "cancelled" | "waitlisted", notes?: string }
  */
 export async function PATCH(
   request: Request,
@@ -14,29 +17,12 @@ export async function PATCH(
   const { supabase } = authResult;
   const { signupId } = await params;
 
-  let body: { approved?: unknown; notes?: unknown; initialRating?: unknown };
+  let body: { approved?: unknown; status?: unknown; notes?: unknown; initialRating?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
-
-  if (typeof body.approved !== "boolean") {
-    return NextResponse.json({ error: "approved (boolean) is required." }, { status: 400 });
-  }
-
-  if (body.approved) {
-    const r = typeof body.initialRating === "number" ? body.initialRating : NaN;
-    if (isNaN(r) || r < 0) {
-      return NextResponse.json(
-        { error: "initialRating (non-negative number) is required when approving." },
-        { status: 400 },
-      );
-    }
-  }
-
-  const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null;
-  const initialRating = body.approved && typeof body.initialRating === "number" ? body.initialRating : null;
 
   const { data: signup, error: signupError } = await supabase
     .from("signups_players")
@@ -60,6 +46,46 @@ export async function PATCH(
       { status: 409 },
     );
   }
+
+  const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null;
+
+  // Explicit status change path (no player creation)
+  if (body.status !== undefined) {
+    if (!ALLOWED_STATUS_CHANGES.includes(body.status as typeof ALLOWED_STATUS_CHANGES[number])) {
+      return NextResponse.json(
+        { error: `status must be one of: ${ALLOWED_STATUS_CHANGES.join(", ")}` },
+        { status: 400 },
+      );
+    }
+
+    const { error: updateError } = await supabase
+      .from("signups_players")
+      .update({ status: body.status, notes })
+      .eq("id", signupId);
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, status: body.status });
+  }
+
+  // Approve / reject path
+  if (typeof body.approved !== "boolean") {
+    return NextResponse.json({ error: "approved (boolean) or status is required." }, { status: 400 });
+  }
+
+  if (body.approved) {
+    const r = typeof body.initialRating === "number" ? body.initialRating : NaN;
+    if (isNaN(r) || r < 0) {
+      return NextResponse.json(
+        { error: "initialRating (non-negative number) is required when approving." },
+        { status: 400 },
+      );
+    }
+  }
+
+  const initialRating = body.approved && typeof body.initialRating === "number" ? body.initialRating : null;
 
   if (!body.approved) {
     const { error: rejectError } = await supabase
@@ -139,4 +165,37 @@ export async function PATCH(
   }
 
   return NextResponse.json({ ok: true, approved: true, player_id: playerId });
+}
+
+/** DELETE /api/admin/membership-applications/[signupId] */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ signupId: string }> },
+) {
+  const authResult = await getAuthorizedAdminClient(request);
+  if (!authResult.ok) return authResult.response;
+
+  const { supabase } = authResult;
+  const { signupId } = await params;
+
+  // Remove referrer assessments first to avoid FK violations
+  const { error: referrersError } = await supabase
+    .from("signups_players_referrers")
+    .delete()
+    .eq("signup_id", signupId);
+
+  if (referrersError) {
+    return NextResponse.json({ error: referrersError.message }, { status: 500 });
+  }
+
+  const { error: deleteError } = await supabase
+    .from("signups_players")
+    .delete()
+    .eq("id", signupId);
+
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
 }
