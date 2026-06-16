@@ -342,8 +342,11 @@ function ReferrerCard({
     <div className="border border-white/10 rounded-xl p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="font-semibold text-white text-sm">{displayName}</p>
-          {(referrer.referrer as Player | undefined)?.nickname &&
+          <p className="font-semibold text-white text-sm">
+            {isAdmin ? displayName : `Player #${referrer.referrer_player_id}`}
+          </p>
+          {isAdmin &&
+            (referrer.referrer as Player | undefined)?.nickname &&
             (referrer.referrer as Player | undefined)?.name && (
               <p className="text-xs text-[#687FA3]">
                 {(referrer.referrer as Player | undefined)?.name}
