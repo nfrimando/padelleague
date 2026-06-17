@@ -31,11 +31,6 @@ export type PredictableMatch = {
   winningTeam: 1 | 2 | null;
 };
 
-type PlayerSummaryRow = {
-  player_id: number | string;
-  latest_rating: number | string | null;
-};
-
 export function usePredictableMatches() {
   const [matches, setMatches] = useState<PredictableMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +137,7 @@ export function usePredictableMatches() {
       }
       const allPlayerIds = Array.from(playerIdSet);
 
-      // Fetch player info — include initial_rating as fallback for players with no match history
+      // Fetch player info — include initial_rating as fallback for players with no ledger events yet
       const { data: playerRows } = await supabase
         .from("players")
         .select("player_id,name,nickname,image_link,initial_rating")
@@ -150,10 +145,13 @@ export function usePredictableMatches() {
 
       if (cancelled) return;
 
-      // Fetch latest ratings via RPC
-      const { data: summaryRows } = await supabase.rpc("get_player_summary", {
-        p_ids: allPlayerIds,
-      });
+      // Fetch latest ratings from the player_rating_events ledger (newest first per player)
+      const { data: ledgerRows } = await supabase
+        .from("player_rating_events")
+        .select("player_id, rating_after, occurred_at, created_at")
+        .in("player_id", allPlayerIds)
+        .order("occurred_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false });
 
       if (cancelled) return;
 
@@ -171,11 +169,15 @@ export function usePredictableMatches() {
           latest_rating: Number.isFinite(initialRating) ? initialRating : null,
         });
       }
-      for (const row of (summaryRows ?? []) as PlayerSummaryRow[]) {
+      // Override with the most recent ledger event per player — first row seen is newest.
+      const seenInLedger = new Set<number>();
+      for (const row of (ledgerRows ?? []) as Array<{ player_id: number | string; rating_after: number | string | null }>) {
         const id = Number(row.player_id);
+        if (seenInLedger.has(id)) continue;
+        seenInLedger.add(id);
         const existing = playerMap.get(id);
-        if (existing && row.latest_rating !== null && row.latest_rating !== undefined) {
-          const rating = Number(row.latest_rating);
+        if (existing && row.rating_after !== null && row.rating_after !== undefined) {
+          const rating = Number(row.rating_after);
           if (Number.isFinite(rating)) {
             existing.latest_rating = rating;
           }

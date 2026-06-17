@@ -35,6 +35,23 @@ export type Player = {
   updated_at?: string;
 };
 
+// Maps to rows in `player_rating_events` — the chronological ledger of every rating-changing
+// event for a player (source of truth for current/effective rating + progression).
+// event_type is open-ended: 'initial_rating' | 'match_win' | 'match_loss' | future types
+// (e.g. 'recalibration', 'admin_adjustment'). Consumers must handle unknown types gracefully.
+export type PlayerRatingEvent = {
+  id: string;
+  playerId: string;
+  eventType: string;
+  ratingBefore: number | null;
+  ratingAfter: number;
+  ratingDelta: number | null;
+  sourceType: string | null; // 'match' | ... | null for initial_rating
+  sourceId: string | null; // match_id (as text) for match events
+  occurredAt: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
 export type EventRestrictions = {
   min_rating?: number | null;
   max_rating?: number | null;

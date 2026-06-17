@@ -25,6 +25,7 @@ type CompletionResult = {
   winnerTeam: 1 | 2;
   setsWon: { team1: number; team2: number };
   ratings: Array<{ player_id: number }>;
+  ledgerEvents?: { count: number } | null;
   message: string;
   emails?: EmailNotifyResult | null;
 };
@@ -621,6 +622,24 @@ export function CompleteMatchTab() {
                     {completionResult.ratings.length} ratings updated
                   </span>
                 </li>
+                {(() => {
+                  const ledgerCount = completionResult.ledgerEvents?.count ?? 0;
+                  const synced = ledgerCount === completionResult.ratings.length;
+                  return (
+                    <li
+                      className={`flex items-center gap-2.5 text-sm ${synced ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
+                    >
+                      <span className={`shrink-0 ${synced ? "text-emerald-500 dark:text-emerald-400" : "text-amber-500 dark:text-amber-400"}`}>
+                        {synced ? <IconCheck /> : "!"}
+                      </span>
+                      <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-44 shrink-0">player_rating_events</code>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {ledgerCount} ledger event{ledgerCount === 1 ? "" : "s"} synced
+                        {synced ? "" : " (expected " + completionResult.ratings.length + ")"}
+                      </span>
+                    </li>
+                  );
+                })()}
                 <li className="flex items-center gap-2.5 text-sm text-emerald-700 dark:text-emerald-400">
                   <span className="shrink-0 text-emerald-500 dark:text-emerald-400"><IconCheck /></span>
                   <code className="text-xs font-mono text-slate-600 dark:text-slate-300 w-44 shrink-0">prediction_results</code>

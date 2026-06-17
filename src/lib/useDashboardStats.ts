@@ -1,13 +1,19 @@
 "use client";
 
 import { useMemo } from "react";
-import type { MatchWithTeams, Player, TeamWithPlayers } from "@/lib/types";
+import type {
+  MatchWithTeams,
+  Player,
+  PlayerRatingEvent,
+  TeamWithPlayers,
+} from "@/lib/types";
 
 export type ChartPoint = {
-  matchIndex: number;
+  index: number;
   rating: number;
-  match: MatchWithTeams;
   delta: number | null;
+  event: PlayerRatingEvent;
+  match: MatchWithTeams | null; // null for initial_rating / future non-match events
 };
 
 export type OpponentStat = {
@@ -62,6 +68,7 @@ export function useDashboardStats(
   matches: MatchWithTeams[],
   playerId: string | null,
   latestRating: number | null,
+  ratingEvents: PlayerRatingEvent[],
 ): DashboardStats {
   return useMemo(() => {
     const empty: DashboardStats = {
@@ -95,52 +102,22 @@ export function useDashboardStats(
     const winRate =
       totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
 
-    // ── Chart data (last 20 completed, chronological) ────────────────────────
-    const chartSource = completedDesc.slice(0, 20).reverse();
-    const chartData: ChartPoint[] = [];
-    let prevRating: number | null = null;
-
-    for (let i = 0; i < chartSource.length; i++) {
-      const match = chartSource[i];
-      let ratingAfter: number | null = null;
-
-      if (i < chartSource.length - 1) {
-        const nextMatch = chartSource[i + 1];
-        const nextMyTeam = findMyTeam(nextMatch, pid);
-        if (nextMyTeam) {
-          const nextMyPlayer =
-            String(nextMyTeam.player_1?.player_id) === pid
-              ? nextMyTeam.player_1
-              : nextMyTeam.player_2;
-          ratingAfter = nextMyPlayer?.pre_match_rating ?? null;
-        }
-      } else {
-        ratingAfter = latestRating;
-      }
-
-      if (ratingAfter === null) continue;
-
-      // For the first point, try to derive a delta using this match's pre_match_rating
-      let ratingBefore = prevRating;
-      if (ratingBefore === null) {
-        const myTeam = findMyTeam(match, pid);
-        if (myTeam) {
-          const myPlayer =
-            String(myTeam.player_1?.player_id) === pid
-              ? myTeam.player_1
-              : myTeam.player_2;
-          ratingBefore = myPlayer?.pre_match_rating ?? null;
-        }
-      }
-
-      chartData.push({
-        matchIndex: i + 1,
-        rating: ratingAfter,
-        match,
-        delta: ratingBefore !== null ? ratingAfter - ratingBefore : null,
-      });
-      prevRating = ratingAfter;
-    }
+    // ── Chart data (last 20 rating events, chronological) from the ledger ─────
+    // Authoritative rating_after / rating_delta per event; match events join back to the
+    // loaded matches by source_id for rich hovers. The initial_rating event is the origin.
+    const matchesById = new Map<string, MatchWithTeams>(
+      matches.map((m) => [String(m.match_id), m]),
+    );
+    const chartData: ChartPoint[] = ratingEvents.slice(-20).map((event, i) => ({
+      index: i + 1,
+      rating: event.ratingAfter,
+      delta: event.ratingDelta,
+      event,
+      match:
+        event.sourceType === "match" && event.sourceId
+          ? (matchesById.get(event.sourceId) ?? null)
+          : null,
+    }));
 
     // ── Peak rating ──────────────────────────────────────────────────────────
     const peakRating =
@@ -261,5 +238,5 @@ export function useDashboardStats(
       opponentStats,
       partnerStats,
     };
-  }, [matches, playerId, latestRating]);
+  }, [matches, playerId, latestRating, ratingEvents]);
 }

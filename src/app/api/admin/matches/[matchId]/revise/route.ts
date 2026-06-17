@@ -4,6 +4,7 @@ import {
   isRecord,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import { readLedgerEventsForMatch } from "@/app/api/admin/_lib/ledger";
 import { calculateRatings } from "@/lib/ratingCalculator";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
@@ -531,6 +532,9 @@ export async function PATCH(
     return rollback(matchCompleteError.message || "Failed to mark match as completed.");
   }
 
+  // The match→ledger trigger has run; read it back to confirm the ledger is synced.
+  const ledgerEvents = await readLedgerEventsForMatch(supabase, matchId);
+
   // --- Post-complete (non-fatal) ---
 
   // 12. Re-resolve predictions against the new winner
@@ -584,6 +588,7 @@ export async function PATCH(
         team2: calculation.team2SetsWon,
       },
       ratings: insertedRatings ?? [],
+      ledgerEvents,
       message: "Match score revised and ratings recalculated.",
     },
     { status: 200 },

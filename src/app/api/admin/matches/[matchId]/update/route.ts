@@ -7,6 +7,7 @@ import {
   normalizeOptionalString,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import { readLedgerEventsForMatch } from "@/app/api/admin/_lib/ledger";
 import { calculateRatings } from "@/lib/ratingCalculator";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
@@ -662,6 +663,10 @@ export async function PATCH(
       );
     }
 
+    // The match_player_ratings → player_rating_events trigger has already run; read it back so the
+    // admin UI can confirm the ledger is synced. Non-fatal: a read failure must not roll back.
+    const ledgerEvents = await readLedgerEventsForMatch(supabase, matchId);
+
     const { data: playerRows } = await supabase
       .from("players")
       .select("player_id,name,nickname,email,is_notifications_subscribed")
@@ -724,6 +729,7 @@ export async function PATCH(
           team2: calculation.team2SetsWon,
         },
         ratings: insertedRatings ?? [],
+        ledgerEvents,
         message: "Match updated as completed with sets and v3 ratings.",
         emails: completedEmailResult,
       },

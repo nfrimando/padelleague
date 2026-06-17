@@ -19,6 +19,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useEventSignup } from "@/lib/useEventSignup";
 import { usePlayerMatches } from "@/lib/usePlayerMatches";
+import { usePlayerRatingEvents } from "@/lib/usePlayerRatingEvents";
 import { useEventMap } from "@/lib/useEventMap";
 import { useDashboardStats } from "@/lib/useDashboardStats";
 import HeroSection from "./HeroSection";
@@ -271,11 +272,14 @@ function DashboardPageContent() {
 
 
   // ── Match data (always for displayPlayer) ────────────────────────────────
-  const {
-    matches,
-    latestRating,
-    loading: matchesLoading,
-  } = usePlayerMatches(displayPlayer ? String(displayPlayer.player_id) : null);
+  const { matches, loading: matchesLoading } = usePlayerMatches(
+    displayPlayer ? String(displayPlayer.player_id) : null,
+  );
+
+  // Current/effective rating + progression come from the player_rating_events ledger.
+  const { events: ratingEvents, latestRating } = usePlayerRatingEvents(
+    displayPlayer ? String(displayPlayer.player_id) : null,
+  );
 
   const { eventMap } = useEventMap();
 
@@ -283,6 +287,7 @@ function DashboardPageContent() {
     matches,
     displayPlayer ? String(displayPlayer.player_id) : null,
     latestRating,
+    ratingEvents,
   );
 
   const matchEventIds = useMemo(() => {

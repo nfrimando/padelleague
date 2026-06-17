@@ -1,27 +1,22 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
+// A player's pre-match rating is resolved from the player_rating_events ledger: their most recent
+// rating_after, EXCLUDING the target match's own event (so we get the rating going INTO this match).
+// Because the ledger mirrors match_player_ratings for match events, this is behavior-preserving for
+// match-only data, and additionally picks up non-match rating events (recalibrations, adjustments).
+//
+// Fallback chain for players with no usable ledger row: the supplied initialRatingFallback map, then
+// players.initial_rating, then null.
+
 type InitialRatingFallback = Map<number, number | null> | null | undefined;
 
-type RatingHistoryRow = {
+type LedgerRow = {
   player_id: number | string | null;
-  match_id: number | string | null;
-  rating_post: number | string | null;
-  formula_name: string | null;
-  matches:
-    | {
-        date_local?: string | null;
-        time_local?: string | null;
-      }
-    | Array<{
-        date_local?: string | null;
-        time_local?: string | null;
-      }>
-    | null;
-};
-
-type ExistingMatchRatingPreRow = {
-  player_id: number | string | null;
-  rating_pre: number | string | null;
+  rating_after: number | string | null;
+  occurred_at: string | null;
+  created_at: string | null;
+  source_type: string | null;
+  source_id: string | null;
 };
 
 type PlayerInitialRatingRow = {
@@ -29,178 +24,89 @@ type PlayerInitialRatingRow = {
   initial_rating: number | string | null;
 };
 
-type ResolvedPreMatchRatingRow = {
-  player_id: number | string | null;
-  pre_match_rating: number | string | null;
-};
-
-type PreferredMatchRating = {
-  ratingPost: number;
-  priority: number;
-  dateLocal: string | null;
-  timeLocal: string | null;
-};
-
 function toFiniteNumber(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function toPriority(formulaName: unknown): number {
-  const formula = String(formulaName || "").toLowerCase();
-  return formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
-}
-
-function normalizeMatchMeta(matches: RatingHistoryRow["matches"]): {
-  dateLocal: string | null;
-  timeLocal: string | null;
-} {
-  if (Array.isArray(matches)) {
-    const first = matches[0];
-    return {
-      dateLocal: first?.date_local ?? null,
-      timeLocal: first?.time_local ?? null,
-    };
-  }
-
-  return {
-    dateLocal: matches?.date_local ?? null,
-    timeLocal: matches?.time_local ?? null,
-  };
-}
-
+// Returns < 0 when `a` is more recent than `b` (descending), so it can be read as "a wins".
 function compareNullableStringDesc(a: string | null, b: string | null): number {
-  if (a === b) {
-    return 0;
-  }
-  if (a === null) {
-    return 1;
-  }
-  if (b === null) {
-    return -1;
-  }
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
   return b.localeCompare(a);
 }
 
-function findLatestRating(
-  perMatch: Map<number, PreferredMatchRating>,
-): number | null {
-  const sorted = Array.from(perMatch.entries()).sort((a, b) => {
-    const [aMatchId, aValue] = a;
-    const [bMatchId, bValue] = b;
+type BestEvent = {
+  ratingAfter: number;
+  occurredAt: string | null;
+  createdAt: string | null;
+};
 
-    const byDate = compareNullableStringDesc(aValue.dateLocal, bValue.dateLocal);
-    if (byDate !== 0) {
-      return byDate;
-    }
-
-    const byTime = compareNullableStringDesc(aValue.timeLocal, bValue.timeLocal);
-    if (byTime !== 0) {
-      return byTime;
-    }
-
-    return bMatchId - aMatchId;
-  });
-
-  return sorted.length > 0 ? sorted[0][1].ratingPost : null;
+function isMoreRecent(candidate: LedgerRow, current: BestEvent): boolean {
+  const byOccurred = compareNullableStringDesc(candidate.occurred_at, current.occurredAt);
+  if (byOccurred !== 0) return byOccurred < 0;
+  return compareNullableStringDesc(candidate.created_at, current.createdAt) < 0;
 }
 
-async function resolvePreMatchRatingsSequentialFallback(
+export async function resolvePreMatchRatings(
   supabase: SupabaseClient,
   matchId: number,
-  requestedPlayerIds: number[],
+  playerIds: number[],
   initialRatingFallback?: InitialRatingFallback,
 ): Promise<Map<number, number | null>> {
+  const requestedPlayerIds = Array.from(
+    new Set(
+      playerIds.filter((playerId) => Number.isInteger(playerId) && playerId > 0),
+    ),
+  );
+
   const resolved = new Map<number, number | null>();
+  if (requestedPlayerIds.length === 0) {
+    return resolved;
+  }
 
-  const { data: historyRows, error: historyError } = await supabase
-    .from("match_player_ratings")
-    .select("player_id,match_id,rating_post,formula_name,matches(date_local,time_local)")
-    .in("player_id", requestedPlayerIds)
-    .neq("match_id", matchId);
+  const { data, error } = await supabase
+    .from("player_rating_events")
+    .select("player_id, rating_after, occurred_at, created_at, source_type, source_id")
+    .in("player_id", requestedPlayerIds);
 
-  if (!historyError) {
-    const preferredByPlayerAndMatch = new Map<
-      number,
-      Map<number, PreferredMatchRating>
-    >();
-
-    for (const row of (historyRows ?? []) as RatingHistoryRow[]) {
+  if (!error) {
+    const best = new Map<number, BestEvent>();
+    for (const row of (data ?? []) as LedgerRow[]) {
       const playerId = toFiniteNumber(row.player_id);
-      const ratingMatchId = toFiniteNumber(row.match_id);
-      const ratingPost = toFiniteNumber(row.rating_post);
+      const ratingAfter = toFiniteNumber(row.rating_after);
+      if (playerId === null || ratingAfter === null) continue;
 
-      if (
-        playerId === null ||
-        ratingMatchId === null ||
-        ratingPost === null ||
-        !requestedPlayerIds.includes(playerId)
-      ) {
+      // Skip the target match's own event so we resolve the rating going INTO this match.
+      if (row.source_type === "match" && String(row.source_id) === String(matchId)) {
         continue;
       }
 
-      const playerMap =
-        preferredByPlayerAndMatch.get(playerId) ??
-        new Map<number, PreferredMatchRating>();
-      const existing = playerMap.get(ratingMatchId);
-      const priority = toPriority(row.formula_name);
-      const { dateLocal, timeLocal } = normalizeMatchMeta(row.matches);
-
-      if (!existing || priority >= existing.priority) {
-        playerMap.set(ratingMatchId, {
-          ratingPost,
-          priority,
-          dateLocal,
-          timeLocal,
+      const existing = best.get(playerId);
+      if (!existing || isMoreRecent(row, existing)) {
+        best.set(playerId, {
+          ratingAfter,
+          occurredAt: row.occurred_at,
+          createdAt: row.created_at,
         });
       }
-
-      preferredByPlayerAndMatch.set(playerId, playerMap);
     }
 
-    for (const playerId of requestedPlayerIds) {
-      const latest = findLatestRating(
-        preferredByPlayerAndMatch.get(playerId) ?? new Map(),
-      );
-      if (typeof latest === "number") {
-        resolved.set(playerId, latest);
-      }
+    for (const [playerId, value] of best) {
+      resolved.set(playerId, value.ratingAfter);
     }
   }
 
+  // Fallback for players with no usable ledger rating yet.
   let remainingPlayerIds = requestedPlayerIds.filter(
     (playerId) => !resolved.has(playerId),
   );
-
-  if (remainingPlayerIds.length > 0) {
-    const { data: existingRows, error: existingError } = await supabase
-      .from("match_player_ratings")
-      .select("player_id,rating_pre")
-      .eq("match_id", matchId)
-      .in("player_id", remainingPlayerIds);
-
-    if (!existingError) {
-      for (const row of (existingRows ?? []) as ExistingMatchRatingPreRow[]) {
-        const playerId = toFiniteNumber(row.player_id);
-        const ratingPre = toFiniteNumber(row.rating_pre);
-        if (playerId === null || ratingPre === null || resolved.has(playerId)) {
-          continue;
-        }
-
-        resolved.set(playerId, ratingPre);
-      }
-    }
-
-    remainingPlayerIds = requestedPlayerIds.filter(
-      (playerId) => !resolved.has(playerId),
-    );
-  }
 
   if (remainingPlayerIds.length > 0 && initialRatingFallback) {
     for (const playerId of remainingPlayerIds) {
       resolved.set(playerId, initialRatingFallback.get(playerId) ?? null);
     }
-
     remainingPlayerIds = requestedPlayerIds.filter(
       (playerId) => !resolved.has(playerId),
     );
@@ -215,84 +121,16 @@ async function resolvePreMatchRatingsSequentialFallback(
     if (!playersError) {
       for (const row of (playersRows ?? []) as PlayerInitialRatingRow[]) {
         const playerId = toFiniteNumber(row.player_id);
-        const initialRating = toFiniteNumber(row.initial_rating);
-        if (playerId === null || resolved.has(playerId)) {
-          continue;
-        }
-
-        resolved.set(playerId, initialRating);
+        if (playerId === null || resolved.has(playerId)) continue;
+        resolved.set(playerId, toFiniteNumber(row.initial_rating));
       }
-    }
-
-    remainingPlayerIds = requestedPlayerIds.filter(
-      (playerId) => !resolved.has(playerId),
-    );
-  }
-
-  for (const playerId of remainingPlayerIds) {
-    resolved.set(playerId, null);
-  }
-
-  return resolved;
-}
-
-export async function resolvePreMatchRatings(
-  supabase: SupabaseClient,
-  matchId: number,
-  playerIds: number[],
-  initialRatingFallback?: InitialRatingFallback,
-): Promise<Map<number, number | null>> {
-  const requestedPlayerIds = Array.from(
-    new Set(
-      playerIds.filter(
-        (playerId) => Number.isInteger(playerId) && playerId > 0,
-      ),
-    ),
-  );
-
-  const resolved = new Map<number, number | null>();
-  if (requestedPlayerIds.length === 0) {
-    return resolved;
-  }
-
-  const { data, error } = await supabase.rpc("get_pre_match_ratings", {
-    p_match_id: matchId,
-    p_player_ids: requestedPlayerIds,
-  });
-
-  if (error) {
-    return resolvePreMatchRatingsSequentialFallback(
-      supabase,
-      matchId,
-      requestedPlayerIds,
-      initialRatingFallback,
-    );
-  }
-
-  for (const row of (data ?? []) as ResolvedPreMatchRatingRow[]) {
-    const playerId = toFiniteNumber(row.player_id);
-    const preMatchRating = toFiniteNumber(row.pre_match_rating);
-
-    if (playerId === null || !requestedPlayerIds.includes(playerId)) {
-      continue;
-    }
-
-    if (preMatchRating !== null) {
-      resolved.set(playerId, preMatchRating);
     }
   }
 
   for (const playerId of requestedPlayerIds) {
-    if (resolved.has(playerId)) {
-      continue;
+    if (!resolved.has(playerId)) {
+      resolved.set(playerId, null);
     }
-
-    if (initialRatingFallback?.has(playerId)) {
-      resolved.set(playerId, initialRatingFallback.get(playerId) ?? null);
-      continue;
-    }
-
-    resolved.set(playerId, null);
   }
 
   return resolved;

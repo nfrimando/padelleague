@@ -5,6 +5,7 @@ import {
   normalizeOptionalString,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import { readLedgerEventsForMatch } from "@/app/api/admin/_lib/ledger";
 
 type MatchRatingResult = "win" | "loss";
 
@@ -290,11 +291,15 @@ export async function PUT(
     );
   }
 
+  // The match→ledger trigger has run; read it back to confirm the ledger is synced.
+  const ledgerEvents = await readLedgerEventsForMatch(supabase, matchId);
+
   return NextResponse.json(
     {
       matchId,
       formulaName: validation.value.formulaName,
       ratings: insertedRows ?? [],
+      ledgerEvents,
       message: "Match player ratings replaced successfully.",
     },
     { status: 200 },

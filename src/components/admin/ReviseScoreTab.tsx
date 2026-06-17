@@ -306,6 +306,7 @@ export function ReviseScoreTab() {
         error?: string;
         details?: string[];
         message?: string;
+        ledgerEvents?: { count: number } | null;
       };
 
       if (!response.ok) {
@@ -315,7 +316,10 @@ export function ReviseScoreTab() {
         return;
       }
 
-      setSubmitSuccess(result.message || "Match score revised successfully.");
+      const ledgerCount = result.ledgerEvents?.count ?? 0;
+      setSubmitSuccess(
+        `${result.message || "Match score revised successfully."} · ${ledgerCount} ledger event${ledgerCount === 1 ? "" : "s"} synced`,
+      );
       setCalculated(false);
       // Refresh the list (re-mount the hook by bumping the key)
       setRefreshKey((k) => k + 1);

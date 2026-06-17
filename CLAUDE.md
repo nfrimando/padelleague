@@ -6,21 +6,29 @@ A Next.js web app for a competitive padel league in the Philippines. Members can
 
 ## Data Model
 
-Core tables: `players`, `matches`, `match_teams`, `match_sets`, `match_player_ratings`, `events`, `signups_events`, `signups_players`, `player_claims`, `payments`, `payments_paymongo`, `webhook_events`, `admin_users`.
+Core tables: `players`, `matches`, `match_teams`, `match_sets`, `match_player_ratings`, `player_rating_events`, `events`, `signups_events`, `signups_players`, `player_claims`, `payments`, `payments_paymongo`, `webhook_events`, `admin_users`.
 
 - Players link to auth via `players.email = auth.user.email`
 - Match structure: `matches` → `match_teams` (team 1 & 2) → each team has `player_1_id` + `player_2_id`
-- Ratings stored in `match_player_ratings` with `formula_name` (prefer `v3` > `v2` when multiple exist)
+- Per-match rating calc is stored in `match_player_ratings` with `formula_name` (prefer `v3` > `v2` when multiple exist). This is the historical record of *each match's* `rating_pre`/`rating_post`.
 - Events are stored in `events` table. "Seasons" are main events, but other types exist.
 - Admin access is checked against the `admin_users` table
 
+## Player Rating Events Ledger
+
+`player_rating_events` is the **chronological ledger** of every rating-changing event for a player and the **source of truth for a player's current/effective rating and rating progression**. One row per event: `event_type` (`initial_rating` | `match_win` | `match_loss` | future types), `rating_before/after/delta`, `source_type`/`source_id` (e.g. `'match'` + match_id), `occurred_at`, `metadata` (jsonb, e.g. `{ "formula": "v3" }`).
+
+**Sync (automatic):** DB triggers (`supabase/migrations/20260617000002_*`) mirror the two existing sources into the ledger — `match_player_ratings` → `match_win`/`match_loss` events (best formula priority, one row per player+match), and `players.initial_rating` → the `initial_rating` event. Match deletion cascades through the trigger. **You never write match/initial ledger rows by hand.**
+
+**RULE — new rating sources:** any feature that changes a player's rating *outside* matches/initial rating (recalibration, admin adjustment, bonus, penalty) **MUST insert its own `player_rating_events` row** with a descriptive `event_type` + `metadata`. All progression UIs must handle unknown `event_type` values gracefully (see `describeRatingEvent` in `src/lib/ratingEventDisplay.ts`).
+
 ## Player Rating Resolution
 
-A player's effective rating is always resolved as:
-1. **Latest `rating_post`** from `match_player_ratings`, joined to `matches` and ordered by `date_local` descending (most recent completed match). Prefer `formula_name = 'v3'` over `v2` over others.
-2. **Fallback**: if the player has no rows in `match_player_ratings`, use `players.initial_rating`.
+A player's **current/effective rating** is the most recent `player_rating_events.rating_after` (ordered by `occurred_at` desc, then `created_at` desc). The `initial_rating` event is the baseline origin, so there is no separate fallback step — read it via `usePlayerRatingEvents` (client) or the ledger query in `resolvePreMatchRatings` (server). At match completion, the pre-match rating is the latest `rating_after` *excluding that match's own event*, so non-match rating shifts are respected.
 
-Never treat a missing RPC or query result as "no rating" without also checking `players.initial_rating`. Apply this rule everywhere ratings are read — win probability calculations, schedule alignment, leaderboard, and player profiles.
+**Per-match historical pre-ratings** for *display inside a specific match* (`buildPreMatchRatingLookup` / `matchAssembly`) still read `match_player_ratings.rating_pre` — those are recorded facts about that match, not the player's current rating.
+
+Apply the ledger rule everywhere current rating / progression is read — win probability, leaderboard, dashboard, player profiles, player cards.
 
 ## Rating System
 
@@ -66,8 +74,9 @@ Auth / current user:
 Players:
 - `src/lib/usePlayers.ts` — list of players (supports `onlyActivePlayers`, `orderByName`, custom `select`)
 - `src/lib/usePlayerSearch.ts` — client-side filter by name/nickname
-- `src/lib/usePlayerMatchCounts.ts` — match counts + latest rating via `get_player_summary` RPC
-- `src/lib/usePlayerMatches.ts` — all matches for a player with rating history
+- `src/lib/usePlayerMatchCounts.ts` — match counts + latest rating (latest rating overridden from the `player_rating_events` ledger)
+- `src/lib/usePlayerMatches.ts` — all matches for a player
+- `src/lib/usePlayerRatingEvents.ts` — **the ledger hook**: a player's rating events (oldest→newest) + `latestRating`. Use for current rating + progression. Pair with `describeRatingEvent` (`src/lib/ratingEventDisplay.ts`) to render hover detail.
 
 Matches:
 - `src/lib/useMatches.ts` — paginated match list with optional date range

@@ -1,6 +1,7 @@
 import { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { calculateV1PredictionReward } from "@/lib/rewards/v1/calculate";
 import { computeV3ExpectedWinProbability } from "@/lib/ratings/v3/calculate";
+import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 
 const REWARD_SYSTEM_VERSION = "v1";
 const PREDICTION_MODEL_VERSION = "v3";
@@ -73,67 +74,33 @@ export async function resolveMatchPredictions(
 
   if (pending.length === 0) return { resolved: 0, skipped: skippedCount };
 
-  // Derive win probabilities from pre-match ratings (rating_pre), falling back to
-  // each player's initial_rating if no match rating record exists. Errors if any
-  // player's rating cannot be resolved.
+  // Derive win probabilities from the player_rating_events ledger (most recent rating_after
+  // per player, excluding this match's own event). Falls back to players.initial_rating.
   let team1Probability: number;
   let team2Probability: number;
   {
-    const [{ data: teamRows, error: teamErr }, { data: preRatingRows, error: preErr }] = await Promise.all([
-      supabase
-        .from("match_teams")
-        .select("team_number,player_1_id,player_2_id")
-        .eq("match_id", matchId),
-      supabase
-        .from("match_player_ratings")
-        .select("player_id,rating_pre,formula_name")
-        .eq("match_id", matchId),
-    ]);
+    const { data: teamRows, error: teamErr } = await supabase
+      .from("match_teams")
+      .select("team_number,player_1_id,player_2_id")
+      .eq("match_id", matchId);
 
     if (teamErr) throw new Error("Failed to fetch match teams.");
-    if (preErr) throw new Error("Failed to fetch match player ratings.");
 
     const team1 = (teamRows ?? []).find((t) => t.team_number === 1);
     const team2 = (teamRows ?? []).find((t) => t.team_number === 2);
 
     if (!team1 || !team2) throw new Error("Match team records not found.");
 
-    // Build player → pre-rating map, preferring v3 > v2 > other
-    const priorityOf = (f: string | null) => (f === "v3" ? 2 : f === "v2" ? 1 : 0);
-    const sorted = [...(preRatingRows ?? [])].sort((a, b) => priorityOf(a.formula_name) - priorityOf(b.formula_name));
-    const preRating = new Map<number, number>();
-    for (const row of sorted) {
-      const rating = Number(row.rating_pre);
-      if (Number.isFinite(rating)) preRating.set(Number(row.player_id), rating);
-    }
-
     const allPlayerIds = [
       team1.player_1_id, team1.player_2_id,
       team2.player_1_id, team2.player_2_id,
     ];
-    const missingIds = allPlayerIds.filter((id) => !preRating.has(id));
 
-    if (missingIds.length > 0) {
-      const { data: playerRows, error: playerErr } = await supabase
-        .from("players")
-        .select("player_id,initial_rating")
-        .in("player_id", missingIds);
+    const preRating = await resolvePreMatchRatings(supabase as Parameters<typeof resolvePreMatchRatings>[0], matchId, allPlayerIds);
 
-      if (playerErr) throw new Error("Failed to fetch player initial ratings.");
-
-      for (const row of playerRows ?? []) {
-        const rating = Number(row.initial_rating);
-        if (!Number.isFinite(rating)) {
-          throw new Error(`Player ${row.player_id} has no pre-match rating and no initial_rating.`);
-        }
-        preRating.set(Number(row.player_id), rating);
-      }
-
-      // Re-check after fallback
-      for (const id of missingIds) {
-        if (!preRating.has(id)) {
-          throw new Error(`Player ${id} has no pre-match rating and was not found in players table.`);
-        }
+    for (const id of allPlayerIds) {
+      if (!preRating.get(id)) {
+        throw new Error(`Player ${id} has no rating in the ledger and no initial_rating.`);
       }
     }
 

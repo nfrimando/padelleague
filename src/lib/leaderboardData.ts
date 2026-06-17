@@ -25,7 +25,7 @@ export type LeaderboardEvent = {
 
 type MatchRow = { match_id: number; winner_team: number | null; status: string; date_local: string | null; type: string | null };
 type TeamRow = { match_id: number; team_number: number | null; player_1_id: number | null; player_2_id: number | null; sets_won: number | null };
-type RatingRow = { match_id: number; player_id: number | string; rating_pre: number | null; rating_post: number | null; formula_name: string | null };
+type LedgerRatingRow = { player_id: number | string; source_id: string | null; rating_after: number | null; rating_delta: number | null };
 type PlayerRow = { player_id: number | string; name: string | null; nickname: string | null; image_link: string | null };
 
 function makeServerClient() {
@@ -33,13 +33,6 @@ function makeServerClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
-}
-
-function formulaPriority(formula: string | null): number {
-  const f = String(formula ?? "").toLowerCase();
-  if (f === "v3") return 2;
-  if (f === "v2") return 1;
-  return 0;
 }
 
 export async function fetchLeaderboardEvents(): Promise<LeaderboardEvent[]> {
@@ -82,14 +75,18 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
   const [{ data: teamsData, error: teamsError }, { data: ratingsData, error: ratingsError }] =
     await Promise.all([
       db.from("match_teams").select("match_id, team_number, player_1_id, player_2_id, sets_won").in("match_id", matchIds),
-      db.from("match_player_ratings").select("match_id, player_id, rating_pre, rating_post, formula_name").in("match_id", matchIds),
+      db
+        .from("player_rating_events")
+        .select("player_id, source_id, rating_after, rating_delta")
+        .eq("source_type", "match")
+        .in("source_id", matchIds.map(String)),
     ]);
 
   if (teamsError) throw new Error(teamsError.message);
   if (ratingsError) throw new Error(ratingsError.message);
 
   const teams = (teamsData ?? []) as TeamRow[];
-  const ratings = (ratingsData ?? []) as RatingRow[];
+  const ratings = (ratingsData ?? []) as LedgerRatingRow[];
 
   const teamSetsByMatch: Record<number, Partial<Record<number, number | null>>> = {};
   for (const team of teams) {
@@ -122,23 +119,23 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
     }
   }
 
-  // player_id → { matchId → best-priority rating row }
-  type BestRating = { ratingPre: number | null; ratingPost: number | null; date: string | null; priority: number };
-  const playerRatingMap: Record<string, Record<number, BestRating>> = {};
+  // player_id → { matchId → ledger rating entry }. The ledger already holds exactly one row per
+  // (player, match) at the best formula priority, so no dedup is needed here.
+  type RatingEntry = { matchId: number; ratingAfter: number | null; ratingDelta: number | null; date: string | null };
+  const playerRatingMap: Record<string, Record<number, RatingEntry>> = {};
 
   for (const r of ratings) {
+    if (r.source_id == null) continue;
+    const matchId = Number(r.source_id);
+    if (!Number.isFinite(matchId)) continue;
     const pid = String(r.player_id);
-    const priority = formulaPriority(r.formula_name);
     if (!playerRatingMap[pid]) playerRatingMap[pid] = {};
-    const existing = playerRatingMap[pid][r.match_id];
-    if (!existing || priority > existing.priority) {
-      playerRatingMap[pid][r.match_id] = {
-        ratingPre: r.rating_pre,
-        ratingPost: r.rating_post,
-        date: matchMeta[r.match_id]?.date ?? null,
-        priority,
-      };
-    }
+    playerRatingMap[pid][matchId] = {
+      matchId,
+      ratingAfter: r.rating_after,
+      ratingDelta: r.rating_delta,
+      date: matchMeta[matchId]?.date ?? null,
+    };
   }
 
   const allPlayerIds = Object.keys(playerMatchMap);
@@ -197,22 +194,21 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
       }
     }
 
-    // Sort filtered rating entries by date ascending so currentRating reflects the latest category match.
-    const ratingEntries = Object.entries(playerRatingMap[pid] ?? {})
-      .map(([, v]) => v)
-      .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+    // Sort filtered rating entries by date (then matchId) ascending so currentRating reflects
+    // the latest category match.
+    const ratingEntries = Object.values(playerRatingMap[pid] ?? {}).sort((a, b) => {
+      const byDate = (a.date ?? "").localeCompare(b.date ?? "");
+      return byDate !== 0 ? byDate : a.matchId - b.matchId;
+    });
 
     const last = ratingEntries[ratingEntries.length - 1];
-    const currentRating = last?.ratingPost ?? null;
+    const currentRating = last?.ratingAfter ?? null;
     const hasIncompleteRatingEntry = ratingEntries.some(
-      (entry) => entry.ratingPre == null || entry.ratingPost == null,
+      (entry) => entry.ratingAfter == null || entry.ratingDelta == null,
     );
     const ratingChange = hasIncompleteRatingEntry
       ? null
-      : ratingEntries.reduce(
-          (total, entry) => total + (entry.ratingPost ?? 0) - (entry.ratingPre ?? 0),
-          0,
-        );
+      : ratingEntries.reduce((total, entry) => total + (entry.ratingDelta ?? 0), 0);
 
     rows.push({
       playerId: pid,

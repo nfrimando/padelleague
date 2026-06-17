@@ -12,7 +12,8 @@ import {
 } from "recharts";
 import Link from "next/link";
 import type { ChartPoint, DashboardStats } from "@/lib/useDashboardStats";
-import type { MatchWithTeams, Player, TeamWithPlayers } from "@/lib/types";
+import { describeRatingEvent } from "@/lib/ratingEventDisplay";
+import type { Player } from "@/lib/types";
 
 type Props = {
   chartData: ChartPoint[];
@@ -26,34 +27,10 @@ type Props = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function findMyTeam(match: MatchWithTeams, pid: string): TeamWithPlayers | null {
-  return (
-    match.teams.find(
-      (t) =>
-        String(t.player_1?.player_id) === pid ||
-        String(t.player_2?.player_id) === pid,
-    ) ?? null
-  );
-}
-
-function getScore(match: MatchWithTeams): string {
-  if (!match.sets?.length) return "";
-  return [...match.sets]
-    .sort((a, b) => a.set_number - b.set_number)
-    .map((s) => `${s.team_1_games}-${s.team_2_games}`)
-    .join("  ");
-}
-
-function didWin(match: MatchWithTeams, pid: string): boolean | null {
-  if (match.status !== "completed" || match.winner_team === null) return null;
-  const myTeam = findMyTeam(match, pid);
-  if (!myTeam) return null;
-  return match.winner_team === myTeam.team_number;
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00");
+  const d = new Date(dateStr + (dateStr.length <= 10 ? "T00:00:00" : ""));
+  if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
 }
 
@@ -77,6 +54,41 @@ function PlayerAvatar({ player }: { player: Player | null | undefined }) {
   );
 }
 
+function RatingFlow({
+  before,
+  after,
+  delta,
+  size = "sm",
+}: {
+  before: number | null;
+  after: number;
+  delta: number | null;
+  size?: "sm" | "xs";
+}) {
+  const deltaText = size === "sm" ? "text-[10px]" : "";
+  return (
+    <div
+      className={`flex items-center gap-1.5 font-mono ${size === "xs" ? "text-[10px]" : ""}`}
+    >
+      {before !== null && (
+        <>
+          <span className="text-white/40">{before.toFixed(2)}</span>
+          <span className="text-[#687FA3]">→</span>
+        </>
+      )}
+      <span className="font-bold text-white">{after.toFixed(2)}</span>
+      {delta !== null && (
+        <span
+          className={`font-black ${deltaText} ${delta > 0 ? "text-emerald-400" : delta < 0 ? "text-red-400" : "text-[#687FA3]"}`}
+        >
+          ({delta > 0 ? "+" : ""}
+          {delta.toFixed(2)})
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Hover tooltip (compact) ───────────────────────────────────────────────────
 
 function HoverTooltip({
@@ -86,86 +98,95 @@ function HoverTooltip({
   point: ChartPoint;
   playerId: string;
 }) {
-  const { match, rating, delta } = point;
-  const myTeam = findMyTeam(match, playerId);
-  const oppTeam = match.teams.find((t) => t.team_number !== myTeam?.team_number);
-  const partner =
-    myTeam &&
-    (String(myTeam.player_1?.player_id) === playerId
-      ? myTeam.player_2
-      : myTeam.player_1);
-  const opponents = [oppTeam?.player_1, oppTeam?.player_2].filter(Boolean);
-  const score = getScore(match);
-  const won = didWin(match, playerId);
-  const ratingBefore = delta !== null ? rating - delta : null;
+  const desc = describeRatingEvent(point.event, point.match, playerId);
 
+  if (desc.kind === "initial") {
+    return (
+      <div className="bg-[#0E1523] border border-[#687FA3]/30 rounded-xl p-3 shadow-xl text-xs min-w-[160px]">
+        <p className="text-[#687FA3] text-[9px] uppercase tracking-wider mb-1.5">
+          Starting rating
+        </p>
+        <p className="font-mono font-bold text-white text-sm">
+          {desc.after.toFixed(2)}
+        </p>
+      </div>
+    );
+  }
+
+  if (desc.kind === "other") {
+    return (
+      <div className="bg-[#0E1523] border border-[#687FA3]/30 rounded-xl p-3 shadow-xl text-xs min-w-[180px]">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <span className="text-[#687FA3] text-[10px] uppercase tracking-wider">
+            {desc.label}
+          </span>
+          {desc.date && (
+            <span className="text-[#687FA3] text-[10px]">
+              {formatDate(desc.date)}
+            </span>
+          )}
+        </div>
+        <RatingFlow before={null} after={desc.after} delta={desc.delta} />
+      </div>
+    );
+  }
+
+  const opponents = desc.opponents;
   return (
     <div className="bg-[#0E1523] border border-[#687FA3]/30 rounded-xl p-3 shadow-xl text-xs min-w-[200px] max-w-[240px]">
       <div className="flex items-center justify-between gap-3 mb-2.5">
         <span className="text-[#687FA3]">
-          {formatDate(match.date_local)}
-          {match.type && (
-            <span className="ml-1 text-[9px] uppercase">· {match.type}</span>
+          {formatDate(desc.date)}
+          {desc.matchType && (
+            <span className="ml-1 text-[9px] uppercase">· {desc.matchType}</span>
           )}
         </span>
-        {won !== null && (
+        {desc.result && (
           <span
-            className={`text-[10px] font-black uppercase tracking-widest ${won ? "text-emerald-400" : "text-red-400"}`}
+            className={`text-[10px] font-black uppercase tracking-widest ${desc.result === "win" ? "text-emerald-400" : "text-red-400"}`}
           >
-            {won ? "Win" : "Loss"}
+            {desc.result === "win" ? "Win" : "Loss"}
           </span>
         )}
       </div>
-      {partner && (
+      {desc.partner && (
         <div className="mb-1.5">
           <span className="text-[#687FA3] text-[9px] uppercase tracking-wider">
             w/{" "}
           </span>
           <Link
-            href={`/players/${encodeURIComponent(String(partner.player_id))}`}
+            href={`/players/${encodeURIComponent(String(desc.partner.player_id))}`}
             className="font-bold text-white/90 hover:text-[#00C8DC] transition-colors"
             onClick={(e) => e.stopPropagation()}
           >
-            {partner.nickname || partner.name}
+            {desc.partner.nickname || desc.partner.name}
           </Link>
         </div>
       )}
-      <div className="mb-2">
-        <span className="text-[#687FA3] text-[9px] uppercase tracking-wider">
-          vs{" "}
-        </span>
-        {opponents.map((p, i) => (
-          <span key={String(p!.player_id)}>
-            <Link
-              href={`/players/${encodeURIComponent(String(p!.player_id))}`}
-              className="font-bold text-white/90 hover:text-[#00C8DC] transition-colors"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {p!.nickname || p!.name}
-            </Link>
-            {i < opponents.length - 1 && (
-              <span className="text-[#687FA3] mx-0.5">&amp;</span>
-            )}
+      {opponents.length > 0 && (
+        <div className="mb-2">
+          <span className="text-[#687FA3] text-[9px] uppercase tracking-wider">
+            vs{" "}
           </span>
-        ))}
-      </div>
-      {score && <p className="font-mono text-white/70 mb-2">{score}</p>}
-      <div className="border-t border-[#687FA3]/20 pt-2 flex items-center gap-1.5 font-mono">
-        {ratingBefore !== null && (
-          <>
-            <span className="text-white/40">{ratingBefore.toFixed(2)}</span>
-            <span className="text-[#687FA3]">→</span>
-          </>
-        )}
-        <span className="font-bold text-white">{rating.toFixed(2)}</span>
-        {delta !== null && (
-          <span
-            className={`text-[10px] font-black ${delta > 0 ? "text-emerald-400" : delta < 0 ? "text-red-400" : "text-[#687FA3]"}`}
-          >
-            ({delta > 0 ? "+" : ""}
-            {delta.toFixed(2)})
-          </span>
-        )}
+          {opponents.map((p, i) => (
+            <span key={String(p.player_id)}>
+              <Link
+                href={`/players/${encodeURIComponent(String(p.player_id))}`}
+                className="font-bold text-white/90 hover:text-[#00C8DC] transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {p.nickname || p.name}
+              </Link>
+              {i < opponents.length - 1 && (
+                <span className="text-[#687FA3] mx-0.5">&amp;</span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      {desc.score && <p className="font-mono text-white/70 mb-2">{desc.score}</p>}
+      <div className="border-t border-[#687FA3]/20 pt-2">
+        <RatingFlow before={desc.before} after={desc.after} delta={desc.delta} />
       </div>
     </div>
   );
@@ -190,23 +211,42 @@ function MatchScrollCard({
   playerId: string;
   isLatest: boolean;
 }) {
-  const { match, rating, delta } = point;
-  const myTeam = findMyTeam(match, playerId);
-  const oppTeam = match.teams.find((t) => t.team_number !== myTeam?.team_number);
-  const myPlayer =
-    myTeam &&
-    (String(myTeam.player_1?.player_id) === playerId
-      ? myTeam.player_1
-      : myTeam.player_2);
-  const partner =
-    myTeam &&
-    (String(myTeam.player_1?.player_id) === playerId
-      ? myTeam.player_2
-      : myTeam.player_1);
-  const opponents = [oppTeam?.player_1, oppTeam?.player_2].filter(Boolean);
-  const score = getScore(match);
-  const won = didWin(match, playerId);
-  const ratingBefore = delta !== null ? rating - delta : null;
+  const desc = describeRatingEvent(point.event, point.match, playerId);
+
+  // Non-match events (initial rating, future recalibrations/adjustments).
+  if (desc.kind !== "match") {
+    const label = desc.kind === "initial" ? "Starting rating" : desc.label;
+    const delta = desc.kind === "initial" ? null : desc.delta;
+    return (
+      <div
+        className={`shrink-0 w-52 rounded-2xl p-4 flex flex-col gap-2.5 border ${
+          isLatest
+            ? "bg-[#1a2540] border-[#00C8DC]/40"
+            : "bg-[#1a2540] border-[#687FA3]/10"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-[#687FA3] text-[10px] uppercase tracking-wider">
+            {label}
+          </span>
+          {isLatest && (
+            <span className="text-[9px] font-black uppercase tracking-widest text-[#00C8DC]/70">
+              Latest
+            </span>
+          )}
+        </div>
+        {desc.date && (
+          <p className="text-[#687FA3] text-[10px]">{formatDate(desc.date)}</p>
+        )}
+        <div className="border-t border-[#687FA3]/10 pt-2 mt-auto">
+          <RatingFlow before={null} after={desc.after} delta={delta} size="xs" />
+        </div>
+      </div>
+    );
+  }
+
+  const youtube = point.match?.youtube_link ?? null;
+  const opponents = desc.opponents;
 
   return (
     <div
@@ -219,9 +259,9 @@ function MatchScrollCard({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[#687FA3] text-[10px]">
-          <span>{formatDate(match.date_local)}</span>
-          {match.type && (
-            <span className="uppercase text-[#687FA3]/60">· {match.type}</span>
+          <span>{formatDate(desc.date)}</span>
+          {desc.matchType && (
+            <span className="uppercase text-[#687FA3]/60">· {desc.matchType}</span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -230,16 +270,16 @@ function MatchScrollCard({
               Latest
             </span>
           )}
-          {won !== null && (
+          {desc.result && (
             <span
-              className={`text-[10px] font-black uppercase tracking-widest ${won ? "text-emerald-400" : "text-red-400"}`}
+              className={`text-[10px] font-black uppercase tracking-widest ${desc.result === "win" ? "text-emerald-400" : "text-red-400"}`}
             >
-              {won ? "W" : "L"}
+              {desc.result === "win" ? "W" : "L"}
             </span>
           )}
-          {match.youtube_link && (
+          {youtube && (
             <a
-              href={match.youtube_link}
+              href={youtube}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -256,74 +296,58 @@ function MatchScrollCard({
       <div className="flex items-center gap-2">
         <div className="flex -space-x-1.5">
           <div className="relative z-10">
-            <PlayerAvatar player={myPlayer || null} />
+            <PlayerAvatar player={desc.me} />
           </div>
-          {partner && (
+          {desc.partner && (
             <div className="relative z-0">
-              <PlayerAvatar player={partner} />
+              <PlayerAvatar player={desc.partner} />
             </div>
           )}
         </div>
         <span className="text-[#687FA3] text-[9px] shrink-0">vs</span>
         <div className="flex -space-x-1.5">
-          {oppTeam?.player_1 && (
-            <div className="relative z-10">
-              <PlayerAvatar player={oppTeam.player_1} />
+          {opponents.map((p, i) => (
+            <div key={String(p.player_id)} className={i === 0 ? "relative z-10" : "relative z-0"}>
+              <PlayerAvatar player={p} />
             </div>
-          )}
-          {oppTeam?.player_2 && (
-            <div className="relative z-0">
-              <PlayerAvatar player={oppTeam.player_2} />
-            </div>
-          )}
+          ))}
         </div>
       </div>
 
       {/* Player names */}
       <div className="space-y-0.5 min-w-0">
-        {partner && (
+        {desc.partner && (
           <div className="flex items-center gap-1 text-[10px] min-w-0">
             <span className="text-[#687FA3] shrink-0">w/</span>
             <Link
-              href={`/players/${encodeURIComponent(String(partner.player_id))}`}
+              href={`/players/${encodeURIComponent(String(desc.partner.player_id))}`}
               className="text-white/80 font-bold hover:text-[#00C8DC] transition-colors truncate"
             >
-              {partner.nickname || partner.name}
+              {desc.partner.nickname || desc.partner.name}
             </Link>
           </div>
         )}
         <div className="flex items-center gap-1 text-[10px] min-w-0">
           <span className="text-[#687FA3] shrink-0">vs</span>
           <div className="truncate text-white/60">
-            {opponents
-              .map((p) => p!.nickname || p!.name.split(" ")[0])
-              .join(" & ")}
+            {opponents.map((p) => p.nickname || p.name.split(" ")[0]).join(" & ")}
           </div>
         </div>
       </div>
 
       {/* Score */}
-      {score && (
-        <p className="font-mono text-[11px] text-white/60">{score}</p>
+      {desc.score && (
+        <p className="font-mono text-[11px] text-white/60">{desc.score}</p>
       )}
 
       {/* Rating */}
-      <div className="border-t border-[#687FA3]/10 pt-2 mt-auto flex items-center gap-1.5 font-mono text-[10px] flex-wrap">
-        {ratingBefore !== null && (
-          <>
-            <span className="text-white/40">{ratingBefore.toFixed(2)}</span>
-            <span className="text-[#687FA3]">→</span>
-          </>
-        )}
-        <span className="font-bold text-white">{rating.toFixed(2)}</span>
-        {delta !== null && (
-          <span
-            className={`font-black ${delta > 0 ? "text-emerald-400" : delta < 0 ? "text-red-400" : "text-[#687FA3]"}`}
-          >
-            ({delta > 0 ? "+" : ""}
-            {delta.toFixed(2)})
-          </span>
-        )}
+      <div className="border-t border-[#687FA3]/10 pt-2 mt-auto">
+        <RatingFlow
+          before={desc.before}
+          after={desc.after}
+          delta={desc.delta}
+          size="xs"
+        />
       </div>
     </div>
   );
@@ -398,7 +422,7 @@ function makeDotRenderer(lastIndex: number) {
     }
     return (
       <circle
-        key={`dot-${payload.matchIndex}`}
+        key={`dot-${payload.index}`}
         cx={cx}
         cy={cy}
         r={3.5}
@@ -535,10 +559,13 @@ export default function ProgressionSection({
                 vertical={false}
               />
               <XAxis
-                dataKey="matchIndex"
+                dataKey="index"
                 tickFormatter={(idx: number) => {
                   const point = chartData[idx - 1];
-                  return point ? formatDate(point.match.date_local) : "";
+                  if (!point) return "";
+                  return formatDate(
+                    point.match?.date_local ?? point.event.occurredAt,
+                  );
                 }}
                 tick={{ fill: "#687FA3", fontSize: 10 }}
                 tickLine={false}
@@ -601,7 +628,7 @@ export default function ProgressionSection({
           >
             {chartData.map((point, i) => (
               <MatchScrollCard
-                key={point.match.match_id}
+                key={point.event.id}
                 point={point}
                 playerId={playerId}
                 isLatest={i === chartData.length - 1}

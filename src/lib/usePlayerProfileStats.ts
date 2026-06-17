@@ -2,8 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { MatchTeamRow, groupByMatchId, normalizeId } from "@/lib/matchAssembly";
-import type { Player } from "@/lib/types";
+import {
+  assembleMatchesWithTeamsAndSets,
+  MatchRow,
+  MatchTeamRow,
+  groupByMatchId,
+  normalizeId,
+} from "@/lib/matchAssembly";
+import {
+  RATING_EVENTS_SELECT,
+  RatingEventRow,
+  mapRatingEventRow,
+} from "@/lib/usePlayerRatingEvents";
+import {
+  describeRatingEvent,
+  type RatingEventDescription,
+} from "@/lib/ratingEventDisplay";
+import type { MatchSet, MatchWithTeams, Player } from "@/lib/types";
 
 type LightMatchRow = {
   match_id: number;
@@ -18,12 +33,6 @@ type LightMatchRow = {
   youtube_link?: string | null;
 };
 
-type RatingRow = {
-  match_id: number;
-  rating_post: number | null;
-  formula_name: string | null;
-};
-
 type PlayerTeamRow = {
   match_id: number;
   team_number: number | null;
@@ -32,6 +41,7 @@ type PlayerTeamRow = {
 export type RatingHistoryPoint = {
   rating: number;
   date: string | null;
+  detail?: RatingEventDescription | null;
 };
 
 export type PartnerStat = {
@@ -83,46 +93,75 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
     let cancelled = false;
     setLoading(true);
 
-    async function load() {
-      // Step 1: Get player's own teams to find match_ids and team_number per match
-      const { data: playerTeamsData, error: playerTeamsError } = await supabase
-        .from("match_teams")
-        .select("match_id, team_number")
-        .or(`player_1_id.eq.${playerId},player_2_id.eq.${playerId}`);
+    // Build enriched sparkline points from the player's last N ledger events.
+    function buildRatingHistory(
+      events: ReturnType<typeof mapRatingEventRow>[],
+      matchesById: Map<string, MatchWithTeams>,
+    ): RatingHistoryPoint[] {
+      return events.slice(-RATING_HISTORY_POINTS).map((event) => {
+        const match =
+          event.sourceType === "match" && event.sourceId
+            ? (matchesById.get(event.sourceId) ?? null)
+            : null;
+        return {
+          rating: event.ratingAfter,
+          date: match?.date_local ?? event.occurredAt,
+          detail: describeRatingEvent(event, match, playerId as string),
+        };
+      });
+    }
 
-      if (playerTeamsError || cancelled) {
-        if (!cancelled) {
-          setLightMatches([]);
-          setTeamsByMatchId(new Map());
-          setMatchCount(0);
-          setWins(0);
-          setWinRate(0);
-          setPartnerStats([]);
-          setLatestRating(null);
-          setRatingHistory([]);
-          setLoading(false);
-        }
+    async function load() {
+      // Player's own teams (match_ids + team_number) and the rating-event ledger run in parallel.
+      const [
+        { data: playerTeamsData, error: playerTeamsError },
+        { data: eventsData },
+      ] = await Promise.all([
+        supabase
+          .from("match_teams")
+          .select("match_id, team_number")
+          .or(`player_1_id.eq.${playerId},player_2_id.eq.${playerId}`),
+        supabase
+          .from("player_rating_events")
+          .select(RATING_EVENTS_SELECT)
+          .eq("player_id", playerId)
+          .order("occurred_at", { ascending: true, nullsFirst: true })
+          .order("created_at", { ascending: true }),
+      ]);
+
+      if (cancelled) return;
+
+      const events = ((eventsData ?? []) as RatingEventRow[])
+        .map(mapRatingEventRow)
+        .filter((e) => Number.isFinite(e.ratingAfter));
+      const latestRatingValue =
+        events.length > 0 ? events[events.length - 1].ratingAfter : null;
+
+      if (playerTeamsError) {
+        setLightMatches([]);
+        setTeamsByMatchId(new Map());
+        setMatchCount(0);
+        setWins(0);
+        setWinRate(0);
+        setPartnerStats([]);
+        setLatestRating(latestRatingValue);
+        setRatingHistory([]);
+        setLoading(false);
         return;
       }
 
       const playerTeams = (playerTeamsData ?? []) as PlayerTeamRow[];
       if (playerTeams.length === 0) {
-        if (!cancelled) {
-          const { data: playerRow } = await supabase
-            .from("players")
-            .select("initial_rating")
-            .eq("player_id", playerId)
-            .maybeSingle();
-          setLightMatches([]);
-          setTeamsByMatchId(new Map());
-          setMatchCount(0);
-          setWins(0);
-          setWinRate(0);
-          setPartnerStats([]);
-          setLatestRating(playerRow?.initial_rating ?? null);
-          setRatingHistory([]);
-          setLoading(false);
-        }
+        setLightMatches([]);
+        setTeamsByMatchId(new Map());
+        setMatchCount(0);
+        setWins(0);
+        setWinRate(0);
+        setPartnerStats([]);
+        setLatestRating(latestRatingValue);
+        // No matches → ratingHistory is just the initial_rating event (< 2 points = no sparkline).
+        setRatingHistory(buildRatingHistory(events, new Map()));
+        setLoading(false);
         return;
       }
 
@@ -131,9 +170,7 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
         playerTeams.map((t) => [t.match_id, t.team_number]),
       );
 
-      // Steps 2-4 in parallel
-      const [allTeamsResult, matchesResult, ratingsResult] = await Promise.all([
-        // Step 2: All teams for those matches (both player and opponent teams, with player joins)
+      const [allTeamsResult, matchesResult, setsResult] = await Promise.all([
         supabase
           .from("match_teams")
           .select(
@@ -141,7 +178,6 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
           )
           .in("match_id", matchIds),
 
-        // Step 3: Light match metadata
         supabase
           .from("matches")
           .select(
@@ -152,27 +188,35 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
           .order("time_local", { ascending: false })
           .order("match_id", { ascending: false }),
 
-        // Step 4: Rating history for this player only
         supabase
-          .from("match_player_ratings")
-          .select("match_id, rating_post, formula_name")
+          .from("match_sets")
+          .select("match_id, set_number, team_1_games, team_2_games")
           .in("match_id", matchIds)
-          .eq("player_id", playerId),
+          .order("set_number", { ascending: true }),
       ]);
 
       if (cancelled) return;
 
       const typedAllTeams = (allTeamsResult.data ?? []) as unknown as MatchTeamRow[];
       const typedMatches = (matchesResult.data ?? []) as LightMatchRow[];
-      const typedRatings = (ratingsResult.data ?? []) as RatingRow[];
+      const typedSets = (setsResult.data ?? []) as MatchSet[];
 
       const teamsById = groupByMatchId(typedAllTeams);
+      const setsById = groupByMatchId(typedSets);
 
-      // Compute match count (non-cancelled)
-      const nonCancelled = typedMatches.filter((m) => m.status !== "cancelled");
-      const completed = nonCancelled.filter((m) => m.status === "completed");
+      // Assemble full matches (teams + sets) for rating-event tooltip detail.
+      const assembled = assembleMatchesWithTeamsAndSets({
+        matches: typedMatches as unknown as MatchRow[],
+        teamsByMatchId: teamsById,
+        setsByMatchId: setsById,
+        ratingLookup: new Map(),
+      });
+      const matchesById = new Map<string, MatchWithTeams>(
+        assembled.map((m) => [String(m.match_id), m]),
+      );
 
-      // Compute wins
+      // Match count (non-cancelled) + wins
+      const completed = typedMatches.filter((m) => m.status === "completed");
       let winCount = 0;
       for (const match of completed) {
         if (match.winner_team === null) continue;
@@ -183,7 +227,7 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
       }
       const wr = completed.length > 0 ? Math.round((winCount / completed.length) * 100) : 0;
 
-      // Compute partner stats (from completed matches only)
+      // Partner stats (completed matches only)
       const partnerMap = new Map<string, { player: Player; wins: number; losses: number }>();
       for (const match of completed) {
         const playerTeamNum = playerTeamNumByMatchId.get(match.match_id);
@@ -214,32 +258,6 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
         }),
       );
 
-      // Compute rating history (last RATING_HISTORY_POINTS matches with ratings)
-      const ratingPostByMatchId = new Map<number, { post: number; priority: number }>();
-      for (const row of typedRatings) {
-        const formula = String(row.formula_name ?? "").toLowerCase();
-        const priority = formula === "v3" ? 2 : formula === "v2" ? 1 : 0;
-        const post = Number(row.rating_post);
-        if (!Number.isFinite(post)) continue;
-        const existing = ratingPostByMatchId.get(row.match_id);
-        if (!existing || priority >= existing.priority) {
-          ratingPostByMatchId.set(row.match_id, { post, priority });
-        }
-      }
-
-      let latestRatingValue: number | null = null;
-      const history: RatingHistoryPoint[] = [];
-      for (const match of typedMatches) {
-        const entry = ratingPostByMatchId.get(match.match_id);
-        if (!entry) continue;
-        if (latestRatingValue === null) latestRatingValue = entry.post;
-        if (history.length < RATING_HISTORY_POINTS) {
-          history.push({ rating: entry.post, date: match.date_local });
-        }
-        if (history.length >= RATING_HISTORY_POINTS) break;
-      }
-      history.reverse();
-
       if (cancelled) return;
 
       setLightMatches(typedMatches);
@@ -249,7 +267,7 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
       setWinRate(wr);
       setPartnerStats(computedPartnerStats);
       setLatestRating(latestRatingValue);
-      setRatingHistory(history);
+      setRatingHistory(buildRatingHistory(events, matchesById));
       setLoading(false);
     }
 
