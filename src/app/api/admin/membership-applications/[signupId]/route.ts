@@ -27,7 +27,7 @@ export async function PATCH(
   const { data: signup, error: signupError } = await supabase
     .from("signups_players")
     .select(
-      "id, status, player_id, applicant_name, applicant_nickname, applicant_email",
+      "id, status, player_id, applicant_name, applicant_nickname, applicant_email, applicant_image_url",
     )
     .eq("id", signupId)
     .maybeSingle();
@@ -139,6 +139,7 @@ export async function PATCH(
         name,
         nickname,
         email,
+        image_link: signup.applicant_image_url ?? null,
         is_profile_complete: true,
         initial_rating: initialRating,
       })
