@@ -7,6 +7,8 @@ import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import SimilarPlayersSection from "@/app/dashboard/SimilarPlayersSection";
+import { InitialRatingInput } from "@/components/InitialRatingInput";
+import { RatingCalibrationHelper } from "@/components/RatingCalibrationHelper";
 import { supabase } from "@/lib/supabase";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
@@ -242,11 +244,13 @@ function RespondentsAdminList({ respondents }: { respondents: RespondentRow[] })
 function MyResponseForm({
   requestId,
   myRespondentRow,
+  requestorPlayerId,
   locked,
   onSaved,
 }: {
   requestId: number;
   myRespondentRow: RespondentRow;
+  requestorPlayerId: number;
   locked: boolean;
   onSaved: (respondent: RespondentRow) => void;
 }) {
@@ -285,26 +289,61 @@ function MyResponseForm({
     setSaved(true);
   }
 
-  return (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
-          Your rating assessment
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={rating}
-          onChange={(e) => {
-            setRating(e.target.value);
-            setSaved(false);
-          }}
-          disabled={locked}
-          placeholder="e.g. 3.75"
-          className="w-full bg-[#1a2540] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/60 focus:outline-none focus:border-[#00C8DC]/50 transition-colors disabled:opacity-50"
-        />
+  if (locked) {
+    return (
+      <div className="border border-white/10 rounded-2xl p-5 space-y-2">
+        <div className="flex items-center gap-3 text-sm">
+          {myRespondentRow.rating != null ? (
+            <span className="bg-[#0E1523] border border-[#687FA3]/20 rounded-full px-3 py-1 text-sm font-semibold text-white">
+              {myRespondentRow.rating}
+            </span>
+          ) : (
+            <span className="text-[#687FA3] italic text-xs">No rating given</span>
+          )}
+        </div>
+        {myRespondentRow.notes && (
+          <p className="text-sm text-white/70 whitespace-pre-wrap">{myRespondentRow.notes}</p>
+        )}
+        <p className="text-xs text-[#687FA3]">This request is no longer open for input.</p>
       </div>
+    );
+  }
+
+  return (
+    <div className="border border-[#00C8DC]/20 bg-[#00C8DC]/5 rounded-2xl p-5 space-y-3">
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3] mb-1">
+            Your Rating
+          </label>
+          <InitialRatingInput
+            value={rating}
+            onChange={(v) => {
+              setRating(v);
+              setSaved(false);
+            }}
+            className="w-full bg-[#1a2540] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/60 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="shrink-0 bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+        >
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+        </button>
+      </div>
+
+      <RatingCalibrationHelper
+        currentPlayerId={requestorPlayerId}
+        rating={rating}
+        onRatingChange={(v) => {
+          setRating(v);
+          setSaved(false);
+        }}
+      />
+
       <div className="space-y-1.5">
         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
           Notes (optional)
@@ -315,25 +354,14 @@ function MyResponseForm({
             setNotes(e.target.value);
             setSaved(false);
           }}
-          disabled={locked}
           maxLength={1000}
           rows={3}
           placeholder="Why do you think this rating fits?"
-          className="w-full bg-[#1a2540] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/60 focus:outline-none focus:border-[#00C8DC]/50 transition-colors resize-none disabled:opacity-50"
+          className="w-full bg-[#1a2540] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/60 focus:outline-none focus:border-[#00C8DC]/50 transition-colors resize-none"
         />
       </div>
+
       {error && <p className="text-red-400 text-sm">{error}</p>}
-      {!locked && (
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-5 py-2 rounded-xl transition-colors cursor-pointer"
-        >
-          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
-        </button>
-      )}
-      {locked && <p className="text-xs text-[#687FA3]">This request is no longer open for input.</p>}
     </div>
   );
 }
@@ -625,12 +653,14 @@ export default function RecalibrationDetailPage() {
           </div>
         )}
 
-        <SimilarPlayersSection
-          playerId={playerForCard.player_id}
-          currentPlayerRating={playerForCard.latest_rating ?? null}
-        />
+        {!myRespondentRow && (
+          <SimilarPlayersSection
+            playerId={playerForCard.player_id}
+            currentPlayerRating={playerForCard.latest_rating ?? null}
+          />
+        )}
 
-        {isAdmin ? (
+        {isAdmin && (
           <div className="space-y-3">
             <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">Calibrators</p>
             <RespondentsAdminList respondents={respondents ?? []} />
@@ -655,12 +685,15 @@ export default function RecalibrationDetailPage() {
               />
             )}
           </div>
-        ) : myRespondentRow ? (
+        )}
+
+        {myRespondentRow && (
           <div className="space-y-3">
             <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">Your Assessment</p>
             <MyResponseForm
               requestId={request.id}
               myRespondentRow={myRespondentRow}
+              requestorPlayerId={request.player_id}
               locked={!isPending}
               onSaved={(respondent) =>
                 setState((prev) =>
@@ -669,7 +702,7 @@ export default function RecalibrationDetailPage() {
               }
             />
           </div>
-        ) : null}
+        )}
 
         {isAdmin && isPending && (
           <ResolutionPanel
