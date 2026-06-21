@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
+import { notifyRecalibrationCalibratorAdded } from "@/lib/email/notifications/recalibrationCalibratorAdded";
 
 /** POST /api/recalibration/[id]/respondents — admin-only "Add Calibrator". Body: { player_id }. */
 export async function POST(
@@ -33,7 +34,7 @@ export async function POST(
 
   const { data: recalRequest } = await supabase
     .from("recalibration_requests")
-    .select("id, player_id, status")
+    .select("id, player_id, status, rating_at_request")
     .eq("id", requestId)
     .maybeSingle();
 
@@ -71,6 +72,25 @@ export async function POST(
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const { data: requestorPlayer } = await supabase
+    .from("players")
+    .select("name, nickname")
+    .eq("player_id", recalRequest.player_id)
+    .maybeSingle();
+
+  await notifyRecalibrationCalibratorAdded({
+    calibratorPlayerId: playerId,
+    requestId,
+    requestorName: (requestorPlayer?.name as string | null) ?? null,
+    requestorNickname: (requestorPlayer?.nickname as string | null) ?? null,
+    ratingAtRequest: recalRequest.rating_at_request as number,
+  }).catch((err) =>
+    console.error(
+      `[email] notifyRecalibrationCalibratorAdded failed for player_id=${playerId}:`,
+      err,
+    ),
+  );
 
   return NextResponse.json({ respondent: data }, { status: 201 });
 }
