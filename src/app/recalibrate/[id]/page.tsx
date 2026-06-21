@@ -12,6 +12,8 @@ import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import type { Player } from "@/lib/types";
 
+const MIN_RESPONDENTS = 3;
+
 type RequestStatus = "pending" | "resolved" | "cancelled";
 type RequestOutcome = "retained" | "updated" | null;
 
@@ -340,20 +342,24 @@ function ResolutionPanel({
   requestId,
   ratingAtRequest,
   computedAverage,
+  ratedCount,
   onResolved,
 }: {
   requestId: number;
   ratingAtRequest: number;
   computedAverage: number | null;
+  ratedCount: number;
   onResolved: (request: RequestDetail) => void;
 }) {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState<"retain" | "update" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const notEnoughRatings = ratedCount < MIN_RESPONDENTS;
   const delta = computedAverage != null ? computedAverage - ratingAtRequest : null;
-  const suggestion =
-    delta == null
+  const suggestion = notEnoughRatings
+    ? `Waiting for at least ${MIN_RESPONDENTS} calibrator ratings (${ratedCount} so far).`
+    : delta == null
       ? "No respondent ratings submitted yet."
       : delta >= 0.8 || delta < 0
         ? "Suggested: Accept New Rating"
@@ -427,7 +433,7 @@ function ResolutionPanel({
         <button
           type="button"
           onClick={() => resolve("retained")}
-          disabled={submitting !== null}
+          disabled={submitting !== null || notEnoughRatings}
           className="flex-1 bg-[#1a2540] hover:bg-[#1e2d50] border border-[#687FA3]/20 text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting === "retain" ? "Submitting…" : "Retain Current Rating"}
@@ -435,7 +441,7 @@ function ResolutionPanel({
         <button
           type="button"
           onClick={() => resolve("updated")}
-          disabled={submitting !== null || computedAverage == null}
+          disabled={submitting !== null || notEnoughRatings || computedAverage == null}
           className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer"
         >
           {submitting === "update" ? "Submitting…" : "Accept New Rating"}
@@ -670,6 +676,7 @@ export default function RecalibrationDetailPage() {
             requestId={request.id}
             ratingAtRequest={request.rating_at_request}
             computedAverage={computedAverage}
+            ratedCount={submittedRatings.length}
             onResolved={(updated) =>
               setState((prev) =>
                 prev.stage === "loaded" ? { ...prev, data: { ...prev.data, request: updated } } : prev,
