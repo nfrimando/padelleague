@@ -14,6 +14,7 @@ import type {
   Player,
 } from "@/lib/types";
 import { InitialRatingInput } from "@/components/InitialRatingInput";
+import { RatingCalibrationHelper } from "@/components/RatingCalibrationHelper";
 
 type RecruitSignup = Pick<
   MembershipApplication,
@@ -305,6 +306,11 @@ function ReferrerCard({
                 {saveError && <span className="text-red-400 text-xs text-right">{saveError}</span>}
               </div>
             </div>
+            <RatingCalibrationHelper
+              currentPlayerId={referrer.referrer_player_id}
+              rating={rating}
+              onRatingChange={setRating}
+            />
             <div>
               <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
                 Notes
@@ -342,11 +348,8 @@ function ReferrerCard({
     <div className="border border-white/10 rounded-xl p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="font-semibold text-white text-sm">
-            {isAdmin ? displayName : `Player #${referrer.referrer_player_id}`}
-          </p>
-          {isAdmin &&
-            (referrer.referrer as Player | undefined)?.nickname &&
+          <p className="font-semibold text-white text-sm">{displayName}</p>
+          {(referrer.referrer as Player | undefined)?.nickname &&
             (referrer.referrer as Player | undefined)?.name && (
               <p className="text-xs text-[#687FA3]">
                 {(referrer.referrer as Player | undefined)?.name}
@@ -362,35 +365,42 @@ function ReferrerCard({
 
       <div className="space-y-2">
         {canAdminEdit ? (
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
-                Initial Rating
-              </label>
-              <InitialRatingInput
-                value={rating}
-                onChange={setRating}
-                className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
-              />
+          <div className="space-y-2">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+                  Initial Rating
+                </label>
+                <InitialRatingInput
+                  value={rating}
+                  onChange={setRating}
+                  className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+                />
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                {saved && (
+                  <span className="text-emerald-400 text-xs">Saved</span>
+                )}
+                {saveError && (
+                  <span className="text-red-400 text-xs text-right">
+                    {saveError}
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="shrink-0 flex flex-col items-end gap-1">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
-              {saved && (
-                <span className="text-emerald-400 text-xs">Saved</span>
-              )}
-              {saveError && (
-                <span className="text-red-400 text-xs text-right">
-                  {saveError}
-                </span>
-              )}
-            </div>
+            <RatingCalibrationHelper
+              currentPlayerId={referrer.referrer_player_id}
+              rating={rating}
+              onRatingChange={setRating}
+            />
           </div>
         ) : (
           <div className="flex items-center gap-3 text-sm">
@@ -568,9 +578,11 @@ function AddReferrerPanel({
 
 function SelfVotePanel({
   signupId,
+  currentPlayerId,
   onAdded,
 }: {
   signupId: string;
+  currentPlayerId: number | null;
   onAdded: (referrer: SignupPlayersReferrer) => void;
 }) {
   const [rating, setRating] = useState("");
@@ -643,16 +655,7 @@ function SelfVotePanel({
         </p>
         <p className="text-xs text-[#687FA3] mt-1">
           You can voluntarily rate this applicant even if they didn&apos;t list
-          you as a referrer. Your vote will be counted equally. See your peers{" "}
-          <a
-            href="/dashboard?tab=peers"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#00C8DC] hover:underline"
-          >
-            here
-          </a>
-          .
+          you as a referrer. Your vote will be counted equally.
         </p>
       </div>
 
@@ -676,6 +679,12 @@ function SelfVotePanel({
           {adding ? "Submitting…" : "Submit"}
         </button>
       </div>
+
+      <RatingCalibrationHelper
+        currentPlayerId={currentPlayerId}
+        rating={rating}
+        onRatingChange={setRating}
+      />
 
       <div>
         <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
@@ -1020,6 +1029,11 @@ export default function RecruitPage() {
 
   const canSeeContact = effectiveIsAdmin || currentUserIsNamedReferrer;
 
+  const ownReferrerEntry =
+    effectivePlayerId !== null
+      ? referrers.find((r) => r.referrer_player_id === effectivePlayerId)
+      : undefined;
+
   const avgRating =
     ratedCount > 0
       ? Math.round(
@@ -1069,94 +1083,176 @@ export default function RecruitPage() {
 
         <ApplicantCard signup={signup} canSeeContact={canSeeContact} />
 
-        {/* Referrers */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">
-              Referrers
-            </p>
-            <span className="text-xs text-[#687FA3]">
-              {namedReferrers.filter((r) => r.initial_rating !== null).length} /{" "}
-              {namedReferrers.length} rated
-            </span>
-          </div>
+        {effectiveIsAdmin ? (
+          <>
+            {/* Referrers */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">
+                  Referrers
+                </p>
+                <span className="text-xs text-[#687FA3]">
+                  {namedReferrers.filter((r) => r.initial_rating !== null).length} /{" "}
+                  {namedReferrers.length} rated
+                </span>
+              </div>
 
-          {namedReferrers.length > 0 && (
+              {namedReferrers.length > 0 && (
+                <p className="text-xs text-[#687FA3] leading-relaxed -mt-1">
+                  These are the members listed by the applicant as referrers. Each
+                  referrer submits their own skill assessment, and we take the
+                  average across all inputs.
+                </p>
+              )}
+
+              {namedReferrers.length === 0 && (
+                <p className="text-sm text-[#687FA3] italic">
+                  No referrers listed by the applicant.
+                </p>
+              )}
+
+              {namedReferrers.map((referrer) => (
+                <ReferrerCard
+                  key={referrer.id}
+                  referrer={referrer}
+                  isOwn={referrer.referrer_player_id === effectivePlayerId}
+                  isAdmin={effectiveIsAdmin}
+                  isLocked={isLocked}
+                  signupId={signupId}
+                  onUpdated={updateReferrer}
+                  onDeleted={() => removeReferrer(referrer.id)}
+                />
+              ))}
+
+              {!isLocked && (
+                <AddReferrerPanel
+                  signupId={signupId}
+                  existingPlayerIds={existingReferrerPlayerIds}
+                  onAdded={addReferrer}
+                />
+              )}
+            </div>
+
+            {/* Community Votes */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-violet-400/80 uppercase tracking-widest">
+                  Community Votes
+                </p>
+                {voluntaryVoters.length > 0 && (
+                  <span className="text-xs text-[#687FA3]">
+                    {
+                      voluntaryVoters.filter((r) => r.initial_rating !== null)
+                        .length
+                    }{" "}
+                    / {voluntaryVoters.length} rated
+                  </span>
+                )}
+              </div>
+
+              {voluntaryVoters.length === 0 && (
+                <p className="text-sm text-[#687FA3] italic">
+                  No community votes yet.
+                </p>
+              )}
+
+              {voluntaryVoters.map((referrer) => (
+                <ReferrerCard
+                  key={referrer.id}
+                  referrer={referrer}
+                  isOwn={referrer.referrer_player_id === effectivePlayerId}
+                  isAdmin={effectiveIsAdmin}
+                  isLocked={isLocked}
+                  signupId={signupId}
+                  onUpdated={updateReferrer}
+                  onDeleted={() => removeReferrer(referrer.id)}
+                />
+              ))}
+
+              {!isLocked && !currentUserIsReferrer && effectivePlayerId !== null && (
+                <SelfVotePanel
+                  signupId={signupId}
+                  currentPlayerId={effectivePlayerId}
+                  onAdded={addReferrer}
+                />
+              )}
+            </div>
+          </>
+        ) : currentUserIsNamedReferrer ? (
+          /* Named referrer: only your own assessment is shown — no visibility into
+             other referrers' or community members' ratings. */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">
+                Referrers
+              </p>
+              <span className="text-xs text-[#687FA3]">
+                {namedReferrers.filter((r) => r.initial_rating !== null).length} /{" "}
+                {namedReferrers.length} rated
+              </span>
+            </div>
+
             <p className="text-xs text-[#687FA3] leading-relaxed -mt-1">
               These are the members listed by the applicant as referrers. Each
               referrer submits their own skill assessment, and we take the
               average across all inputs.
             </p>
-          )}
 
-          {namedReferrers.length === 0 && (
-            <p className="text-sm text-[#687FA3] italic">
-              No referrers listed by the applicant.
-            </p>
-          )}
-
-          {namedReferrers.map((referrer) => (
-            <ReferrerCard
-              key={referrer.id}
-              referrer={referrer}
-              isOwn={referrer.referrer_player_id === effectivePlayerId}
-              isAdmin={effectiveIsAdmin}
-              isLocked={isLocked}
-              signupId={signupId}
-              onUpdated={updateReferrer}
-              onDeleted={() => removeReferrer(referrer.id)}
-            />
-          ))}
-
-          {effectiveIsAdmin && !isLocked && (
-            <AddReferrerPanel
-              signupId={signupId}
-              existingPlayerIds={existingReferrerPlayerIds}
-              onAdded={addReferrer}
-            />
-          )}
-        </div>
-
-        {/* Community Votes */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-violet-400/80 uppercase tracking-widest">
-              Community Votes
-            </p>
-            {voluntaryVoters.length > 0 && (
-              <span className="text-xs text-[#687FA3]">
-                {
-                  voluntaryVoters.filter((r) => r.initial_rating !== null)
-                    .length
-                }{" "}
-                / {voluntaryVoters.length} rated
-              </span>
+            {ownReferrerEntry && (
+              <ReferrerCard
+                key={ownReferrerEntry.id}
+                referrer={ownReferrerEntry}
+                isOwn
+                isAdmin={false}
+                isLocked={isLocked}
+                signupId={signupId}
+                onUpdated={updateReferrer}
+                onDeleted={() => removeReferrer(ownReferrerEntry.id)}
+              />
             )}
           </div>
+        ) : (
+          /* Regular member, not a named referrer: only your own community vote
+             is shown — no visibility into referrers' or other members' ratings. */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-violet-400/80 uppercase tracking-widest">
+                Community Votes
+              </p>
+              {voluntaryVoters.length > 0 && (
+                <span className="text-xs text-[#687FA3]">
+                  {
+                    voluntaryVoters.filter((r) => r.initial_rating !== null)
+                      .length
+                  }{" "}
+                  / {voluntaryVoters.length} rated
+                </span>
+              )}
+            </div>
 
-          {voluntaryVoters.length === 0 && (
-            <p className="text-sm text-[#687FA3] italic">
-              No community votes yet.
-            </p>
-          )}
-
-          {voluntaryVoters.map((referrer) => (
-            <ReferrerCard
-              key={referrer.id}
-              referrer={referrer}
-              isOwn={referrer.referrer_player_id === effectivePlayerId}
-              isAdmin={effectiveIsAdmin}
-              isLocked={isLocked}
-              signupId={signupId}
-              onUpdated={updateReferrer}
-              onDeleted={() => removeReferrer(referrer.id)}
-            />
-          ))}
-
-          {!isLocked && !currentUserIsReferrer && effectivePlayerId !== null && (
-            <SelfVotePanel signupId={signupId} onAdded={addReferrer} />
-          )}
-        </div>
+            {ownReferrerEntry ? (
+              <ReferrerCard
+                key={ownReferrerEntry.id}
+                referrer={ownReferrerEntry}
+                isOwn
+                isAdmin={false}
+                isLocked={isLocked}
+                signupId={signupId}
+                onUpdated={updateReferrer}
+                onDeleted={() => removeReferrer(ownReferrerEntry.id)}
+              />
+            ) : (
+              !isLocked &&
+              effectivePlayerId !== null && (
+                <SelfVotePanel
+                  signupId={signupId}
+                  currentPlayerId={effectivePlayerId}
+                  onAdded={addReferrer}
+                />
+              )
+            )}
+          </div>
+        )}
 
         <div className="border-t border-white/10 pt-6">
           {isLocked ? (

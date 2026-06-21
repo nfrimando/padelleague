@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 
 export type LeaderboardRow = {
   playerId: string;
@@ -142,10 +143,18 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
   if (allPlayerIds.length === 0) return [];
 
   const numericIds = allPlayerIds.map(Number).filter((n) => Number.isFinite(n) && n > 0);
-  const { data: playersData, error: playersError } = await db
-    .from("players")
-    .select("player_id, name, nickname, image_link")
-    .in("player_id", numericIds);
+
+  // currentRating must reflect the player's true latest rating (which may come from a
+  // non-match ledger event like a recalibration), not just their rating as of the last
+  // match counted in this filtered set. ratingChange/wins/losses/sets stay scoped to the
+  // filtered match set below — only currentRating uses this unscoped lookup.
+  const [{ data: playersData, error: playersError }, latestRatingByPlayer] = await Promise.all([
+    db
+      .from("players")
+      .select("player_id, name, nickname, image_link")
+      .in("player_id", numericIds),
+    fetchLatestRatingsByPlayerIds(db, numericIds),
+  ]);
 
   if (playersError) throw new Error(playersError.message);
 
@@ -194,15 +203,14 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
       }
     }
 
-    // Sort filtered rating entries by date (then matchId) ascending so currentRating reflects
-    // the latest category match.
+    // Sorted ascending by date (then matchId) so ratingChange sums deltas in chronological
+    // order; currentRating itself comes from latestRatingByPlayer above, not from this list.
     const ratingEntries = Object.values(playerRatingMap[pid] ?? {}).sort((a, b) => {
       const byDate = (a.date ?? "").localeCompare(b.date ?? "");
       return byDate !== 0 ? byDate : a.matchId - b.matchId;
     });
 
-    const last = ratingEntries[ratingEntries.length - 1];
-    const currentRating = last?.ratingAfter ?? null;
+    const currentRating = latestRatingByPlayer.get(pid) ?? null;
     const hasIncompleteRatingEntry = ratingEntries.some(
       (entry) => entry.ratingAfter == null || entry.ratingDelta == null,
     );

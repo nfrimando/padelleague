@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 
 type UsePlayerMatchCountsResult = {
   matchCountCompleted: Record<string, number>;
@@ -79,16 +80,11 @@ export function usePlayerMatchCounts(
         latestRatingValues[id] = null;
       });
 
-      // Match counts/dates come from the summary RPC; latest rating is overridden below from the
-      // player_rating_events ledger so it reflects non-match rating events (shifts) too.
-      const [{ data, error }, ledgerRes] = await Promise.all([
+      // Match counts/dates come from the summary RPC; latest rating always comes from the
+      // player_rating_events ledger so it reflects non-match rating events (e.g. recalibration) too.
+      const [{ data, error }, latestRatingByPlayer] = await Promise.all([
         supabase.rpc("get_player_summary", { p_ids: numericIds }),
-        supabase
-          .from("player_rating_events")
-          .select("player_id, rating_after, occurred_at, created_at")
-          .in("player_id", numericIds)
-          .order("occurred_at", { ascending: false, nullsFirst: false })
-          .order("created_at", { ascending: false }),
+        fetchLatestRatingsByPlayerIds(supabase, numericIds),
       ]);
 
       if (isCancelled) {
@@ -106,32 +102,12 @@ export function usePlayerMatchCounts(
           counts[playerId] = Number.isFinite(matchCount) ? matchCount : 0;
 
           latestDates[playerId] = row.latest_match_date || null;
-
-          const rawRating = row.latest_rating;
-          const rating = rawRating !== null && rawRating !== undefined ? Number(rawRating) : null;
-          latestRatingValues[playerId] = rating !== null && Number.isFinite(rating) ? rating : null;
         });
       }
 
-      // Override latest rating with the most recent ledger event per player (rows are ordered
-      // newest-first, so the first row seen for a player is their current rating).
-      if (!ledgerRes.error && ledgerRes.data) {
-        const seen = new Set<string>();
-        for (const row of ledgerRes.data as Array<{
-          player_id: number | string;
-          rating_after: number | string | null;
-        }>) {
-          const playerId = String(row.player_id);
-          if (!(playerId in latestRatingValues) || seen.has(playerId)) continue;
-          seen.add(playerId);
-          const rating =
-            row.rating_after === null || row.rating_after === undefined
-              ? null
-              : Number(row.rating_after);
-          latestRatingValues[playerId] =
-            rating !== null && Number.isFinite(rating) ? rating : null;
-        }
-      }
+      normalizedIds.forEach((id) => {
+        latestRatingValues[id] = latestRatingByPlayer.get(id) ?? null;
+      });
 
       setMatchCountCompleted(counts);
       setLatestMatchDates(latestDates);

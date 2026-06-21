@@ -8,6 +8,7 @@ import { countryToFlag } from "@/lib/utils";
 import { COUNTRY_LIST } from "@/lib/countries";
 import EditProfileModal from "@/components/EditProfileModal";
 import EditScheduleModal from "@/app/dashboard/EditScheduleModal";
+import RecalibrationRequestModal from "@/app/dashboard/RecalibrationRequestModal";
 import type { Event, Player } from "@/lib/types";
 import type { DashboardStats } from "@/lib/useDashboardStats";
 
@@ -169,6 +170,7 @@ export default function HeroSection({
   const [localImgSrc, setLocalImgSrc] = useState<string | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [recalModalOpen, setRecalModalOpen] = useState(false);
   const [hasSchedule, setHasSchedule] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const paymentPanelRef = useRef<HTMLDivElement>(null);
@@ -438,6 +440,15 @@ export default function HeroSection({
             <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#687FA3] mt-1">
               Current Rating
             </p>
+            {showEditProfile && !adminTargetPlayerId && (
+              <button
+                type="button"
+                onClick={() => setRecalModalOpen(true)}
+                className="mt-1.5 text-[10px] font-bold text-[#687FA3] hover:text-[#00C8DC] underline-offset-2 hover:underline transition-colors cursor-pointer"
+              >
+                Request Reassessment
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -716,6 +727,14 @@ export default function HeroSection({
           isOpen={scheduleModalOpen}
           onClose={() => setScheduleModalOpen(false)}
           onSaved={() => { setScheduleModalOpen(false); setHasSchedule(true); }}
+        />
+      )}
+
+      {/* ── Recalibration request modal ── */}
+      {showEditProfile && !adminTargetPlayerId && (
+        <RecalibrationRequestModal
+          isOpen={recalModalOpen}
+          onClose={() => setRecalModalOpen(false)}
         />
       )}
 

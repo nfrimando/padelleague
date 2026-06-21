@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
+import { fetchLatestRatingsByPlayerIds } from "./ratingLedger";
 import type { PredictableMatch, PredictablePlayer } from "./usePredictableMatches";
 import type { UserPick } from "./usePredictions";
 
@@ -20,11 +21,6 @@ export type PredictionHistoryStats = {
   totalRewards: number;
   predictionsWithResults: number;
   correctPredictions: number;
-};
-
-type PlayerSummaryRow = {
-  player_id: number | string;
-  latest_rating: number | string | null;
 };
 
 type TeamSlots = {
@@ -155,13 +151,16 @@ export function useUserPredictionHistory(email: string | null) {
         .filter(([, info]) => info.status !== "scheduled")
         .map(([id]) => id);
 
-      // Fetch player info + latest ratings + pre-match ratings in parallel
-      const [{ data: playerRows }, { data: summaryRows }, { data: preRatingRows }] = await Promise.all([
+      // Fetch player info + latest ratings + pre-match ratings in parallel. latest_rating
+      // always comes from the player_rating_events ledger (not an RPC) so it reflects
+      // non-match events like recalibration; rating_pre for completed matches stays
+      // sourced from match_player_ratings, untouched.
+      const [{ data: playerRows }, latestRatingByPlayer, { data: preRatingRows }] = await Promise.all([
         supabase
           .from("players")
           .select("player_id,name,nickname,image_link,initial_rating")
           .in("player_id", allPlayerIds),
-        supabase.rpc("get_player_summary", { p_ids: allPlayerIds }),
+        fetchLatestRatingsByPlayerIds(supabase, allPlayerIds),
         completedMatchIds.length > 0
           ? supabase
               .from("match_player_ratings")
@@ -196,13 +195,9 @@ export function useUserPredictionHistory(email: string | null) {
           latest_rating: Number.isFinite(initialRating) ? initialRating : null,
         });
       }
-      for (const row of (summaryRows ?? []) as PlayerSummaryRow[]) {
-        const id = Number(row.player_id);
-        const existing = playerMap.get(id);
-        if (existing && row.latest_rating != null) {
-          const rating = Number(row.latest_rating);
-          if (Number.isFinite(rating)) existing.latest_rating = rating;
-        }
+      for (const [id, existing] of playerMap) {
+        const rating = latestRatingByPlayer.get(String(id));
+        if (rating != null) existing.latest_rating = rating;
       }
 
       // Assemble entries — use stored pick_probability for historical win prob bar
