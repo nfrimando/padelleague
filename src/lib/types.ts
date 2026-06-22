@@ -55,7 +55,6 @@ export type PlayerRatingEvent = {
 export type EventRestrictions = {
   min_rating?: number | null;
   max_rating?: number | null;
-  max_games_per_player?: number | null;
 };
 
 export type Event = {
@@ -79,6 +78,8 @@ export type Event = {
   url_link?: string | null;
   event_url?: string | null;
   restrictions?: EventRestrictions | null;
+  requires_payment?: boolean;
+  signup_list_visible?: boolean;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;

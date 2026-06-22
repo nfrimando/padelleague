@@ -100,7 +100,7 @@ export async function POST(request: Request) {
   // 6. Load event (must exist, not soft-deleted, and registration open)
   const { data: event, error: eventError } = await serviceClient
     .from("events")
-    .select("event_id, registration_status, deleted_at, restrictions")
+    .select("event_id, registration_status, deleted_at")
     .eq("event_id", eventId)
     .is("deleted_at", null)
     .eq("registration_status", "open")
@@ -112,85 +112,6 @@ export async function POST(request: Request) {
       { error: "Event not found or registration is closed." },
       { status: 404 },
     );
-  }
-
-  // 6a. Restrictions check
-  const restrictions = event.restrictions as {
-    min_rating?: number | null;
-    max_rating?: number | null;
-    max_games_per_player?: number | null;
-  } | null;
-
-  if (restrictions) {
-    const hasRatingGate =
-      (restrictions.min_rating != null) || (restrictions.max_rating != null);
-
-    if (hasRatingGate) {
-      const { data: ratingRow } = await serviceClient
-        .from("match_player_ratings")
-        .select("rating_post, formula_name")
-        .eq("player_id", player.player_id)
-        .in("formula_name", ["v3", "v2"])
-        .order("formula_name", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const currentRating = ratingRow?.rating_post ?? null;
-
-      if (currentRating == null) {
-        return NextResponse.json(
-          {
-            error: "This event has a rating requirement, but you have no rated matches yet.",
-            ineligible: true,
-            reason: "no_rating",
-          },
-          { status: 403 },
-        );
-      }
-
-      if (restrictions.min_rating != null && currentRating < restrictions.min_rating) {
-        return NextResponse.json(
-          {
-            error: `Your current rating (${currentRating.toFixed(0)}) is below the minimum required (${restrictions.min_rating}) for this event.`,
-            ineligible: true,
-            reason: "rating_too_low",
-          },
-          { status: 403 },
-        );
-      }
-
-      if (restrictions.max_rating != null && currentRating > restrictions.max_rating) {
-        return NextResponse.json(
-          {
-            error: `Your current rating (${currentRating.toFixed(0)}) exceeds the maximum allowed (${restrictions.max_rating}) for this event.`,
-            ineligible: true,
-            reason: "rating_too_high",
-          },
-          { status: 403 },
-        );
-      }
-    }
-
-    if (restrictions.max_games_per_player != null) {
-      const { count, error: countError } = await serviceClient
-        .from("signups_events")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", eventId)
-        .eq("player_id", player.player_id)
-        .in("status", ["accepted"]);
-
-      if (!countError && (count ?? 0) >= restrictions.max_games_per_player) {
-        return NextResponse.json(
-          {
-            error: `You have reached the maximum of ${restrictions.max_games_per_player} game(s) allowed for this event.`,
-            ineligible: true,
-            reason: "games_limit_reached",
-          },
-          { status: 403 },
-        );
-      }
-    }
   }
 
   // 7. Existing signup checks

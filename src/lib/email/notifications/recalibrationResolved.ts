@@ -10,6 +10,7 @@ type RecalibrationResolved = {
   outcome: "retained" | "updated" | "cancelled";
   oldRating: number;
   newRating: number | null; // present only when outcome === "updated"
+  respondentCount: number;
 };
 
 function displayName(name: string | null, nickname: string | null): string {
@@ -21,6 +22,7 @@ function buildEmailHtml({
   outcome,
   oldRating,
   newRating,
+  respondentCount,
   profileUrl,
   unsubscribeAllUrl,
 }: {
@@ -28,6 +30,7 @@ function buildEmailHtml({
   outcome: "retained" | "updated" | "cancelled";
   oldRating: number;
   newRating: number | null;
+  respondentCount: number;
   profileUrl: string;
   unsubscribeAllUrl: string;
 }): string {
@@ -39,6 +42,8 @@ function buildEmailHtml({
     updated: `
       <p style="color: #374151;">The committee reviewed your respondents' assessments and has
       <strong>updated your rating from ${oldRating.toFixed(2)} to ${(newRating ?? oldRating).toFixed(2)}</strong>.</p>
+      <p style="color: #6b7280; font-size: 13px;">This was based on ${respondentCount} respondent
+      rating${respondentCount === 1 ? "" : "s"}.</p>
     `,
     cancelled: `
       <p style="color: #374151;">Your recalibration request has been <strong>cancelled</strong> by the league
@@ -80,7 +85,8 @@ function buildEmailHtml({
 }
 
 export async function notifyRecalibrationResolved(data: RecalibrationResolved): Promise<void> {
-  const { playerId, playerName, playerNickname, outcome, oldRating, newRating } = data;
+  const { playerId, playerName, playerNickname, outcome, oldRating, newRating, respondentCount } =
+    data;
 
   const supabase = getServerServiceClient();
   const { data: player } = await supabase
@@ -112,6 +118,7 @@ export async function notifyRecalibrationResolved(data: RecalibrationResolved): 
     outcome,
     oldRating,
     newRating,
+    respondentCount,
     profileUrl,
     unsubscribeAllUrl,
   });

@@ -1,49 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import {
-  getServerServiceClient,
-  getServerUserClient,
-} from "@/app/api/_lib/supabase";
+import { getServerServiceClient } from "@/app/api/_lib/supabase";
+import { resolveCallerPlayerId, isAdminUser } from "@/app/api/events/_lib/auth";
 import { EventRestrictions } from "@/lib/types";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-async function resolveCallerPlayerId(authorization: string | null): Promise<number | null> {
-  if (!authorization?.startsWith("Bearer ")) return null;
-  try {
-    const userClient = getServerUserClient(authorization);
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user?.email) return null;
-    const serviceClient = getServerServiceClient();
-    const { data: player } = await serviceClient
-      .from("players")
-      .select("player_id")
-      .eq("email", user.email)
-      .maybeSingle();
-    return player?.player_id ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function isAdminUser(authorization: string | null): Promise<boolean> {
-  if (!authorization?.startsWith("Bearer ")) return false;
-  try {
-    const userClient = getServerUserClient(authorization);
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user) return false;
-    const serviceClient = getServerServiceClient();
-    const { data } = await serviceClient
-      .from("admin_users")
-      .select("auth_user_id")
-      .eq("auth_user_id", user.id)
-      .maybeSingle();
-    return !!data;
-  } catch {
-    return false;
-  }
-}
 
 /** GET /api/events/[id] */
 export async function GET(
@@ -59,7 +21,9 @@ export async function GET(
   const anonClient = createClient(supabaseUrl, supabaseAnonKey);
   const { data: event, error } = await anonClient
     .from("events")
-    .select("*")
+    .select(
+      "*, creator:players!created_by_player_id(player_id,name,nickname,image_link)",
+    )
     .eq("event_id", eventId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -149,6 +113,7 @@ export async function PATCH(
   if (typeof body.description === "string") update.description = body.description.trim() || null;
   if (typeof body.notes === "string") update.notes = body.notes.trim() || null;
   if (typeof body.image_url === "string") update.image_url = body.image_url.trim() || null;
+  if (typeof body.signup_list_visible === "boolean") update.signup_list_visible = body.signup_list_visible;
 
   if (Object.prototype.hasOwnProperty.call(body, "min_rating") || Object.prototype.hasOwnProperty.call(body, "max_rating")) {
     const restrictions: EventRestrictions = {};

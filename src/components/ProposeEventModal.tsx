@@ -264,6 +264,10 @@ export default function ProposeEventModal({ onClose }: Props) {
                     onChange={(e) => setMaxRating(e.target.value)}
                   />
                 </div>
+                <p className="sm:col-span-2 text-[11px] text-slate-500 -mt-1">
+                  Guideline only — shown to players to help them self-select.
+                  Doesn&apos;t block signup.
+                </p>
                 <div className="sm:col-span-2">
                   <label className={labelCls}>Description</label>
                   <textarea

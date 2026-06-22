@@ -139,6 +139,7 @@ export async function POST(
     outcome,
     oldRating: ratingAtRequest,
     newRating: resolvedRating,
+    respondentCount: submittedRatings.length,
   }).catch((err) => console.error("[email] notifyRecalibrationResolved failed:", err));
 
   return NextResponse.json({ request: updated });

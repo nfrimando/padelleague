@@ -8,8 +8,6 @@ function parseRestrictions(value: unknown): EventRestrictions | null {
   const restrictions: EventRestrictions = {};
   if (typeof r.min_rating === "number") restrictions.min_rating = r.min_rating;
   if (typeof r.max_rating === "number") restrictions.max_rating = r.max_rating;
-  if (typeof r.max_games_per_player === "number")
-    restrictions.max_games_per_player = r.max_games_per_player;
   return Object.keys(restrictions).length > 0 ? restrictions : null;
 }
 

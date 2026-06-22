@@ -83,6 +83,7 @@ export async function POST(
     outcome: "cancelled",
     oldRating: Number(recalRequest.rating_at_request),
     newRating: null,
+    respondentCount: 0, // unused by the "cancelled" email template
   }).catch((err) => console.error("[email] notifyRecalibrationResolved failed:", err));
 
   return NextResponse.json({ request: updated });

@@ -11,16 +11,15 @@ import {
 } from "@/lib/playerLookup";
 import { supabase } from "@/lib/supabase";
 import { useEventSignup } from "@/lib/useEventSignup";
+import {
+  signupStatusLabel,
+  signupStatusBadgeClass,
+  type EventSignupStatus,
+} from "@/lib/eventSignupStatus";
 import type { User } from "@supabase/supabase-js";
 import type { Event } from "@/lib/types";
 
-type SignupStatus =
-  | "none"
-  | "applied"
-  | "pending_payment"
-  | "accepted"
-  | "waitlisted"
-  | "cancelled";
+type SignupStatus = "none" | EventSignupStatus;
 type VerifyStatus = "verified" | "pending" | "unknown";
 
 type RegisterLookupPlayer = {
@@ -47,36 +46,6 @@ function eventLabel(e: Event): string {
     return `Event ${e.event_id} · ${year}`;
   }
   return `Event ${e.event_id}`;
-}
-
-function signupStatusLabel(status: Exclude<SignupStatus, "none">): string {
-  switch (status) {
-    case "applied":
-      return "Applied — Pending Approval";
-    case "pending_payment":
-      return "Payment Required";
-    case "accepted":
-      return "Accepted";
-    case "waitlisted":
-      return "Waitlisted";
-    case "cancelled":
-      return "Cancelled";
-  }
-}
-
-function signupStatusBadgeClass(status: Exclude<SignupStatus, "none">): string {
-  switch (status) {
-    case "applied":
-      return "bg-amber-500/10 border-amber-500/30 text-amber-300";
-    case "pending_payment":
-      return "bg-orange-500/10 border-orange-500/30 text-orange-300";
-    case "accepted":
-      return "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
-    case "waitlisted":
-      return "bg-amber-500/10 border-amber-500/30 text-amber-300";
-    case "cancelled":
-      return "bg-red-500/10 border-red-500/30 text-red-300";
-  }
 }
 
 export default function RegisterPage() {
@@ -266,7 +235,7 @@ export default function RegisterPage() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/events/register`,
+        redirectTo: `${window.location.origin}/register`,
         queryParams: { prompt: "select_account" },
       },
     });
@@ -400,7 +369,7 @@ export default function RegisterPage() {
                 <GoogleIcon />
                 Continue with Google
               </button>
-              <EmailAuthForm redirectTo="/events/register" />
+              <EmailAuthForm redirectTo="/register" />
               <div className="mt-6 border-t border-white/10 pt-6">
                 <button
                   type="button"

@@ -4,9 +4,50 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
+import PlayerCard from "@/components/PlayerCard";
+import Toggle from "@/components/Toggle";
+import EventSignupConfirmModal from "@/components/EventSignupConfirmModal";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
+import { useEventSignup } from "@/lib/useEventSignup";
+import {
+  signupStatusLabel,
+  signupStatusBadgeClass,
+  type EventSignupStatus,
+} from "@/lib/eventSignupStatus";
 import { supabase } from "@/lib/supabase";
 import { Event, EventRestrictions } from "@/lib/types";
+
+type EventCreator = {
+  player_id: number;
+  name: string | null;
+  nickname: string | null;
+  image_link: string | null;
+};
+
+type EventWithCreator = Event & { creator?: EventCreator | null };
+
+type RosterPlayer = {
+  player_id: number | null;
+  name: string | null;
+  nickname: string | null;
+  image_link: string | null;
+};
+
+type ManagedSignupRow = RosterPlayer & {
+  id: string;
+  status: EventSignupStatus;
+  paid: boolean;
+};
+
+type SignupsResponse = {
+  signupListVisible: boolean;
+  canManage: boolean;
+  viewerSignup: { status: EventSignupStatus } | null;
+  roster: RosterPlayer[];
+  signups?: ManagedSignupRow[];
+  statusCounts?: Record<EventSignupStatus, number>;
+  hidden?: boolean;
+};
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
@@ -49,9 +90,10 @@ type EditForm = {
   description: string;
   notes: string;
   image_url: string;
+  signup_list_visible: boolean;
 };
 
-function makeEditForm(event: Event): EditForm {
+function makeEditForm(event: EventWithCreator): EditForm {
   return {
     name: event.name ?? "",
     start_date: event.start_date ?? "",
@@ -70,6 +112,7 @@ function makeEditForm(event: Event): EditForm {
     description: event.description ?? "",
     notes: event.notes ?? "",
     image_url: event.image_url ?? "",
+    signup_list_visible: event.signup_list_visible ?? true,
   };
 }
 
@@ -78,7 +121,7 @@ export default function EventDetailPage() {
   const eventId = params.event_id as string;
   const { player, isLinked } = useCurrentPlayer();
 
-  const [event, setEvent] = useState<Event | null>(null);
+  const [event, setEvent] = useState<EventWithCreator | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +132,14 @@ export default function EventDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+
+  const [signupsData, setSignupsData] = useState<SignupsResponse | null>(null);
+  const [showSignupModal, setShowSignupModal] = useState(false);
+  const {
+    handleSignup,
+    loading: signupSubmitting,
+    error: signupError,
+  } = useEventSignup();
 
   // Load event
   useEffect(() => {
@@ -148,6 +199,28 @@ export default function EventDetailPage() {
     void checkAdmin();
   }, [isLinked]);
 
+  // Load roster + viewer's own signup status
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSignups() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/events/${eventId}/signups`, { headers });
+      if (cancelled) return;
+      if (res.ok) {
+        const json = (await res.json()) as SignupsResponse;
+        setSignupsData(json);
+      }
+    }
+    void loadSignups();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
+
   const isCreator =
     isLinked &&
     player &&
@@ -187,6 +260,7 @@ export default function EventDetailPage() {
       description: editForm.description || null,
       notes: editForm.notes || null,
       image_url: editForm.image_url || null,
+      signup_list_visible: editForm.signup_list_visible,
     };
     if (editForm.min_rating || editForm.max_rating) {
       body.min_rating = editForm.min_rating
@@ -241,15 +315,24 @@ export default function EventDetailPage() {
   const restrictionTags: string[] = [];
   const r: EventRestrictions | null | undefined = event?.restrictions;
   if (r?.min_rating != null && r?.max_rating != null)
-    restrictionTags.push(`Rating ${r.min_rating}–${r.max_rating}`);
+    restrictionTags.push(`Suggested rating ${r.min_rating}–${r.max_rating}`);
   else if (r?.min_rating != null)
-    restrictionTags.push(`Rating ≥ ${r.min_rating}`);
+    restrictionTags.push(`Suggested rating ≥ ${r.min_rating}`);
   else if (r?.max_rating != null)
-    restrictionTags.push(`Rating ≤ ${r.max_rating}`);
-  if (r?.max_games_per_player != null)
-    restrictionTags.push(
-      `Max ${r.max_games_per_player} game${r.max_games_per_player !== 1 ? "s" : ""}/player`,
-    );
+    restrictionTags.push(`Suggested rating ≤ ${r.max_rating}`);
+
+  const viewerSignupStatus = signupsData?.viewerSignup?.status ?? null;
+  const canSignUpAgain = !viewerSignupStatus || viewerSignupStatus === "cancelled";
+  const isVerifiedPlayer = isLinked && !!player?.is_profile_complete;
+
+  const handleSignupConfirm = async () => {
+    if (!event) return;
+    const outcome = await handleSignup(event.event_id);
+    if (outcome === "registered") {
+      setSignupsData((d) => (d ? { ...d, viewerSignup: { status: "applied" } } : d));
+      setShowSignupModal(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -364,10 +447,30 @@ export default function EventDetailPage() {
                   onClick={handleEditOpen}
                   className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
                 >
-                  Edit
+                  Edit Details
                 </button>
               )}
             </div>
+
+            {/* Creator */}
+            {event.creator && (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <span>Created by</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    event.creator.image_link && event.creator.image_link !== "null"
+                      ? event.creator.image_link
+                      : "/default-avatar.webp"
+                  }
+                  alt={event.creator.name ?? "Creator"}
+                  className="w-5 h-5 rounded-full object-cover"
+                />
+                <span className="text-slate-200 font-medium">
+                  {event.creator.name ?? event.creator.nickname ?? "Unknown"}
+                </span>
+              </div>
+            )}
 
             {/* Key details */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 divide-y divide-slate-800">
@@ -443,15 +546,124 @@ export default function EventDetailPage() {
               </div>
             )}
 
-            {/* Registration CTA */}
+            {/* Players */}
+            {signupsData?.canManage && signupsData.signups ? (
+              <div className="space-y-3">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                  Players
+                </h2>
+                {signupsData.statusCounts && (
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        "accepted",
+                        "pending_payment",
+                        "applied",
+                        "waitlisted",
+                        "cancelled",
+                      ] as const
+                    ).map((s) =>
+                      signupsData.statusCounts![s] > 0 ? (
+                        <span
+                          key={s}
+                          className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${signupStatusBadgeClass(s)}`}
+                        >
+                          {signupStatusLabel(s)}: {signupsData.statusCounts![s]}
+                        </span>
+                      ) : null,
+                    )}
+                  </div>
+                )}
+                {signupsData.signups.length === 0 ? (
+                  <p className="text-sm text-slate-500">No signups yet.</p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {signupsData.signups.map((s) => (
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                      >
+                        <PlayerCard
+                          player={{
+                            player_id: s.player_id ?? 0,
+                            name: s.name ?? "Unknown",
+                            nickname: s.nickname ?? "",
+                            image_link: s.image_link,
+                          }}
+                          size="sm"
+                          showLatestRating={false}
+                        />
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${signupStatusBadgeClass(s.status)}`}
+                          >
+                            {signupStatusLabel(s.status)}
+                          </span>
+                          {event.requires_payment && s.status === "accepted" && (
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                                s.paid
+                                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                  : "bg-slate-800 border-slate-700 text-slate-400"
+                              }`}
+                            >
+                              {s.paid ? "Paid" : "Unpaid"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : signupsData?.signupListVisible && signupsData.roster.length > 0 ? (
+              <div className="space-y-3">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                  Accepted Players ({signupsData.roster.length})
+                </h2>
+                <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+                  {signupsData.roster.map((p, i) => (
+                    <PlayerCard
+                      key={p.player_id ?? i}
+                      player={{
+                        player_id: p.player_id ?? 0,
+                        name: p.name ?? "Unknown",
+                        nickname: p.nickname ?? "",
+                        image_link: p.image_link,
+                      }}
+                      size="sm"
+                      showLatestRating={false}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Sign up CTA */}
             {event.registration_status === "open" && !isDraft && (
               <div className="pt-2">
-                <Link
-                  href={`/events/register?eventId=${event.event_id}`}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors"
-                >
-                  Register Now
-                </Link>
+                {viewerSignupStatus && !canSignUpAgain ? (
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${signupStatusBadgeClass(viewerSignupStatus)}`}
+                  >
+                    {signupStatusLabel(viewerSignupStatus)}
+                  </span>
+                ) : isVerifiedPlayer ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+                  >
+                    Sign Up!
+                  </button>
+                ) : (
+                  <Link
+                    href={`/register?eventId=${event.event_id}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors"
+                  >
+                    Sign Up!
+                  </Link>
+                )}
               </div>
             )}
 
@@ -589,6 +801,10 @@ export default function EventDetailPage() {
                         }
                       />
                     </div>
+                    <p className="sm:col-span-2 text-[11px] text-slate-500 -mt-1">
+                      Guideline only — shown to players to help them
+                      self-select. Doesn&apos;t block signup.
+                    </p>
                     <div className="sm:col-span-2">
                       <label className={labelCls}>Description</label>
                       <textarea
@@ -632,6 +848,17 @@ export default function EventDetailPage() {
                   </div>
                 </div>
 
+                <div className="border-t border-slate-700/60" />
+
+                <Toggle
+                  checked={editForm.signup_list_visible}
+                  onChange={(v) =>
+                    setEditForm((f) => (f ? { ...f, signup_list_visible: v } : f))
+                  }
+                  label="Signup list visible to others"
+                  description="When on, anyone can see the players who've been accepted into this event."
+                />
+
                 {saveError && (
                   <div className="rounded-md border border-rose-800/40 bg-rose-900/20 px-3 py-2 text-sm text-rose-300">
                     {saveError}
@@ -663,6 +890,16 @@ export default function EventDetailPage() {
           </div>
         ) : null}
       </main>
+
+      {showSignupModal && event && (
+        <EventSignupConfirmModal
+          eventName={event.name ?? `Event #${event.event_id}`}
+          loading={signupSubmitting}
+          error={signupError}
+          onConfirm={() => void handleSignupConfirm()}
+          onCancel={() => setShowSignupModal(false)}
+        />
+      )}
     </div>
   );
 }

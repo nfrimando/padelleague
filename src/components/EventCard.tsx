@@ -57,14 +57,11 @@ function buildRestrictionTags(event: Event): string[] {
   if (!r) return [];
   const tags: string[] = [];
   if (r.min_rating != null && r.max_rating != null) {
-    tags.push(`Rating ${r.min_rating}–${r.max_rating}`);
+    tags.push(`Suggested rating ${r.min_rating}–${r.max_rating}`);
   } else if (r.min_rating != null) {
-    tags.push(`Rating ≥ ${r.min_rating}`);
+    tags.push(`Suggested rating ≥ ${r.min_rating}`);
   } else if (r.max_rating != null) {
-    tags.push(`Rating ≤ ${r.max_rating}`);
-  }
-  if (r.max_games_per_player != null) {
-    tags.push(`Max ${r.max_games_per_player} game${r.max_games_per_player !== 1 ? "s" : ""}/player`);
+    tags.push(`Suggested rating ≤ ${r.max_rating}`);
   }
   return tags;
 }
@@ -73,10 +70,10 @@ function getEligibilityHint(event: Event, rating?: number): string | null {
   const r = event.restrictions;
   if (!r || rating == null) return null;
   if (r.min_rating != null && rating < r.min_rating) {
-    return `Your rating (${Math.round(rating)}) is below the minimum`;
+    return `Outside the suggested rating range (yours: ${Math.round(rating)})`;
   }
   if (r.max_rating != null && rating > r.max_rating) {
-    return `Your rating (${Math.round(rating)}) exceeds the maximum`;
+    return `Outside the suggested rating range (yours: ${Math.round(rating)})`;
   }
   return null;
 }
@@ -165,35 +162,39 @@ export default function EventCard({ event, isAccepted = false, currentPlayerRati
         <div className="mt-auto pt-1 flex items-center gap-3 flex-wrap">
           {isOpen ? (
             <Link
-              href={`/events/register?eventId=${event.event_id}`}
-              className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition-colors${eligibilityHint ? " opacity-50" : ""}`}
+              href={`/events/${event.event_id}`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition-colors"
             >
-              Register Now
+              Sign Up →
             </Link>
-          ) : event.status === "completed" ? (
-            <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
-              Event completed
-            </span>
-          ) : isAccepted && event.url_link ? (
-            <a
-              href={event.url_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700 px-5 py-2 text-sm font-medium text-emerald-400 hover:border-emerald-500 hover:text-emerald-300 transition-colors cursor-pointer"
-            >
-              See details →
-            </a>
           ) : (
-            <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
-              Registration closed
-            </span>
+            <>
+              {event.status === "completed" ? (
+                <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                  Event completed
+                </span>
+              ) : isAccepted && event.url_link ? (
+                <a
+                  href={event.url_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700 px-5 py-2 text-sm font-medium text-emerald-400 hover:border-emerald-500 hover:text-emerald-300 transition-colors cursor-pointer"
+                >
+                  See details →
+                </a>
+              ) : (
+                <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                  Registration closed
+                </span>
+              )}
+              <Link
+                href={`/events/${event.event_id}`}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                View details →
+              </Link>
+            </>
           )}
-          <Link
-            href={`/events/${event.event_id}`}
-            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-          >
-            View details →
-          </Link>
         </div>
       </div>
     </div>

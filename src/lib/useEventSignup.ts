@@ -13,7 +13,7 @@ type RegisterResponse = {
 };
 
 export function useEventSignup(): {
-  handleSignup: (eventId: number) => Promise<void>;
+  handleSignup: (eventId: number) => Promise<SignupResult>;
   loading: boolean;
   error: string | null;
   result: SignupResult;
@@ -34,7 +34,7 @@ export function useEventSignup(): {
 
       if (!session) {
         setError("Session expired. Please sign in again.");
-        return;
+        return null;
       }
 
       const registerRes = await fetch("/api/events/register", {
@@ -50,29 +50,31 @@ export function useEventSignup(): {
 
       if (registerJson.registered === true) {
         setResult("registered");
-        return;
+        return "registered" as const;
       }
 
       if (registerJson.pendingVerification === true) {
         setResult("pending_verification");
         setError("Your account is pending verification.");
-        return;
+        return "pending_verification" as const;
       }
 
       if (registerJson.noProfile === true) {
         setResult("no_profile");
         setError(registerJson.error ?? "No player profile linked to your account.");
-        return;
+        return "no_profile" as const;
       }
 
       if (!registerRes.ok) {
         setError(registerJson.error ?? "Something went wrong. Please try again.");
-        return;
+        return null;
       }
 
       setError(registerJson.error ?? "Something went wrong. Please try again.");
+      return null;
     } catch {
       setError("Network error. Please try again.");
+      return null;
     } finally {
       setLoading(false);
     }
