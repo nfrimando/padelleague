@@ -202,13 +202,12 @@ export default function RecalibrationRequestModal({ isOpen, onClose }: Props) {
                   your request.
                 </li>
                 <li>
-                  Average rating will be computed from the respondents. If the
-                  computed new rating is &ge;0.5 delta, your rating will be
-                  updated. If the computed rating is below your current,{" "}
+                  Your new rating will be the average of the ratings
+                  submitted by respondents —{" "}
                   <strong className="text-white">
-                    your rating will be updated to the lower rating
+                    this can result in a lower rating than your current one
                   </strong>
-                  . If within 0 to 0.5, your rating will not be changed.
+                  . By requesting a recalibration, you accept that risk.
                 </li>
                 <li>You can only request a recalibration every 3 months.</li>
               </ul>

@@ -690,6 +690,9 @@ export default function RecalibrationDetailPage() {
         {myRespondentRow && (
           <div className="space-y-3">
             <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">Your Assessment</p>
+            <p className="text-xs text-[#9aabc7] leading-relaxed bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+              Your rating and notes are anonymous — the player being recalibrated will never see who responded or what was submitted. You were selected by the committee specifically to avoid bias among players with the most recent matches against them.
+            </p>
             <MyResponseForm
               requestId={request.id}
               myRespondentRow={myRespondentRow}
