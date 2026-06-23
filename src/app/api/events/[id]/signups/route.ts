@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { resolveCallerPlayerId, isAdminUser } from "@/app/api/events/_lib/auth";
+import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 
 type SignupStatus =
   | "applied"
@@ -111,6 +112,11 @@ export async function GET(
     };
     for (const row of rows) statusCounts[row.status]++;
 
+    const latestRatingByPlayer = await fetchLatestRatingsByPlayerIds(
+      serviceClient,
+      rows.map((row) => row.player_id).filter((id): id is number => id != null),
+    );
+
     const signups = rows.map((row) => ({
       id: row.id,
       player_id: row.player_id,
@@ -119,6 +125,10 @@ export async function GET(
       name: row.player?.name ?? null,
       nickname: row.player?.nickname ?? null,
       image_link: row.player?.image_link ?? null,
+      latest_rating:
+        row.player_id != null
+          ? latestRatingByPlayer.get(String(row.player_id)) ?? null
+          : null,
     }));
 
     return NextResponse.json({
@@ -134,6 +144,7 @@ export async function GET(
           name: s.name,
           nickname: s.nickname,
           image_link: s.image_link,
+          latest_rating: s.latest_rating,
         })),
     });
   }
@@ -158,11 +169,21 @@ export async function GET(
     return NextResponse.json({ error: acceptedError.message }, { status: 500 });
   }
 
-  const roster = ((acceptedRows ?? []) as unknown as SignupPlayerRow[]).map((row) => ({
+  const acceptedPlayerRows = (acceptedRows ?? []) as unknown as SignupPlayerRow[];
+  const latestRatingByPlayer = await fetchLatestRatingsByPlayerIds(
+    serviceClient,
+    acceptedPlayerRows.map((row) => row.player_id).filter((id): id is number => id != null),
+  );
+
+  const roster = acceptedPlayerRows.map((row) => ({
     player_id: row.player_id,
     name: row.player?.name ?? null,
     nickname: row.player?.nickname ?? null,
     image_link: row.player?.image_link ?? null,
+    latest_rating:
+      row.player_id != null
+        ? latestRatingByPlayer.get(String(row.player_id)) ?? null
+        : null,
   }));
 
   return NextResponse.json({

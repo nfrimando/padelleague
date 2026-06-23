@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { Gauge, X } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import Toggle from "@/components/Toggle";
@@ -33,6 +33,7 @@ type RosterPlayer = {
   name: string | null;
   nickname: string | null;
   image_link: string | null;
+  latest_rating: number | null;
 };
 
 type ManagedSignupRow = RosterPlayer & {
@@ -146,6 +147,7 @@ export default function EventDetailPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [signupsData, setSignupsData] = useState<SignupsResponse | null>(null);
+  const [signupsLoading, setSignupsLoading] = useState(true);
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [paymentJustCompleted, setPaymentJustCompleted] = useState(false);
   const [updatingSignupId, setUpdatingSignupId] = useState<string | null>(null);
@@ -227,6 +229,7 @@ export default function EventDetailPage() {
   useEffect(() => {
     let cancelled = false;
     async function loadSignups() {
+      setSignupsLoading(true);
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const headers: Record<string, string> = {};
@@ -238,6 +241,7 @@ export default function EventDetailPage() {
         const json = (await res.json()) as SignupsResponse;
         setSignupsData(json);
       }
+      setSignupsLoading(false);
     }
     void loadSignups();
     return () => {
@@ -612,6 +616,19 @@ export default function EventDetailPage() {
                 <h1 className="text-2xl sm:text-3xl font-black text-slate-100 leading-tight">
                   {event.name ?? `Event #${event.event_id}`}
                 </h1>
+                {restrictionTags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {restrictionTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 px-3 py-1 text-xs font-bold text-amber-300"
+                      >
+                        <Gauge size={13} />
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               {canEdit && !editing && (
                 <button
@@ -702,20 +719,6 @@ export default function EventDetailPage() {
               </div>
             </div>
 
-            {/* Restrictions */}
-            {restrictionTags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {restrictionTags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center rounded-full bg-slate-800 border border-slate-700 px-3 py-1 text-xs font-medium text-slate-300"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
             {/* Description */}
             {event.description && (
               <div>
@@ -729,7 +732,11 @@ export default function EventDetailPage() {
             )}
 
             {/* Players */}
-            {signupsData?.canManage && signupsData.signups ? (
+            {signupsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : signupsData?.canManage && signupsData.signups ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">
@@ -777,7 +784,7 @@ export default function EventDetailPage() {
                     {signupsData.signups.map((s) => (
                       <div
                         key={s.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                        className="flex flex-col gap-2 min-w-0 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
                       >
                         <PlayerCard
                           player={{
@@ -785,11 +792,12 @@ export default function EventDetailPage() {
                             name: s.name ?? "Unknown",
                             nickname: s.nickname ?? "",
                             image_link: s.image_link,
+                            latest_rating: s.latest_rating,
                           }}
                           size="sm"
-                          showLatestRating={false}
+                          showLatestRating
                         />
-                        <div className="flex flex-col items-end gap-1 shrink-0">
+                        <div className="flex items-center justify-end gap-2 sm:flex-col sm:items-end sm:gap-1 shrink-0">
                           <select
                             value={s.status}
                             disabled={updatingSignupId === s.id}
@@ -799,7 +807,7 @@ export default function EventDetailPage() {
                                 e.target.value as EventSignupStatus,
                               )
                             }
-                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:opacity-50 cursor-pointer ${signupStatusBadgeClass(s.status)}`}
+                            className={`w-28 truncate rounded-full border px-2 py-0.5 text-[11px] font-medium focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:opacity-50 cursor-pointer ${signupStatusBadgeClass(s.status)}`}
                           >
                             {(
                               [
@@ -850,9 +858,10 @@ export default function EventDetailPage() {
                         name: p.name ?? "Unknown",
                         nickname: p.nickname ?? "",
                         image_link: p.image_link,
+                        latest_rating: p.latest_rating,
                       }}
                       size="sm"
-                      showLatestRating={false}
+                      showLatestRating
                     />
                   ))}
                 </div>
