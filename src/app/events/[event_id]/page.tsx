@@ -191,8 +191,8 @@ export default function EventDetailPage() {
       if (!user) return;
       const { data } = await supabase
         .from("admin_users")
-        .select("auth_user_id")
-        .eq("auth_user_id", user.id)
+        .select("user_id")
+        .eq("user_id", user.id)
         .maybeSingle();
       setIsAdmin(!!data);
     }

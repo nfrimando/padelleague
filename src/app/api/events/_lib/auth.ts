@@ -36,8 +36,8 @@ export async function isAdminUser(authorization: string | null): Promise<boolean
     const serviceClient = getServerServiceClient();
     const { data } = await serviceClient
       .from("admin_users")
-      .select("auth_user_id")
-      .eq("auth_user_id", user.id)
+      .select("user_id")
+      .eq("user_id", user.id)
       .maybeSingle();
     return !!data;
   } catch {
