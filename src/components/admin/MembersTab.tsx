@@ -11,7 +11,7 @@ import { InitialRatingInput } from "@/components/InitialRatingInput";
 type ActiveAction =
   | { kind: "review-claim" | "review-application"; id: string; approved: boolean; notes: string; initialRating: string }
   | { kind: "change-status"; id: string; status: "cancelled" | "waitlisted"; notes: string }
-  | { kind: "delete"; id: string };
+  | { kind: "cancel"; id: string; notes: string };
 
 export function MembersTab({ enabled }: { enabled: boolean }) {
   const {
@@ -43,8 +43,8 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
     setSubmitError(null);
   };
 
-  const startDelete = (id: string) => {
-    setAction({ kind: "delete", id });
+  const startCancel = (id: string) => {
+    setAction({ kind: "cancel", id, notes: "" });
     setSubmitError(null);
   };
 
@@ -126,10 +126,14 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
         return;
       }
 
-      if (action.kind === "delete") {
+      if (action.kind === "cancel") {
         const res = await fetch(`/api/admin/membership-applications/${action.id}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ status: "cancelled", notes: action.notes || null }),
         });
 
         if (res.ok) {
@@ -341,10 +345,10 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => startDelete(a.id)}
+                          onClick={() => startCancel(a.id)}
                           className="inline-flex items-center justify-center rounded-md bg-red-50 dark:bg-red-900/20 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer transition-colors"
                         >
-                          Delete
+                          Cancel Application
                         </button>
                       </div>
                     )}
@@ -365,11 +369,15 @@ export function MembersTab({ enabled }: { enabled: boolean }) {
                       onCancel={cancelAction}
                     />
                   )}
-                  {isActive && action?.kind === "delete" && (
-                    <DeleteConfirmPanel
+                  {isActive && action?.kind === "cancel" && (
+                    <CancelPanel
                       name={a.applicant_name ?? "this applicant"}
+                      notes={action.notes}
                       submitting={submitting}
                       error={submitError}
+                      onNotesChange={(notes) =>
+                        setAction((prev) => prev && prev.kind === "cancel" ? { ...prev, notes } : prev)
+                      }
                       onConfirm={() => void handleConfirm()}
                       onCancel={cancelAction}
                     />
@@ -539,24 +547,36 @@ function StatusChangePanel({
   );
 }
 
-function DeleteConfirmPanel({
+function CancelPanel({
   name,
+  notes,
   submitting,
   error,
+  onNotesChange,
   onConfirm,
   onCancel,
 }: {
   name: string;
+  notes: string;
   submitting: boolean;
   error: string | null;
+  onNotesChange: (notes: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   return (
     <div className="border-t border-slate-100 dark:border-slate-800 bg-red-50 dark:bg-red-900/10 px-4 py-3 space-y-2">
       <p className="text-xs font-medium text-red-600 dark:text-red-400">
-        Delete application for <span className="font-semibold">{name}</span>? This cannot be undone.
+        Mark <span className="font-semibold">{name}</span>&apos;s application as
+        cancelled? They will no longer appear in the pending list.
       </p>
+      <textarea
+        rows={2}
+        value={notes}
+        onChange={(e) => onNotesChange(e.target.value)}
+        placeholder="Optional — reason for cancelling…"
+        className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-500 resize-none"
+      />
       {error && <p className="text-xs text-red-400">{error}</p>}
       <div className="flex gap-2">
         <button
@@ -565,7 +585,7 @@ function DeleteConfirmPanel({
           disabled={submitting}
           className="inline-flex items-center rounded-md bg-red-600 hover:bg-red-700 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
-          {submitting ? "Deleting…" : "Confirm Delete"}
+          {submitting ? "Cancelling…" : "Confirm Cancel"}
         </button>
         <button
           type="button"
@@ -573,7 +593,7 @@ function DeleteConfirmPanel({
           disabled={submitting}
           className="inline-flex items-center rounded-md bg-slate-200 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50 cursor-pointer"
         >
-          Cancel
+          Keep
         </button>
       </div>
     </div>

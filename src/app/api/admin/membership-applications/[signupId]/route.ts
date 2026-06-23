@@ -167,36 +167,3 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true, approved: true, player_id: playerId });
 }
-
-/** DELETE /api/admin/membership-applications/[signupId] */
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ signupId: string }> },
-) {
-  const authResult = await getAuthorizedAdminClient(request);
-  if (!authResult.ok) return authResult.response;
-
-  const { supabase } = authResult;
-  const { signupId } = await params;
-
-  // Remove referrer assessments first to avoid FK violations
-  const { error: referrersError } = await supabase
-    .from("signups_players_referrers")
-    .delete()
-    .eq("signup_id", signupId);
-
-  if (referrersError) {
-    return NextResponse.json({ error: referrersError.message }, { status: 500 });
-  }
-
-  const { error: deleteError } = await supabase
-    .from("signups_players")
-    .delete()
-    .eq("id", signupId);
-
-  if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true });
-}
