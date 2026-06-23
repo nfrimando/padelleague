@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  let body: { signup_id?: unknown };
+  let body: { signup_id?: unknown; return_to?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -45,6 +45,14 @@ export async function POST(request: Request) {
   if (!signupId) {
     return NextResponse.json({ error: "signup_id is required." }, { status: 400 });
   }
+
+  // Only allow same-origin relative paths to prevent open redirects.
+  const returnTo =
+    typeof body.return_to === "string" &&
+    body.return_to.startsWith("/") &&
+    !body.return_to.startsWith("//")
+      ? body.return_to
+      : "/dashboard";
 
   const secretKey = process.env.PAYMONGO_SECRET_KEY;
   if (!secretKey) {
@@ -127,7 +135,8 @@ export async function POST(request: Request) {
   const description = `Registration fee for ${event.name ?? `Event ${event.event_id}`}`;
 
   const origin = request.headers.get("origin") ?? `https://${request.headers.get("host") ?? ""}`;
-  const afterPaymentUrl = `${origin}/dashboard?payment=success`;
+  const separator = returnTo.includes("?") ? "&" : "?";
+  const afterPaymentUrl = `${origin}${returnTo}${separator}payment=success`;
 
   // Create PayMongo payment link
   const paymongoRes = await fetch("https://api.paymongo.com/v1/links", {

@@ -147,6 +147,7 @@ export default function EventDetailPage() {
 
   const [signupsData, setSignupsData] = useState<SignupsResponse | null>(null);
   const [showSignupModal, setShowSignupModal] = useState(false);
+  const [paymentJustCompleted, setPaymentJustCompleted] = useState(false);
   const [updatingSignupId, setUpdatingSignupId] = useState<string | null>(null);
   const [signupStatusError, setSignupStatusError] = useState<string | null>(null);
   const {
@@ -154,6 +155,15 @@ export default function EventDetailPage() {
     loading: signupSubmitting,
     error: signupError,
   } = useEventSignup();
+
+  // Detect return from PayMongo payment
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success") {
+      setPaymentJustCompleted(true);
+      window.history.replaceState(null, "", `/events/${eventId}`);
+    }
+  }, [eventId]);
 
   // Load event
   useEffect(() => {
@@ -490,6 +500,28 @@ export default function EventDetailPage() {
           </div>
         ) : event ? (
           <div className="space-y-6">
+            {/* Payment success banner */}
+            {paymentJustCompleted && (
+              <div className="rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-emerald-300">
+                    Payment Received
+                  </p>
+                  <p className="text-xs text-emerald-400/80 mt-0.5">
+                    Your registration is being confirmed.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPaymentJustCompleted(false)}
+                  className="text-emerald-400/60 hover:text-emerald-200 transition-colors shrink-0 cursor-pointer"
+                  aria-label="Dismiss"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             {/* Draft banner */}
             {isDraft && (
               <div className="rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">

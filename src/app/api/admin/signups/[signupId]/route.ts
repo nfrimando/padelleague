@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   getAuthorizedAdminClient,
 } from "@/app/api/admin/_lib/auth";
+import { notifySignupPaymentRequired } from "@/lib/email/notifications/signupPaymentRequired";
+import { notifySignupAccepted } from "@/lib/email/notifications/signupAccepted";
 
 type SignupStatus = "applied" | "pending_payment" | "accepted" | "waitlisted" | "cancelled";
 
@@ -58,6 +60,12 @@ export async function PATCH(
 
   const { supabase } = authResult;
 
+  const { data: previousSignup } = await supabase
+    .from("signups_events")
+    .select("status, player_id, event_id")
+    .eq("id", signupId)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from("signups_events")
     .update({ status })
@@ -71,6 +79,38 @@ export async function PATCH(
 
   if (!data) {
     return NextResponse.json({ error: "Signup not found." }, { status: 404 });
+  }
+
+  if (
+    previousSignup &&
+    previousSignup.status !== status &&
+    data.player_id &&
+    (status === "pending_payment" || status === "accepted")
+  ) {
+    const [{ data: player }, { data: eventRecord }] = await Promise.all([
+      supabase.from("players").select("name, nickname, email").eq("player_id", data.player_id).maybeSingle(),
+      supabase.from("events").select("name").eq("event_id", data.event_id).maybeSingle(),
+    ]);
+
+    if (player?.email) {
+      const notifyData = {
+        playerId: data.player_id,
+        playerEmail: player.email,
+        playerName: player.name ?? null,
+        playerNickname: player.nickname ?? null,
+        eventId: data.event_id,
+        eventName: eventRecord?.name ?? null,
+      };
+      if (status === "pending_payment") {
+        await notifySignupPaymentRequired(notifyData).catch((err) =>
+          console.error("[email] notifySignupPaymentRequired failed:", err),
+        );
+      } else {
+        await notifySignupAccepted(notifyData).catch((err) =>
+          console.error("[email] notifySignupAccepted failed:", err),
+        );
+      }
+    }
   }
 
   return NextResponse.json({ signup: data });

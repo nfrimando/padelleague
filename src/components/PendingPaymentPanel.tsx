@@ -43,7 +43,10 @@ export default function PendingPaymentPanel({
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ signup_id: signupId }),
+        body: JSON.stringify({
+          signup_id: signupId,
+          return_to: window.location.pathname,
+        }),
       });
 
       const json = (await res.json()) as { link_url?: string; error?: string };

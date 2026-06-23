@@ -6,7 +6,7 @@ import {
 import type { NotifType, PlayerNotificationPreferences } from "@/lib/types";
 import { fetchPlayerPrefs, setPlayerPref } from "@/lib/notificationPreferences";
 
-const VALID_NOTIF_TYPES: NotifType[] = ["match_results", "match_scheduled"];
+const VALID_NOTIF_TYPES: NotifType[] = ["match_results", "match_scheduled", "signup_status"];
 
 type ProfileUpdateBody = {
   nickname?: string;

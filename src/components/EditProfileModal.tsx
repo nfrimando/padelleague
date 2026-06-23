@@ -27,6 +27,7 @@ type FormState = {
   notif_match_results: boolean;
   notif_match_scheduled: boolean;
   notif_recruit_invitation: boolean;
+  notif_signup_status: boolean;
   preferred_side: "left" | "right" | "both" | "";
   shirt_size: string;
   ig_handle: string;
@@ -52,6 +53,7 @@ export default function EditProfileModal({
     notif_match_results: true,
     notif_match_scheduled: true,
     notif_recruit_invitation: true,
+    notif_signup_status: true,
     preferred_side: player.preferred_side ?? "",
     shirt_size: player.shirt_size ?? "",
     ig_handle: player.ig_handle ?? "",
@@ -92,7 +94,12 @@ export default function EditProfileModal({
         });
         if (!res.ok) return;
         const json = (await res.json()) as {
-          notification_preferences?: { match_results?: boolean; match_scheduled?: boolean; recruit_invitation?: boolean };
+          notification_preferences?: {
+            match_results?: boolean;
+            match_scheduled?: boolean;
+            recruit_invitation?: boolean;
+            signup_status?: boolean;
+          };
         };
         const prefs = json.notification_preferences ?? {};
         setForm((prev) => ({
@@ -100,6 +107,7 @@ export default function EditProfileModal({
           notif_match_results: prefs.match_results ?? true,
           notif_match_scheduled: prefs.match_scheduled ?? true,
           notif_recruit_invitation: prefs.recruit_invitation ?? true,
+          notif_signup_status: prefs.signup_status ?? true,
         }));
       } catch {
         // silently ignore; defaults stay true
@@ -157,6 +165,7 @@ export default function EditProfileModal({
             match_results: form.notif_match_results,
             match_scheduled: form.notif_match_scheduled,
             recruit_invitation: form.notif_recruit_invitation,
+            signup_status: form.notif_signup_status,
           },
         }),
       });
@@ -383,6 +392,12 @@ export default function EditProfileModal({
                   onChange={(v) => setForm((f) => ({ ...f, notif_recruit_invitation: v }))}
                   label="Recruit Invitations"
                   description="When you're named as a referrer for a new member application."
+                />
+                <Toggle
+                  checked={form.notif_signup_status}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_signup_status: v }))}
+                  label="Event Signup Updates"
+                  description="When you're shortlisted, accepted, or confirmed for an event you signed up for."
                 />
               </div>
             </div>

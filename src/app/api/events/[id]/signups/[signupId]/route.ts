@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { resolveCallerPlayerId, isAdminUser } from "@/app/api/events/_lib/auth";
+import { notifySignupPaymentRequired } from "@/lib/email/notifications/signupPaymentRequired";
+import { notifySignupAccepted } from "@/lib/email/notifications/signupAccepted";
 
 type SignupStatus =
   | "applied"
@@ -40,7 +42,7 @@ export async function PATCH(
 
   const { data: event, error: eventError } = await serviceClient
     .from("events")
-    .select("event_id, created_by_player_id")
+    .select("event_id, created_by_player_id, name")
     .eq("event_id", eventId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -82,6 +84,13 @@ export async function PATCH(
     );
   }
 
+  const { data: previousSignup } = await serviceClient
+    .from("signups_events")
+    .select("status, player_id")
+    .eq("id", signupId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+
   const { data, error } = await serviceClient
     .from("signups_events")
     .update({ status })
@@ -92,6 +101,39 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Signup not found." }, { status: 404 });
+
+  if (
+    previousSignup &&
+    previousSignup.status !== status &&
+    data.player_id &&
+    (status === "pending_payment" || status === "accepted")
+  ) {
+    const { data: player } = await serviceClient
+      .from("players")
+      .select("name, nickname, email")
+      .eq("player_id", data.player_id)
+      .maybeSingle();
+
+    if (player?.email) {
+      const notifyData = {
+        playerId: data.player_id,
+        playerEmail: player.email,
+        playerName: player.name ?? null,
+        playerNickname: player.nickname ?? null,
+        eventId,
+        eventName: event.name ?? null,
+      };
+      if (status === "pending_payment") {
+        await notifySignupPaymentRequired(notifyData).catch((err) =>
+          console.error("[email] notifySignupPaymentRequired failed:", err),
+        );
+      } else {
+        await notifySignupAccepted(notifyData).catch((err) =>
+          console.error("[email] notifySignupAccepted failed:", err),
+        );
+      }
+    }
+  }
 
   return NextResponse.json({ signup: data });
 }
