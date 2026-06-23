@@ -197,7 +197,7 @@ export default function RecruitListPage() {
     <div className="min-h-screen bg-[#0E1523] text-white flex flex-col">
       <SiteHeader />
 
-      <div className="flex-1 px-4 py-8 max-w-xl mx-auto w-full">
+      <div className="flex-1 px-4 py-8 max-w-6xl mx-auto w-full">
         <div className="mb-6">
           <h1 className="text-2xl font-black italic uppercase tracking-tighter">
             Pending Recruits
@@ -222,7 +222,7 @@ export default function RecruitListPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {applications.map((app) => (
               <Link
                 key={app.id}
