@@ -128,8 +128,19 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               {unvotedCount > 0 && (
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
               )}
-              <span className="text-[8px] font-black tracking-widest text-amber-400/60">β</span>
             </a>
+            {user && (
+              <a
+                href="/tools"
+                className={`hover:text-[#00C8DC] transition-colors ${
+                  currentPath.startsWith("/tools")
+                    ? "text-white border-b-2 border-[#00C8DC] pb-1"
+                    : "text-[#687FA3]"
+                }`}
+              >
+                Tools
+              </a>
+            )}
           </div>
         </div>
 
@@ -187,7 +198,7 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
             {rightSlot}
           </div>
 
-          <div className="flex md:hidden items-center min-w-0 gap-3">
+          <div className="flex md:hidden items-center min-w-0 gap-3 ml-4">
             <div className="flex-1 overflow-x-auto min-w-0" style={{ scrollbarWidth: "none" }}>
               <div className="flex gap-5 font-bold text-[11px] uppercase tracking-[0.12em] w-max">
                 {(
@@ -217,8 +228,19 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   {unvotedCount > 0 && (
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                   )}
-                  <span className="text-[7px] font-black text-amber-400/60">β</span>
                 </a>
+                {user && (
+                  <a
+                    href="/tools"
+                    className={
+                      currentPath.startsWith("/tools")
+                        ? "text-[#00C8DC]"
+                        : "text-white/75 hover:text-[#00C8DC] transition-colors"
+                    }
+                  >
+                    Tools
+                  </a>
+                )}
               </div>
             </div>
             <div className="flex-shrink-0 font-bold text-[11px] uppercase tracking-[0.12em] flex items-center gap-2">

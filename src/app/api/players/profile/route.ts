@@ -15,6 +15,7 @@ type ProfileUpdateBody = {
   country?: string | null;
   is_public?: boolean;
   is_notifications_subscribed?: boolean;
+  is_duel_roulette_opt_in?: boolean;
   preferred_side?: "left" | "right" | "both" | null;
   shirt_size?: string | null;
   ig_handle?: string | null;
@@ -112,6 +113,16 @@ export async function PATCH(request: NextRequest) {
       );
     }
     updates.is_notifications_subscribed = body.is_notifications_subscribed;
+  }
+
+  if (body.is_duel_roulette_opt_in !== undefined) {
+    if (typeof body.is_duel_roulette_opt_in !== "boolean") {
+      return NextResponse.json(
+        { error: "is_duel_roulette_opt_in must be a boolean" },
+        { status: 400 },
+      );
+    }
+    updates.is_duel_roulette_opt_in = body.is_duel_roulette_opt_in;
   }
 
   if (body.preferred_side !== undefined) {

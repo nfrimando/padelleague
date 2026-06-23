@@ -15,12 +15,18 @@ import { usePlayerMatchCounts } from "@/lib/usePlayerMatchCounts";
 import { computeV3ExpectedWinProbability } from "@/lib/ratings/v3/calculate";
 import { Player } from "@/lib/types";
 import { usePlayerSchedules, ScheduleSlot } from "@/lib/usePlayerSchedules";
+import {
+  SCHED_HOURS,
+  SCHED_DAYS,
+  schedHourLabel,
+  fullSchedHourLabel,
+} from "@/lib/scheduleGrid";
 import EditScheduleModal from "./EditScheduleModal";
 
 const FORMULA_NAME = "v3";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-type SlotKey = "t1p1" | "t1p2" | "t2p1" | "t2p2";
+export type SlotKey = "t1p1" | "t1p2" | "t2p1" | "t2p2";
 type SlotState = { search: string; player: Player | null };
 const EMPTY: SlotState = { search: "", player: null };
 
@@ -33,6 +39,11 @@ export type WinProbabilityCalculatorProps = {
 
 export type WinProbabilityCalculatorHandle = {
   addPlayer: (player: Player) => void;
+  // Removes a player (by id) from whichever slot holds them; no-op if absent.
+  removePlayer: (playerId: string) => void;
+  // Clears all four slots and sets the given ones in a single update — used by
+  // Duel Roulette's "Generate" to drop a full fair lineup at once.
+  setLineup: (players: Partial<Record<SlotKey, Player>>) => void;
 };
 
 // ── Search input ─────────────────────────────────────────────────────────────
@@ -127,6 +138,14 @@ function SlotSearch({
   );
 }
 
+// Short label for a player's preferred court side; null when unset.
+function preferredSideLabel(side: Player["preferred_side"]): string | null {
+  if (side === "left") return "L";
+  if (side === "right") return "R";
+  if (side === "both") return "L·R";
+  return null;
+}
+
 // ── Selected player chip ──────────────────────────────────────────────────────
 function PlayerChip({
   player,
@@ -179,8 +198,18 @@ function PlayerChip({
             </span>
           )}
         </div>
-        <div className="text-[11px] font-mono text-[#687FA3] leading-tight mt-0.5">
-          {rating != null ? rating.toFixed(2) : "—"}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[11px] font-mono text-[#687FA3] leading-tight">
+            {rating != null ? rating.toFixed(2) : "—"}
+          </span>
+          {preferredSideLabel(player.preferred_side) && (
+            <span
+              title={`Prefers ${player.preferred_side} side`}
+              className="text-[8px] font-black uppercase tracking-wider text-[#687FA3]/80 bg-[#687FA3]/10 border border-[#687FA3]/20 px-1 py-px rounded-sm leading-none"
+            >
+              {preferredSideLabel(player.preferred_side)}
+            </span>
+          )}
         </div>
       </div>
       {!isLocked && (
@@ -197,19 +226,9 @@ function PlayerChip({
 }
 
 // ── Schedule intersection ─────────────────────────────────────────────────────
-const SCHED_HOURS = [
-  6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0,
-];
-const SCHED_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function schedHourLabel(h: number): string {
-  if (h === 0) return "12a";
-  if (h < 12) return `${h}a`;
-  if (h === 12) return "12p";
-  return `${h - 12}p`;
-}
-
-// Four distinct hues so 1/2/3/4 are unambiguous at a glance
+// Grid scaffolding (days/hours/labels) lives in @/lib/scheduleGrid and is shared
+// with the Find Players heatmap. COUNT_COLORS stays here — it's specific to the
+// 1–4 player legend of a 2v2 duel.
 const COUNT_COLORS = [
   "",
   "bg-slate-600/50 border-slate-500/40", // 1 — dim gray-blue
@@ -217,13 +236,6 @@ const COUNT_COLORS = [
   "bg-orange-500/75 border-orange-400/65", // 3 — orange
   "bg-emerald-500 border-emerald-400/80", // 4 — green
 ];
-
-function fullSchedHourLabel(h: number): string {
-  if (h === 0) return "midnight";
-  if (h < 12) return `${h}am`;
-  if (h === 12) return "noon";
-  return `${h - 12}pm`;
-}
 
 function ScheduleIntersectionGrid({
   schedules,
@@ -465,8 +477,34 @@ const WinProbabilityCalculator = forwardRef<
 
   useImperativeHandle(ref, () => ({
     addPlayer: (player: Player) => {
+      const id = String(player.player_id);
+      const already = SLOT_ORDER.some(
+        (k) => slots[k].player && String(slots[k].player!.player_id) === id,
+      );
+      if (already) return; // never seat the same player twice
       const nextEmpty = SLOT_ORDER.find((k) => !slots[k].player);
       if (nextEmpty) updateSlot(nextEmpty, { player, search: "" });
+    },
+    removePlayer: (playerId: string) => {
+      const key = SLOT_ORDER.find(
+        (k) => slots[k].player && String(slots[k].player!.player_id) === playerId,
+      );
+      if (key) clearSlot(key);
+    },
+    setLineup: (players: Partial<Record<SlotKey, Player>>) => {
+      setSlots(() => {
+        const next: Record<SlotKey, SlotState> = {
+          t1p1: { ...EMPTY },
+          t1p2: { ...EMPTY },
+          t2p1: { ...EMPTY },
+          t2p2: { ...EMPTY },
+        };
+        for (const key of SLOT_ORDER) {
+          const p = players[key];
+          if (p) next[key] = { player: p, search: "" };
+        }
+        return next;
+      });
     },
   }));
 

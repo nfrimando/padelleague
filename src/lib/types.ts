@@ -31,6 +31,7 @@ export type Player = {
   preferred_side?: "left" | "right" | "both" | null;
   shirt_size?: string | null;
   ig_handle?: string | null;
+  is_duel_roulette_opt_in?: boolean;
   created_at?: string;
   updated_at?: string;
 };

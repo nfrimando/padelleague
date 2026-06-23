@@ -406,10 +406,9 @@ function DashboardPageContent() {
                       { id: "overview", label: "Overview", badge: !!pendingPaymentSignup },
                       { id: "peers", label: "Peers" },
                       { id: "favorites", label: "Favorites" },
-                      { id: "predictions", label: "Predictions", beta: true, badge: hasUnviewedResults },
+                      { id: "predictions", label: "Predictions", badge: hasUnviewedResults },
                     ] as const
                   ).map(({ id, label, ...rest }) => {
-                    const isBeta = "beta" in rest && rest.beta === true;
                     const hasBadge = "badge" in rest && rest.badge === true;
                     const isDisabled =
                       !!pendingPaymentSignup && id !== "overview";
@@ -429,11 +428,6 @@ function DashboardPageContent() {
                         ].join(" ")}
                       >
                         {label}
-                        {isBeta && (
-                          <span className="text-[7px] font-black text-amber-400/60">
-                            β
-                          </span>
-                        )}
                         {hasBadge && activeTab !== id && (
                           <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400" />
                         )}

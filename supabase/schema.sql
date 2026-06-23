@@ -140,6 +140,7 @@ CREATE TABLE public.players (
   is_public boolean NOT NULL DEFAULT false,
   is_notifications_subscribed boolean NOT NULL DEFAULT false,
   shirt_size character varying,
+  is_duel_roulette_opt_in boolean NOT NULL DEFAULT false,
   CONSTRAINT players_pkey PRIMARY KEY (player_id)
 );
 CREATE TABLE public.prediction_results (
