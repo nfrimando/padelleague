@@ -41,6 +41,7 @@ export async function fetchLeaderboardEvents(): Promise<LeaderboardEvent[]> {
   const { data, error } = await db
     .from("events")
     .select("event_id, name, status, start_date, end_date")
+    .is("deleted_at", null)
     .order("start_date", { ascending: false, nullsFirst: false })
     .order("event_id", { ascending: false });
 

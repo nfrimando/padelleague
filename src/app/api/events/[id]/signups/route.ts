@@ -63,17 +63,18 @@ export async function GET(
     return NextResponse.json({ error: "Event not found." }, { status: 404 });
   }
 
-  let viewerSignup: { status: SignupStatus } | null = null;
+  let viewerSignup: { id: string; status: SignupStatus } | null = null;
   if (playerId !== null) {
     const { data: viewerRow } = await serviceClient
       .from("signups_events")
-      .select("status")
+      .select("id, status")
       .eq("event_id", eventId)
       .eq("player_id", playerId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (viewerRow) viewerSignup = { status: viewerRow.status as SignupStatus };
+    if (viewerRow)
+      viewerSignup = { id: viewerRow.id as string, status: viewerRow.status as SignupStatus };
   }
 
   if (canManage) {

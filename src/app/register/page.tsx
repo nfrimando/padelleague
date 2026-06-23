@@ -90,6 +90,7 @@ export default function RegisterPage() {
               "event_id, name, event_type, start_date, end_date, registration_status, status, created_at, updated_at",
             )
             .eq("registration_status", "open")
+            .is("deleted_at", null)
             .order("event_id", { ascending: false }),
           supabase
             .from("players")

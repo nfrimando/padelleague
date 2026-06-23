@@ -5,6 +5,7 @@ import {
   getServerUserClient,
 } from "@/app/api/_lib/supabase";
 import { EventRestrictions } from "@/lib/types";
+import { notifyNewEventProposed } from "@/lib/email/notifications/newEventProposed";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
 
   const { data: player, error: playerError } = await serviceClient
     .from("players")
-    .select("player_id, is_profile_complete")
+    .select("player_id, is_profile_complete, name, nickname")
     .eq("email", user.email ?? "")
     .maybeSingle();
 
@@ -141,6 +142,13 @@ export async function POST(request: Request) {
     console.error("Failed to create draft event:", insertError?.message);
     return NextResponse.json({ error: "Failed to create event." }, { status: 500 });
   }
+
+  await notifyNewEventProposed({
+    name,
+    startDate: start_date,
+    proposerName: player.name ?? null,
+    proposerNickname: player.nickname ?? null,
+  }).catch((err) => console.error("[email] notifyNewEventProposed failed:", err));
 
   return NextResponse.json({ event }, { status: 201 });
 }

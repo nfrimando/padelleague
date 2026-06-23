@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { X } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import Toggle from "@/components/Toggle";
 import EventSignupConfirmModal from "@/components/EventSignupConfirmModal";
+import PendingPaymentPanel from "@/components/PendingPaymentPanel";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { useEventSignup } from "@/lib/useEventSignup";
 import {
@@ -42,7 +44,7 @@ type ManagedSignupRow = RosterPlayer & {
 type SignupsResponse = {
   signupListVisible: boolean;
   canManage: boolean;
-  viewerSignup: { status: EventSignupStatus } | null;
+  viewerSignup: { id: string | null; status: EventSignupStatus } | null;
   roster: RosterPlayer[];
   signups?: ManagedSignupRow[];
   statusCounts?: Record<EventSignupStatus, number>;
@@ -86,6 +88,7 @@ type EditForm = {
   end_date: string;
   format: string;
   player_limit: string;
+  registration_fee: string;
   min_rating: string;
   max_rating: string;
   description: string;
@@ -103,6 +106,8 @@ function makeEditForm(event: EventWithCreator): EditForm {
     end_date: event.end_date ?? "",
     format: event.format ?? "",
     player_limit: event.player_limit != null ? String(event.player_limit) : "",
+    registration_fee:
+      event.registration_fee != null ? String(event.registration_fee) : "",
     min_rating:
       event.restrictions?.min_rating != null
         ? String(event.restrictions.min_rating)
@@ -121,6 +126,7 @@ function makeEditForm(event: EventWithCreator): EditForm {
 
 export default function EventDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const eventId = params.event_id as string;
   const { player, isLinked } = useCurrentPlayer();
 
@@ -135,6 +141,9 @@ export default function EventDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [signupsData, setSignupsData] = useState<SignupsResponse | null>(null);
   const [showSignupModal, setShowSignupModal] = useState(false);
@@ -262,6 +271,9 @@ export default function EventDetailPage() {
       player_limit: editForm.player_limit
         ? parseInt(editForm.player_limit, 10)
         : null,
+      registration_fee: editForm.registration_fee
+        ? parseFloat(editForm.registration_fee)
+        : null,
       description: editForm.description || null,
       notes: editForm.notes || null,
       image_url: editForm.image_url || null,
@@ -335,6 +347,34 @@ export default function EventDetailPage() {
     setPublishing(false);
   };
 
+  const handleDelete = async () => {
+    if (!event) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setDeleteError("Not authenticated.");
+      setDeleting(false);
+      return;
+    }
+
+    const res = await fetch(`/api/events/${event.event_id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      setDeleteError(json.error ?? "Failed to delete event.");
+      setDeleting(false);
+      return;
+    }
+
+    router.push("/events");
+  };
+
   const isDraft = event?.visibility === "draft";
 
   const restrictionTags: string[] = [];
@@ -347,14 +387,20 @@ export default function EventDetailPage() {
     restrictionTags.push(`Suggested rating ≤ ${r.max_rating}`);
 
   const viewerSignupStatus = signupsData?.viewerSignup?.status ?? null;
+  const viewerSignupId = signupsData?.viewerSignup?.id ?? null;
   const canSignUpAgain = !viewerSignupStatus || viewerSignupStatus === "cancelled";
+  const showOwnStatusInPlayers = Boolean(
+    signupsData?.canManage && viewerSignupStatus && !canSignUpAgain,
+  );
   const isVerifiedPlayer = isLinked && !!player?.is_profile_complete;
 
   const handleSignupConfirm = async () => {
     if (!event) return;
     const outcome = await handleSignup(event.event_id);
     if (outcome === "registered") {
-      setSignupsData((d) => (d ? { ...d, viewerSignup: { status: "applied" } } : d));
+      setSignupsData((d) =>
+        d ? { ...d, viewerSignup: { id: null, status: "applied" } } : d,
+      );
       setShowSignupModal(false);
     }
   };
@@ -612,6 +658,16 @@ export default function EventDetailPage() {
                   )}
                 </div>
               )}
+              <div className="px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                  Entry Fee
+                </p>
+                <p className="text-sm text-slate-200">
+                  {event.requires_payment
+                    ? `₱${(event.registration_fee ?? 0).toLocaleString()}`
+                    : "Free"}
+                </p>
+              </div>
             </div>
 
             {/* Restrictions */}
@@ -643,9 +699,18 @@ export default function EventDetailPage() {
             {/* Players */}
             {signupsData?.canManage && signupsData.signups ? (
               <div className="space-y-3">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                  Players
-                </h2>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                    Players
+                  </h2>
+                  {showOwnStatusInPlayers && viewerSignupStatus && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${signupStatusBadgeClass(viewerSignupStatus)}`}
+                    >
+                      Your status: {signupStatusLabel(viewerSignupStatus)}
+                    </span>
+                  )}
+                </div>
                 {signupsData.statusCounts && (
                   <div className="flex flex-wrap gap-2">
                     {(
@@ -762,10 +827,21 @@ export default function EventDetailPage() {
               </div>
             ) : null}
 
+            {/* Payment required — same pay-online / pay-direct options as the dashboard */}
+            {viewerSignupStatus === "pending_payment" && viewerSignupId && (
+              <PendingPaymentPanel
+                signupId={viewerSignupId}
+                eventLabel={event.name ?? `Event #${event.event_id}`}
+                registrationFee={event.registration_fee}
+                paymentInstructions={event.payment_instructions}
+              />
+            )}
+
             {/* Sign up CTA */}
-            {event.registration_status === "open" && !isDraft && (
+            {event.registration_status === "open" && !isDraft && !showOwnStatusInPlayers && (
               <div className="pt-2">
-                {viewerSignupStatus && !canSignUpAgain ? (
+                {viewerSignupStatus === "pending_payment" ? null : viewerSignupStatus &&
+                  !canSignUpAgain ? (
                   <span
                     className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${signupStatusBadgeClass(viewerSignupStatus)}`}
                   >
@@ -790,12 +866,32 @@ export default function EventDetailPage() {
               </div>
             )}
 
-            {/* Edit form (inline) */}
+            {/* Edit form modal */}
             {editing && editForm && (
-              <div className="rounded-xl border border-[#00C8DC]/30 bg-slate-900 p-5 space-y-4">
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div
+                  className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+                  onClick={() => {
+                    setEditing(false);
+                    setSaveError(null);
+                  }}
+                />
+                <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-[#00C8DC]/30 bg-slate-900 p-5 space-y-4">
+                <div className="flex items-start justify-between gap-3">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-[#00C8DC]">
                   Edit Event
                 </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(false);
+                    setSaveError(null);
+                  }}
+                  className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+                </div>
 
                 {/* Required */}
                 <div>
@@ -895,7 +991,22 @@ export default function EventDetailPage() {
                         }
                       />
                     </div>
-                    <div />
+                    <div>
+                      <label className={labelCls}>Entry Fee (₱)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className={inputCls}
+                        placeholder="e.g. 1000"
+                        value={editForm.registration_fee}
+                        onChange={(e) =>
+                          setEditForm((f) =>
+                            f ? { ...f, registration_fee: e.target.value } : f,
+                          )
+                        }
+                      />
+                    </div>
                     <div>
                       <label className={labelCls}>Minimum Rating</label>
                       <input
@@ -1017,6 +1128,32 @@ export default function EventDetailPage() {
                     Cancel
                   </button>
                 </div>
+                </div>
+              </div>
+            )}
+
+            {/* Danger zone */}
+            {canEdit && (
+              <div className="rounded-xl border border-rose-900/40 bg-rose-950/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-rose-300">
+                    Delete Event
+                  </p>
+                  <p className="text-xs text-rose-400/70 mt-0.5">
+                    This removes the event from the listing. This can&apos;t
+                    be undone.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setShowDeleteConfirm(true);
+                  }}
+                  className="shrink-0 inline-flex items-center rounded-md border border-rose-700/60 px-4 py-1.5 text-sm font-medium text-rose-300 hover:bg-rose-900/30 hover:border-rose-600 transition-colors cursor-pointer"
+                >
+                  Delete Event
+                </button>
               </div>
             )}
           </div>
@@ -1031,6 +1168,50 @@ export default function EventDetailPage() {
           onConfirm={() => void handleSignupConfirm()}
           onCancel={() => setShowSignupModal(false)}
         />
+      )}
+
+      {showDeleteConfirm && event && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+            onClick={() => !deleting && setShowDeleteConfirm(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-rose-900/40 bg-slate-900 p-5 space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-rose-400">
+              Delete Event
+            </h3>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-slate-100">
+                {event.name ?? `Event #${event.event_id}`}
+              </span>
+              ? This can&apos;t be undone.
+            </p>
+            {deleteError && (
+              <div className="rounded-md border border-rose-800/40 bg-rose-900/20 px-3 py-2 text-sm text-rose-300">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={deleting}
+                className="inline-flex items-center rounded-full bg-rose-700 px-5 py-1.5 text-sm font-bold text-white hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                {deleting ? "Deleting…" : "Delete Event"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="inline-flex items-center rounded-full border border-slate-700 px-4 py-1.5 text-sm text-slate-400 hover:text-slate-200 hover:border-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

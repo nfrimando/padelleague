@@ -110,6 +110,8 @@ export async function PATCH(
   if (typeof body.format === "string") update.format = body.format.trim() || null;
   if (typeof body.player_limit === "number") update.player_limit = body.player_limit > 0 ? body.player_limit : null;
   if (Object.prototype.hasOwnProperty.call(body, "player_limit") && body.player_limit === null) update.player_limit = null;
+  if (typeof body.registration_fee === "number") update.registration_fee = body.registration_fee >= 0 ? body.registration_fee : null;
+  if (Object.prototype.hasOwnProperty.call(body, "registration_fee") && body.registration_fee === null) update.registration_fee = null;
   if (typeof body.description === "string") update.description = body.description.trim() || null;
   if (typeof body.notes === "string") update.notes = body.notes.trim() || null;
   if (typeof body.image_url === "string") update.image_url = body.image_url.trim() || null;
@@ -142,4 +144,69 @@ export async function PATCH(
   if (!updated) return NextResponse.json({ error: "Event not found." }, { status: 404 });
 
   return NextResponse.json({ event: updated });
+}
+
+/** DELETE /api/events/[id] — creator or admin can soft-delete an event */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const eventId = parseInt(id, 10);
+  if (isNaN(eventId)) {
+    return NextResponse.json({ error: "Invalid event ID." }, { status: 400 });
+  }
+
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  const [playerId, adminFlag] = await Promise.all([
+    resolveCallerPlayerId(authorization),
+    isAdminUser(authorization),
+  ]);
+
+  if (!playerId && !adminFlag) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  const serviceClient = getServerServiceClient();
+  const { data: event, error: fetchError } = await serviceClient
+    .from("events")
+    .select("event_id, created_by_player_id")
+    .eq("event_id", eventId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  if (!event) return NextResponse.json({ error: "Event not found." }, { status: 404 });
+
+  const isCreator = playerId !== null && playerId === event.created_by_player_id;
+  if (!adminFlag && !isCreator) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
+
+  const { count, error: signupError } = await serviceClient
+    .from("signups_events")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .neq("status", "cancelled");
+
+  if (signupError) return NextResponse.json({ error: signupError.message }, { status: 500 });
+  if ((count ?? 0) > 0) {
+    return NextResponse.json(
+      { error: "Event has active signups. Cancel all signups before deleting." },
+      { status: 409 },
+    );
+  }
+
+  const { error: deleteError } = await serviceClient
+    .from("events")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("event_id", eventId);
+
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }
