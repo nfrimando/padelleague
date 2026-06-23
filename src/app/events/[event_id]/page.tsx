@@ -784,7 +784,7 @@ export default function EventDetailPage() {
                     {signupsData.signups.map((s) => (
                       <div
                         key={s.id}
-                        className="flex flex-col gap-2 min-w-0 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                        className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
                       >
                         <PlayerCard
                           player={{
@@ -797,7 +797,7 @@ export default function EventDetailPage() {
                           size="sm"
                           showLatestRating
                         />
-                        <div className="flex items-center justify-end gap-2 sm:flex-col sm:items-end sm:gap-1 shrink-0">
+                        <div className="flex items-center gap-2 border-t border-slate-800 pt-2">
                           <select
                             value={s.status}
                             disabled={updatingSignupId === s.id}
@@ -807,7 +807,7 @@ export default function EventDetailPage() {
                                 e.target.value as EventSignupStatus,
                               )
                             }
-                            className={`w-28 truncate rounded-full border px-2 py-0.5 text-[11px] font-medium focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:opacity-50 cursor-pointer ${signupStatusBadgeClass(s.status)}`}
+                            className={`flex-1 min-w-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-medium focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:opacity-50 cursor-pointer ${signupStatusBadgeClass(s.status)}`}
                           >
                             {(
                               [
@@ -829,7 +829,7 @@ export default function EventDetailPage() {
                           </select>
                           {event.requires_payment && s.status === "accepted" && (
                             <span
-                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                              className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                                 s.paid
                                   ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                                   : "bg-slate-800 border-slate-700 text-slate-400"
