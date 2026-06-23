@@ -35,6 +35,10 @@ export type WinProbabilityCalculatorProps = {
   currentPlayer?: Player | null;
   currentPlayerRating?: number | null;
   onSlotsChange?: (ids: Partial<Record<SlotKey, string>>) => void;
+  // When provided, the set of player ids that are in the duel pool (opted in).
+  // Any seated player NOT in this set is flagged with a red outline. Leave
+  // undefined (e.g. on the dashboard) to disable the indicator entirely.
+  poolIds?: Set<string>;
 };
 
 export type WinProbabilityCalculatorHandle = {
@@ -153,6 +157,7 @@ function PlayerChip({
   isYou,
   isLocked,
   isDragging,
+  outOfPool,
   team,
   onRemove,
   onDragStart,
@@ -162,23 +167,31 @@ function PlayerChip({
   isYou?: boolean;
   isLocked?: boolean;
   isDragging?: boolean;
+  outOfPool?: boolean;
   team: 1 | 2;
   onRemove?: () => void;
   onDragStart?: () => void;
 }) {
   const hasImg = !!(player.image_link && player.image_link !== "null");
   const src = hasImg ? player.image_link! : "/default-avatar.webp";
-  const ringCls = team === 1 ? "ring-sky-500/40" : "ring-amber-500/40";
+  const ringCls = outOfPool
+    ? "ring-rose-500/70"
+    : team === 1
+      ? "ring-sky-500/40"
+      : "ring-amber-500/40";
 
   return (
     <div
       draggable={!isLocked}
       onDragStart={!isLocked ? onDragStart : undefined}
+      title={outOfPool ? "Not in the duel pool" : undefined}
       className={[
         "flex items-center gap-2.5 rounded-xl px-2.5 py-2 h-[52px] transition-opacity",
         isLocked
           ? "bg-sky-950/40 border border-sky-700/25 cursor-default"
-          : "bg-[#0d1520] border border-[#687FA3]/20 cursor-grab active:cursor-grabbing",
+          : outOfPool
+            ? "bg-rose-950/20 border border-rose-500/60 cursor-grab active:cursor-grabbing"
+            : "bg-[#0d1520] border border-[#687FA3]/20 cursor-grab active:cursor-grabbing",
         isDragging ? "opacity-40" : "",
       ].join(" ")}
     >
@@ -405,7 +418,7 @@ const WinProbabilityCalculator = forwardRef<
   WinProbabilityCalculatorHandle,
   WinProbabilityCalculatorProps
 >(function WinProbabilityCalculator(
-  { initialPlayerIds, currentPlayer, currentPlayerRating, onSlotsChange },
+  { initialPlayerIds, currentPlayer, currentPlayerRating, onSlotsChange, poolIds },
   ref,
 ) {
   const { players: allPlayers, loading: playersLoading } = usePlayers({
@@ -662,6 +675,7 @@ const WinProbabilityCalculator = forwardRef<
             isYou={isYou}
             isLocked={false}
             isDragging={isBeingDragged}
+            outOfPool={!!poolIds && !poolIds.has(String(slot.player.player_id))}
             team={team}
             onRemove={() => clearSlot(key)}
             onDragStart={() => setDragSlot(key)}

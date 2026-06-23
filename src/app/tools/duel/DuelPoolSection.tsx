@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Shuffle, Loader2, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import RatingRangeFilter from "@/components/RatingRangeFilter";
-import { useDuelPool, DuelPoolPlayer } from "@/lib/useDuelPool";
+import { DuelPoolPlayer } from "@/lib/useDuelPool";
 import { generateFairDuel } from "@/lib/generateFairDuel";
 import type { Player } from "@/lib/types";
 import type { SlotKey } from "@/app/dashboard/WinProbabilityCalculator";
@@ -91,6 +91,9 @@ export default function DuelPoolSection({
   currentPlayer,
   currentPlayerRating,
   selectedIds,
+  pool,
+  loading,
+  reload,
   onAddPlayer,
   onRemovePlayer,
   onSetLineup,
@@ -98,12 +101,13 @@ export default function DuelPoolSection({
   currentPlayer: Player;
   currentPlayerRating: number | null;
   selectedIds: string[];
+  pool: DuelPoolPlayer[];
+  loading: boolean;
+  reload: () => void;
   onAddPlayer: (player: Player) => void;
   onRemovePlayer: (id: string) => void;
   onSetLineup: (players: Partial<Record<SlotKey, Player>>) => void;
 }) {
-  const { pool, loading, reload } = useDuelPool();
-
   const [optIn, setOptIn] = useState<boolean>(
     currentPlayer.is_duel_roulette_opt_in ?? false,
   );
