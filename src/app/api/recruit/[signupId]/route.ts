@@ -15,7 +15,7 @@ export async function GET(
   const { data: signup, error: signupError } = await serviceClient
     .from("signups_players")
     .select(
-      "id, status, applicant_name, applicant_nickname, applicant_contact, applicant_email, applicant_image_url, created_at, updated_at, player_id",
+      "id, status, applicant_name, applicant_nickname, applicant_contact, applicant_email, applicant_image_url, created_at, updated_at, player_id, notes",
     )
     .eq("id", signupId)
     .maybeSingle();

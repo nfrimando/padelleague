@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 import { InitialRatingInput } from "@/components/InitialRatingInput";
 import { RatingCalibrationHelper } from "@/components/RatingCalibrationHelper";
+import ImageLightbox from "@/components/ImageLightbox";
 
 type RecruitSignup = Pick<
   MembershipApplication,
@@ -25,7 +26,7 @@ type RecruitSignup = Pick<
   | "applicant_contact"
   | "applicant_email"
   | "created_at"
-> & { applicant_image_url?: string | null };
+> & { applicant_image_url?: string | null; notes?: string | null };
 
 type RecruitPageState =
   | { stage: "loading" }
@@ -70,6 +71,8 @@ function ApplicantCard({
   signup: RecruitSignup;
   canSeeContact: boolean;
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
   const initials = (signup.applicant_name ?? "?")
     .split(" ")
     .map((w) => w[0])
@@ -84,11 +87,27 @@ function ApplicantCard({
       </p>
       <div className="flex items-center gap-4">
         {signup.applicant_image_url ? (
-          <img
-            src={signup.applicant_image_url}
-            alt={signup.applicant_name ?? "Applicant"}
-            className="w-16 h-16 rounded-full object-cover shrink-0"
-          />
+          <>
+            <button
+              type="button"
+              onClick={() => setLightboxOpen(true)}
+              className="shrink-0 cursor-zoom-in rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00C8DC]/60"
+              aria-label="View enlarged photo"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={signup.applicant_image_url}
+                alt={signup.applicant_name ?? "Applicant"}
+                className="w-16 h-16 rounded-full object-cover"
+              />
+            </button>
+            <ImageLightbox
+              isOpen={lightboxOpen}
+              onClose={() => setLightboxOpen(false)}
+              src={signup.applicant_image_url}
+              alt={signup.applicant_name ?? "Applicant"}
+            />
+          </>
         ) : (
           <div className="w-16 h-16 rounded-full bg-[#687FA3]/20 shrink-0 flex items-center justify-center text-[#687FA3] font-bold text-lg">
             {initials}
@@ -134,10 +153,16 @@ function ApplicantCard({
             className={
               signup.status === "accepted"
                 ? "text-emerald-400 font-bold"
-                : "text-amber-400"
+                : signup.status === "cancelled"
+                  ? "text-red-400 font-bold"
+                  : "text-amber-400"
             }
           >
-            {signup.status === "accepted" ? "Recruited" : "Pending"}
+            {signup.status === "accepted"
+              ? "Recruited"
+              : signup.status === "cancelled"
+                ? "Cancelled"
+                : "Pending"}
           </p>
         </div>
       </div>
@@ -853,6 +878,115 @@ function RecruitModal({
   );
 }
 
+function CancelModal({
+  applicantName,
+  signupId,
+  onClose,
+  onCancelled,
+}: {
+  applicantName: string | null;
+  signupId: string;
+  onClose: () => void;
+  onCancelled: (notes: string | null) => void;
+}) {
+  const [notes, setNotes] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  async function handleConfirm() {
+    setCancelling(true);
+    setError(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const res = await fetch(`/api/recruit/${signupId}/cancel`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {}),
+      },
+      body: JSON.stringify({ notes: notes.trim() || null }),
+    });
+
+    const json = await res.json();
+    setCancelling(false);
+
+    if (!res.ok) {
+      setError(json.error ?? "Failed to cancel application.");
+      return;
+    }
+
+    onCancelled((json.notes as string | null) ?? null);
+  }
+
+  return (
+    <div
+      ref={backdropRef}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 cursor-pointer"
+      onClick={(e) => {
+        if (e.target === backdropRef.current) onClose();
+      }}
+    >
+      <div className="bg-[#0E1523] border border-white/10 rounded-2xl p-6 w-full max-w-sm space-y-5 cursor-default">
+        <div>
+          <h2 className="text-lg font-bold text-white">Cancel Application</h2>
+          <p className="text-sm text-[#687FA3] mt-1">
+            This marks{" "}
+            <span className="text-white font-medium">
+              {applicantName ?? "this applicant"}
+            </span>
+            &apos;s application as cancelled. They will no longer appear in the
+            pending recruits list.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">
+            Notes
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Optional — reason for cancelling..."
+            rows={3}
+            className="w-full bg-[#0E1523] border border-[#687FA3]/20 rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-red-400/50 transition-colors resize-none"
+          />
+        </div>
+
+        {error && (
+          <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
+            {error}
+          </p>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={cancelling}
+            className="flex-1 bg-red-700 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            {cancelling ? "Cancelling…" : "Confirm Cancel"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={cancelling}
+            className="px-4 text-sm text-[#687FA3] hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Keep
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RecruitPage() {
   const { signupId } = useParams<{ signupId: string }>();
   const [state, setState] = useState<RecruitPageState>({ stage: "loading" });
@@ -860,6 +994,9 @@ export default function RecruitPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [recruited, setRecruited] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelledNotes, setCancelledNotes] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -1012,7 +1149,11 @@ export default function RecruitPage() {
   const ratedReferrers = referrers.filter((r) => r.initial_rating !== null);
   const ratedCount = ratedReferrers.length;
   const readyToRecruit = ratedCount >= MIN_REFERRER_RATINGS;
-  const isLocked = signup.status === "accepted" || recruited;
+  const isRecruited = signup.status === "accepted" || recruited;
+  const isCancelled = signup.status === "cancelled" || cancelled;
+  const isLocked = isRecruited || isCancelled;
+  const effectiveCancelNotes =
+    cancelled ? cancelledNotes : signup.notes ?? null;
 
   const effectivePlayerId = currentPlayerId;
   const effectiveIsAdmin = isAdmin;
@@ -1261,7 +1402,21 @@ export default function RecruitPage() {
         </div>
 
         <div className="border-t border-white/10 pt-6">
-          {isLocked ? (
+          {isCancelled ? (
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400 px-5 py-3 rounded-xl text-sm font-bold">
+                Application Cancelled
+              </div>
+              {effectiveCancelNotes && (
+                <p className="text-sm text-white/60">
+                  <span className="text-[#687FA3]">Notes: </span>
+                  <span className="whitespace-pre-wrap">
+                    {effectiveCancelNotes}
+                  </span>
+                </p>
+              )}
+            </div>
+          ) : isRecruited ? (
             <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-5 py-3 rounded-xl text-sm font-bold">
               ✓ Already Recruited
             </div>
@@ -1280,20 +1435,31 @@ export default function RecruitPage() {
                   </span>
                 )}
               </p>
-              <button
-                type="button"
-                disabled={!effectiveIsAdmin || !readyToRecruit}
-                onClick={() => setShowModal(true)}
-                className={`w-full py-3 px-6 rounded-xl font-black text-sm transition-colors ${
-                  readyToRecruit
-                    ? effectiveIsAdmin
-                      ? "bg-green-700 hover:bg-green-600 text-white cursor-pointer"
-                      : "bg-transparent border-2 border-green-700 text-green-500 cursor-not-allowed"
-                    : "bg-white/5 border border-white/10 text-white/30 cursor-not-allowed"
-                }`}
-              >
-                Recruit{effectiveIsAdmin ? "" : " (Admin Only)"}
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  disabled={!effectiveIsAdmin || !readyToRecruit}
+                  onClick={() => setShowModal(true)}
+                  className={`flex-1 py-3 px-6 rounded-xl font-black text-sm transition-colors ${
+                    readyToRecruit
+                      ? effectiveIsAdmin
+                        ? "bg-green-700 hover:bg-green-600 text-white cursor-pointer"
+                        : "bg-transparent border-2 border-green-700 text-green-500 cursor-not-allowed"
+                      : "bg-white/5 border border-white/10 text-white/30 cursor-not-allowed"
+                  }`}
+                >
+                  Recruit{effectiveIsAdmin ? "" : " (Admin Only)"}
+                </button>
+                {effectiveIsAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelModal(true)}
+                    className="sm:w-auto py-3 px-6 rounded-xl font-bold text-sm border border-red-500/40 text-red-400 hover:bg-red-500/10 hover:border-red-500/60 transition-colors cursor-pointer"
+                  >
+                    Cancel Application
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1308,6 +1474,19 @@ export default function RecruitPage() {
           onRecruited={() => {
             setShowModal(false);
             setRecruited(true);
+          }}
+        />
+      )}
+
+      {showCancelModal && !isLocked && (
+        <CancelModal
+          applicantName={signup.applicant_name}
+          signupId={signupId}
+          onClose={() => setShowCancelModal(false)}
+          onCancelled={(notes) => {
+            setShowCancelModal(false);
+            setCancelledNotes(notes);
+            setCancelled(true);
           }}
         />
       )}
