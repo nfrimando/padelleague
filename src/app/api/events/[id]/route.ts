@@ -114,6 +114,9 @@ export async function PATCH(
   if (typeof body.notes === "string") update.notes = body.notes.trim() || null;
   if (typeof body.image_url === "string") update.image_url = body.image_url.trim() || null;
   if (typeof body.signup_list_visible === "boolean") update.signup_list_visible = body.signup_list_visible;
+  if (body.registration_status === "open" || body.registration_status === "closed") {
+    update.registration_status = body.registration_status;
+  }
 
   if (Object.prototype.hasOwnProperty.call(body, "min_rating") || Object.prototype.hasOwnProperty.call(body, "max_rating")) {
     const restrictions: EventRestrictions = {};

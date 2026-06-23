@@ -17,7 +17,11 @@ import type { User } from "@supabase/supabase-js";
 type LeagueStats = {
   players: number;
   completedMatches: number;
-  latestEvent: { event_id: number; name: string } | null;
+  latestEvent: {
+    event_id: number;
+    name: string;
+    status: "ongoing" | "completed";
+  } | null;
   setsPlayed: number;
 };
 
@@ -99,7 +103,8 @@ export default function HomePage() {
       const [
         { count: playerCount },
         { data: matchCountData },
-        { data: latestEventData },
+        { data: ongoingEventData },
+        { data: completedEventData },
         { count: setsCount },
       ] = await Promise.all([
         supabase.from("players").select("*", { count: "exact", head: true }),
@@ -110,16 +115,33 @@ export default function HomePage() {
         supabase
           .from("events")
           .select("event_id,name,start_date")
+          .eq("status", "ongoing")
+          .eq("visibility", "published")
+          .is("deleted_at", null)
+          .order("start_date", { ascending: false })
+          .limit(1),
+        supabase
+          .from("events")
+          .select("event_id,name,start_date")
+          .eq("status", "completed")
+          .eq("visibility", "published")
+          .is("deleted_at", null)
           .order("start_date", { ascending: false })
           .limit(1),
         supabase.from("match_sets").select("*", { count: "exact", head: true }),
       ]);
 
-      const latestEvent: { event_id: number; name: string } | null =
-        latestEventData?.[0]
+      const latestEvent: LeagueStats["latestEvent"] = ongoingEventData?.[0]
+        ? {
+            event_id: ongoingEventData[0].event_id,
+            name: ongoingEventData[0].name,
+            status: "ongoing",
+          }
+        : completedEventData?.[0]
           ? {
-              event_id: latestEventData[0].event_id,
-              name: latestEventData[0].name,
+              event_id: completedEventData[0].event_id,
+              name: completedEventData[0].name,
+              status: "completed",
             }
           : null;
 
@@ -201,7 +223,12 @@ export default function HomePage() {
       icon: Sword,
     },
     {
-      label: "EVENT",
+      label:
+        stats?.latestEvent?.status === "ongoing"
+          ? "ONGOING EVENT"
+          : stats?.latestEvent?.status === "completed"
+            ? "LATEST COMPLETED EVENT"
+            : "EVENT",
       value: stats?.latestEvent != null ? stats.latestEvent.name : "–",
       icon: Flame,
     },
@@ -238,7 +265,11 @@ export default function HomePage() {
             <div className="max-w-3xl space-y-4 md:space-y-6">
               <div className="inline-block bg-[#00C8DC]/10 text-[#00C8DC] px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase">
                 {stats?.latestEvent
-                  ? `${stats.latestEvent.name} · Now Live`
+                  ? `${stats.latestEvent.name} · ${
+                      stats.latestEvent.status === "ongoing"
+                        ? "Now Live"
+                        : "Recently Completed"
+                    }`
                   : "Philippines' Premier Circuit"}
               </div>
               <h1 className="text-5xl sm:text-7xl md:text-[9rem] font-black italic leading-[0.85] tracking-tighter uppercase">

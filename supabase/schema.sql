@@ -14,7 +14,7 @@ CREATE TABLE public.events (
   name text,
   event_type text NOT NULL DEFAULT 'league_season'::text,
   registration_fee numeric NOT NULL DEFAULT 1000,
-  registration_status text NOT NULL DEFAULT 'closed'::text CHECK (registration_status = ANY (ARRAY['open'::text, 'closed'::text])),
+  registration_status text NOT NULL DEFAULT 'open'::text CHECK (registration_status = ANY (ARRAY['open'::text, 'closed'::text])),
   status text NOT NULL DEFAULT 'upcoming'::text CHECK (status = ANY (ARRAY['upcoming'::text, 'ongoing'::text, 'completed'::text])),
   start_date date,
   end_date date,

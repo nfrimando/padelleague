@@ -131,7 +131,7 @@ export async function POST(request: Request) {
       visibility: "draft",
       created_by_player_id: player.player_id,
       event_type: "open_event",
-      registration_status: "closed",
+      registration_status: "open",
       status: "upcoming",
     })
     .select("*")

@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     registration_status:
       typeof body.registration_status === "string"
         ? body.registration_status
-        : "closed",
+        : "open",
     status: typeof body.status === "string" ? body.status : "upcoming",
     image_url: typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null,
     description: typeof body.description === "string" && body.description.trim() ? body.description.trim() : null,

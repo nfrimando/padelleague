@@ -62,6 +62,7 @@ function formatDateRange(start?: string | null, end?: string | null): string {
   if (!start && !end) return "Dates TBD";
   if (start && !end) return formatDate(start);
   if (!start && end) return `Until ${formatDate(end)}`;
+  if (start === end) return formatDate(start);
   const s = new Date(start! + "T00:00:00");
   const e = new Date(end! + "T00:00:00");
   if (s.getFullYear() === e.getFullYear()) {
@@ -91,6 +92,7 @@ type EditForm = {
   notes: string;
   image_url: string;
   signup_list_visible: boolean;
+  registration_open: boolean;
 };
 
 function makeEditForm(event: EventWithCreator): EditForm {
@@ -113,6 +115,7 @@ function makeEditForm(event: EventWithCreator): EditForm {
     notes: event.notes ?? "",
     image_url: event.image_url ?? "",
     signup_list_visible: event.signup_list_visible ?? true,
+    registration_open: event.registration_status === "open",
   };
 }
 
@@ -135,6 +138,8 @@ export default function EventDetailPage() {
 
   const [signupsData, setSignupsData] = useState<SignupsResponse | null>(null);
   const [showSignupModal, setShowSignupModal] = useState(false);
+  const [updatingSignupId, setUpdatingSignupId] = useState<string | null>(null);
+  const [signupStatusError, setSignupStatusError] = useState<string | null>(null);
   const {
     handleSignup,
     loading: signupSubmitting,
@@ -261,6 +266,7 @@ export default function EventDetailPage() {
       notes: editForm.notes || null,
       image_url: editForm.image_url || null,
       signup_list_visible: editForm.signup_list_visible,
+      registration_status: editForm.registration_open ? "open" : "closed",
     };
     if (editForm.min_rating || editForm.max_rating) {
       body.min_rating = editForm.min_rating
@@ -310,6 +316,25 @@ export default function EventDetailPage() {
     setPublishing(false);
   };
 
+  const handleUnpublish = async () => {
+    if (!event) return;
+    setPublishing(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setPublishing(false);
+      return;
+    }
+
+    const res = await fetch(`/api/admin/events/${event.event_id}/unpublish`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json()) as { event?: Event };
+    if (res.ok && json.event) setEvent(json.event);
+    setPublishing(false);
+  };
+
   const isDraft = event?.visibility === "draft";
 
   const restrictionTags: string[] = [];
@@ -332,6 +357,58 @@ export default function EventDetailPage() {
       setSignupsData((d) => (d ? { ...d, viewerSignup: { status: "applied" } } : d));
       setShowSignupModal(false);
     }
+  };
+
+  const handleChangeSignupStatus = async (
+    signupId: string,
+    status: EventSignupStatus,
+  ) => {
+    if (!event) return;
+    const previous = signupsData?.signups?.find((s) => s.id === signupId);
+    if (!previous || previous.status === status) return;
+
+    setUpdatingSignupId(signupId);
+    setSignupStatusError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setSignupStatusError("Not authenticated.");
+      setUpdatingSignupId(null);
+      return;
+    }
+
+    const res = await fetch(
+      `/api/events/${event.event_id}/signups/${signupId}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      },
+    );
+
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      setSignupStatusError(json.error ?? "Failed to update status.");
+      setUpdatingSignupId(null);
+      return;
+    }
+
+    setSignupsData((d) => {
+      if (!d?.signups || !d.statusCounts) return d;
+      const statusCounts = { ...d.statusCounts };
+      statusCounts[previous.status] -= 1;
+      statusCounts[status] += 1;
+      return {
+        ...d,
+        statusCounts,
+        signups: d.signups.map((s) => (s.id === signupId ? { ...s, status } : s)),
+      };
+    });
+    setUpdatingSignupId(null);
   };
 
   return (
@@ -389,6 +466,23 @@ export default function EventDetailPage() {
                     {publishing ? "Publishing…" : "Publish"}
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Published banner (admin-only) */}
+            {!isDraft && isAdmin && (
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <p className="flex-1 text-xs text-slate-500">
+                  This event is published and visible on the events listing.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleUnpublish()}
+                  disabled={publishing}
+                  className="shrink-0 inline-flex items-center rounded-md border border-slate-600 px-4 py-1.5 text-sm font-medium text-slate-300 hover:border-slate-400 hover:text-slate-100 disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {publishing ? "Unpublishing…" : "Unpublish"}
+                </button>
               </div>
             )}
 
@@ -574,6 +668,11 @@ export default function EventDetailPage() {
                     )}
                   </div>
                 )}
+                {signupStatusError && (
+                  <div className="rounded-md border border-rose-800/40 bg-rose-900/20 px-3 py-2 text-sm text-rose-300">
+                    {signupStatusError}
+                  </div>
+                )}
                 {signupsData.signups.length === 0 ? (
                   <p className="text-sm text-slate-500">No signups yet.</p>
                 ) : (
@@ -594,11 +693,35 @@ export default function EventDetailPage() {
                           showLatestRating={false}
                         />
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${signupStatusBadgeClass(s.status)}`}
+                          <select
+                            value={s.status}
+                            disabled={updatingSignupId === s.id}
+                            onChange={(e) =>
+                              void handleChangeSignupStatus(
+                                s.id,
+                                e.target.value as EventSignupStatus,
+                              )
+                            }
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:opacity-50 cursor-pointer ${signupStatusBadgeClass(s.status)}`}
                           >
-                            {signupStatusLabel(s.status)}
-                          </span>
+                            {(
+                              [
+                                "applied",
+                                "pending_payment",
+                                "accepted",
+                                "waitlisted",
+                                "cancelled",
+                              ] as const
+                            ).map((statusOption) => (
+                              <option
+                                key={statusOption}
+                                value={statusOption}
+                                className="bg-slate-800 text-slate-100"
+                              >
+                                {signupStatusLabel(statusOption)}
+                              </option>
+                            ))}
+                          </select>
                           {event.requires_payment && s.status === "accepted" && (
                             <span
                               className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
@@ -849,6 +972,15 @@ export default function EventDetailPage() {
                 </div>
 
                 <div className="border-t border-slate-700/60" />
+
+                <Toggle
+                  checked={editForm.registration_open}
+                  onChange={(v) =>
+                    setEditForm((f) => (f ? { ...f, registration_open: v } : f))
+                  }
+                  label="Registration open"
+                  description="When on, players can sign up for this event. Turn off to pause new signups."
+                />
 
                 <Toggle
                   checked={editForm.signup_list_visible}
