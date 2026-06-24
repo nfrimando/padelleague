@@ -223,6 +223,7 @@ function DashboardPageContent() {
           "event_id, name, event_type, start_date, end_date, registration_status, status, created_at, updated_at",
         )
         .eq("registration_status", "open")
+        .eq("visibility", "published")
         .is("deleted_at", null)
         .order("event_id", { ascending: false }),
     ]);
