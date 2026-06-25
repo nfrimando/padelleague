@@ -798,6 +798,16 @@ export default function RecalibrationDetailPage() {
         )}
 
         {isAdmin && (
+          <div className="flex items-center gap-3 pt-2">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
+              Admin Only
+            </span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+        )}
+
+        {isAdmin && (
           <div className="space-y-3">
             <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">Calibrators</p>
             <RespondentsAdminList respondents={respondents ?? []} />
