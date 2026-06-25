@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { isUserAdmin } from "@/app/api/_lib/admin-check";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -155,11 +156,10 @@ export async function getAuthorizedAdminClient(
     };
   }
 
-  const { data: adminRow, error: adminError } = await userSupabase
-    .from("admin_users")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const { isAdmin, error: adminError } = await isUserAdmin(
+    userSupabase,
+    user.id,
+  );
 
   if (adminError) {
     return {
@@ -171,7 +171,7 @@ export async function getAuthorizedAdminClient(
     };
   }
 
-  if (!adminRow) {
+  if (!isAdmin) {
     return {
       ok: false,
       response: NextResponse.json(

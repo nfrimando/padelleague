@@ -3,6 +3,7 @@ import {
   getServerUserClient,
   getServerServiceClient,
 } from "@/app/api/_lib/supabase";
+import { isUserAdmin } from "@/app/api/_lib/admin-check";
 import type { NotifType, PlayerNotificationPreferences } from "@/lib/types";
 import { fetchPlayerPrefs, setPlayerPref } from "@/lib/notificationPreferences";
 
@@ -206,12 +207,8 @@ export async function PATCH(request: NextRequest) {
   if (queryPlayerIdParam) {
     const requestedId = Number(queryPlayerIdParam);
     if (requestedId && requestedId !== playerId) {
-      const { data: adminRow } = await serviceClient
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (adminRow) playerId = requestedId;
+      const { isAdmin } = await isUserAdmin(serviceClient, user.id);
+      if (isAdmin) playerId = requestedId;
     }
   }
 

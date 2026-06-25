@@ -2,6 +2,7 @@ import {
   getServerServiceClient,
   getServerUserClient,
 } from "@/app/api/_lib/supabase";
+import { isUserAdmin } from "@/app/api/_lib/admin-check";
 
 export async function resolveCallerPlayerId(
   authorization: string | null,
@@ -34,12 +35,8 @@ export async function isAdminUser(authorization: string | null): Promise<boolean
     } = await userClient.auth.getUser();
     if (!user) return false;
     const serviceClient = getServerServiceClient();
-    const { data } = await serviceClient
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    return !!data;
+    const { isAdmin } = await isUserAdmin(serviceClient, user.id);
+    return isAdmin;
   } catch {
     return false;
   }

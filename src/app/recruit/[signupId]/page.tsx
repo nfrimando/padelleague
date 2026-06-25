@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import { supabase } from "@/lib/supabase";
+import { checkIsAdmin } from "@/lib/adminCheck";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { MIN_REFERRER_RATINGS } from "@/lib/recruitConfig";
@@ -1039,12 +1040,7 @@ export default function RecruitPage() {
       } = await supabase.auth.getUser();
 
       if (user) {
-        const { data: adminRow } = await supabase
-          .from("admin_users")
-          .select("user_id")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        setIsAdmin(Boolean(adminRow));
+        setIsAdmin(await checkIsAdmin(supabase, user.id));
 
         if (user.email) {
           const { data: playerRow } = await supabase

@@ -3,6 +3,7 @@ import {
   getServerUserClient,
   getServerServiceClient,
 } from "@/app/api/_lib/supabase";
+import { isUserAdmin } from "@/app/api/_lib/admin-check";
 
 type ScheduleSlot = { day_of_week: number; start_hour: number };
 
@@ -38,12 +39,8 @@ export async function GET(request: NextRequest) {
   if (queryPlayerIdParam) {
     const requestedId = Number(queryPlayerIdParam);
     if (requestedId && requestedId !== targetPlayerId) {
-      const { data: adminRow } = await serviceClient
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (adminRow) targetPlayerId = requestedId;
+      const { isAdmin } = await isUserAdmin(serviceClient, user.id);
+      if (isAdmin) targetPlayerId = requestedId;
     }
   }
 
@@ -119,12 +116,8 @@ export async function PUT(request: NextRequest) {
   if (queryPlayerIdParam) {
     const requestedId = Number(queryPlayerIdParam);
     if (requestedId && requestedId !== targetPlayerId) {
-      const { data: adminRow } = await serviceClient
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (adminRow) targetPlayerId = requestedId;
+      const { isAdmin } = await isUserAdmin(serviceClient, user.id);
+      if (isAdmin) targetPlayerId = requestedId;
     }
   }
 

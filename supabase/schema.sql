@@ -6,6 +6,7 @@ CREATE TABLE public.admin_users (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   email text,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  revoked_at timestamp with time zone,
   CONSTRAINT admin_users_pkey PRIMARY KEY (user_id),
   CONSTRAINT admin_users_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

@@ -3,6 +3,7 @@ import {
   getServerUserClient,
   getServerServiceClient,
 } from "@/app/api/_lib/supabase";
+import { isUserAdmin } from "@/app/api/_lib/admin-check";
 
 type PlayerAuthResult =
   | { ok: true; playerId: number; userId: string; isAdmin: boolean }
@@ -61,16 +62,12 @@ export async function getAuthorizedPlayer(
     };
   }
 
-  const { data: adminRow } = await serviceClient
-    .from("admin_users")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const { isAdmin } = await isUserAdmin(serviceClient, user.id);
 
   return {
     ok: true,
     playerId: player.player_id as number,
     userId: user.id,
-    isAdmin: Boolean(adminRow),
+    isAdmin,
   };
 }

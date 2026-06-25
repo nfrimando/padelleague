@@ -13,6 +13,7 @@ import { ScheduleMatchTab } from "@/components/admin/ScheduleMatchTab";
 import { UpdateMatchTab } from "@/components/admin/UpdateMatchTab";
 import { ReviseScoreTab } from "@/components/admin/ReviseScoreTab";
 import { supabase } from "@/lib/supabase";
+import { checkIsAdmin } from "@/lib/adminCheck";
 import { Player } from "@/lib/types";
 import { useMatchEvents } from "@/lib/useMatchEvents";
 import { useScheduledMatches } from "@/lib/useScheduledMatches";
@@ -182,13 +183,7 @@ function AdminPageContent() {
 
     async function resolveAdminStatus(userId: string | undefined) {
       if (!userId) return false;
-      const { data, error } = await supabase
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (error) return false;
-      return !!data;
+      return checkIsAdmin(supabase, userId);
     }
 
     async function initSession() {

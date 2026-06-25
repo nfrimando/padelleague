@@ -17,6 +17,7 @@ import {
   type EventSignupStatus,
 } from "@/lib/eventSignupStatus";
 import { supabase } from "@/lib/supabase";
+import { checkIsAdmin } from "@/lib/adminCheck";
 import { Event, EventRestrictions } from "@/lib/types";
 
 type EventCreator = {
@@ -215,12 +216,7 @@ export default function EventDetailPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      setIsAdmin(!!data);
+      setIsAdmin(await checkIsAdmin(supabase, user.id));
     }
     void checkAdmin();
   }, [isLinked]);
