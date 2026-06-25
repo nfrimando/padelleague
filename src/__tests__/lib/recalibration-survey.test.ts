@@ -32,6 +32,7 @@ describe("impliedRating", () => {
   it("maps each magnitude to an offset from the opponent's rating", () => {
     expect(impliedRating(3, "significantly_better")).toBeCloseTo(3 + DELTA_SIGNIFICANT);
     expect(impliedRating(3, "slightly_better")).toBeCloseTo(3 + DELTA_SLIGHT);
+    expect(impliedRating(3, "relatively_same")).toBeCloseTo(3);
     expect(impliedRating(3, "slightly_worse")).toBeCloseTo(3 - DELTA_SLIGHT);
     expect(impliedRating(3, "significantly_worse")).toBeCloseTo(3 - DELTA_SIGNIFICANT);
   });
@@ -122,7 +123,19 @@ describe("answeredImpliedRatings + summarizeChoices", () => {
       ],
     };
     expect(answeredImpliedRatings(state)).toEqual([3.25, 3.25]);
-    expect(summarizeChoices(state)).toEqual({ better: 1, worse: 1, total: 2 });
+    expect(summarizeChoices(state)).toEqual({ better: 1, worse: 1, same: 0, total: 2 });
+  });
+
+  it("counts 'relatively the same' as a real signal at the anchor's rating", () => {
+    const state: SurveyState = {
+      ...createSurveyState("2026-06-25T00:00:00Z"),
+      questions: [
+        q(1, 3, "slightly_better", 3.25),
+        q(2, 3.5, "relatively_same", 3.5),
+      ],
+    };
+    expect(answeredImpliedRatings(state)).toEqual([3.25, 3.5]);
+    expect(summarizeChoices(state)).toEqual({ better: 1, worse: 0, same: 1, total: 2 });
   });
 });
 

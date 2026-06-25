@@ -24,6 +24,7 @@ export const DERIVED_MARGIN = 0.5; // headroom above the pool max when clamping 
 export type SurveyChoice =
   | "significantly_better"
   | "slightly_better"
+  | "relatively_same"
   | "slightly_worse"
   | "significantly_worse"
   | "dont_know";
@@ -31,6 +32,7 @@ export type SurveyChoice =
 export const SURVEY_CHOICES: SurveyChoice[] = [
   "significantly_better",
   "slightly_better",
+  "relatively_same",
   "slightly_worse",
   "significantly_worse",
   "dont_know",
@@ -74,6 +76,8 @@ export function choiceToOffset(choice: SurveyChoice): number | null {
       return DELTA_SIGNIFICANT;
     case "slightly_better":
       return DELTA_SLIGHT;
+    case "relatively_same":
+      return 0;
     case "slightly_worse":
       return -DELTA_SLIGHT;
     case "significantly_worse":
@@ -204,12 +208,16 @@ export function toRespondentSurveySummary(state: SurveyState): RespondentSurveyS
 }
 
 /** Counts for the rater-facing recap (no rating numbers). */
-export function summarizeChoices(state: SurveyState): { better: number; worse: number; total: number } {
+export function summarizeChoices(
+  state: SurveyState,
+): { better: number; worse: number; same: number; total: number } {
   let better = 0;
   let worse = 0;
+  let same = 0;
   for (const q of state.questions) {
     if (q.choice === "significantly_better" || q.choice === "slightly_better") better += 1;
     else if (q.choice === "significantly_worse" || q.choice === "slightly_worse") worse += 1;
+    else if (q.choice === "relatively_same") same += 1;
   }
-  return { better, worse, total: better + worse };
+  return { better, worse, same, total: better + worse + same };
 }

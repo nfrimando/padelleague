@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -19,7 +19,7 @@ type CalibrateeInfo = {
   image_link: string | null;
 };
 
-type Recap = { better: number; worse: number; total: number };
+type Recap = { better: number; worse: number; same: number; total: number };
 
 type Phase =
   | { kind: "loading" }
@@ -72,32 +72,28 @@ function Avatar({ player, ring }: { player: { name: string | null; image_link: s
 }
 
 export default function RecalibrationSurveyModal({
-  isOpen,
   onClose,
   requestId,
   calibratee,
   onCompleted,
 }: {
-  isOpen: boolean;
   onClose: () => void;
   requestId: number;
   calibratee: CalibrateeInfo;
   onCompleted: () => void;
 }) {
-  const [mounted, setMounted] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
-  const startedRef = useRef(false);
 
-  useEffect(() => setMounted(true), []);
-
+  // The parent mounts this component only while the survey is open, so locking the
+  // body scroll on mount and starting the survey in a single mount-effect avoids any
+  // synchronous setState-in-effect reset cycles.
   useEffect(() => {
-    if (!isOpen) return;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isOpen]);
+  }, []);
 
   const post = useCallback(
     async (payload: Record<string, unknown>) => {
@@ -119,7 +115,7 @@ export default function RecalibrationSurveyModal({
       return;
     }
     if (json.done) {
-      setPhase({ kind: "done", recap: (json.recap as Recap) ?? { better: 0, worse: 0, total: 0 } });
+      setPhase({ kind: "done", recap: (json.recap as Recap) ?? { better: 0, worse: 0, same: 0, total: 0 } });
       return;
     }
     const question = json.question as { anchorPlayer: PublicAnchor } | undefined;
@@ -135,20 +131,13 @@ export default function RecalibrationSurveyModal({
     });
   }, []);
 
-  // Start (or resume) the survey once when the modal opens.
+  // Start (or resume) the survey once, when the modal mounts.
   useEffect(() => {
-    if (!isOpen) {
-      startedRef.current = false;
-      setPhase({ kind: "loading" });
-      return;
-    }
-    if (startedRef.current) return;
-    startedRef.current = true;
     void (async () => {
       const { ok, json } = await post({ action: "start" });
       applyResult(ok, json);
     })();
-  }, [isOpen, post, applyResult]);
+  }, [post, applyResult]);
 
   async function answer(choice: SurveyChoice) {
     if (phase.kind !== "question" || busy) return;
@@ -166,8 +155,6 @@ export default function RecalibrationSurveyModal({
     onCompleted();
     onClose();
   }
-
-  if (!mounted || !isOpen) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -264,6 +251,14 @@ export default function RecalibrationSurveyModal({
                 <button
                   type="button"
                   disabled={busy}
+                  onClick={() => answer("relatively_same")}
+                  className="w-full py-3 px-4 rounded-xl border border-[#687FA3]/40 hover:border-[#687FA3]/70 hover:bg-white/5 text-white/80 bg-[#0E1523]/40 font-bold text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Relatively the same
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
                   onClick={() => answer("dont_know")}
                   className="w-full mt-1 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-widest text-[#687FA3] hover:text-white border border-transparent hover:border-white/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -288,8 +283,14 @@ export default function RecalibrationSurveyModal({
                   {phase.recap.total > 0 && (
                     <>
                       {" "}You rated {calibratee.name ?? "them"} better than{" "}
-                      <strong>{phase.recap.better}</strong> and worse than{" "}
-                      <strong>{phase.recap.worse}</strong> of the players shown.
+                      <strong>{phase.recap.better}</strong>, worse than{" "}
+                      <strong>{phase.recap.worse}</strong>
+                      {phase.recap.same > 0 && (
+                        <>
+                          , and about the same as <strong>{phase.recap.same}</strong>
+                        </>
+                      )}{" "}
+                      of the players shown.
                     </>
                   )}
                 </p>

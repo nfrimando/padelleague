@@ -6,7 +6,6 @@ import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
-import SimilarPlayersSection from "@/app/dashboard/SimilarPlayersSection";
 import RecalibrationSurveyModal from "./RecalibrationSurveyModal";
 import { supabase } from "@/lib/supabase";
 import { usePlayers } from "@/lib/usePlayers";
@@ -19,6 +18,7 @@ const MIN_RESPONDENTS = 3;
 const CHOICE_LABELS: Record<SurveyChoice, string> = {
   significantly_better: "Significantly better",
   slightly_better: "Slightly better",
+  relatively_same: "Relatively the same",
   slightly_worse: "Slightly worse",
   significantly_worse: "Significantly worse",
   dont_know: "Didn't know",
@@ -442,13 +442,14 @@ function MyResponseForm({
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
 
-      <RecalibrationSurveyModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        requestId={requestId}
-        calibratee={calibratee}
-        onCompleted={onSurveyCompleted}
-      />
+      {modalOpen && (
+        <RecalibrationSurveyModal
+          onClose={() => setModalOpen(false)}
+          requestId={requestId}
+          calibratee={calibratee}
+          onCompleted={onSurveyCompleted}
+        />
+      )}
     </div>
   );
 }
@@ -744,40 +745,6 @@ export default function RecalibrationDetailPage() {
           </div>
         )}
 
-        {!myRespondentRow && (
-          <SimilarPlayersSection
-            playerId={playerForCard.player_id}
-            currentPlayerRating={playerForCard.latest_rating ?? null}
-          />
-        )}
-
-        {isAdmin && (
-          <div className="space-y-3">
-            <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">Calibrators</p>
-            <RespondentsAdminList respondents={respondents ?? []} />
-            {isPending && (
-              <AddCalibratorPanel
-                requestId={request.id}
-                existingPlayerIds={(respondents ?? []).map((r) => r.player_id)}
-                requestorPlayerId={request.player_id}
-                onAdded={(respondent) =>
-                  setState((prev) =>
-                    prev.stage === "loaded"
-                      ? {
-                          ...prev,
-                          data: {
-                            ...prev.data,
-                            respondents: [...(prev.data.respondents ?? []), respondent],
-                          },
-                        }
-                      : prev,
-                  )
-                }
-              />
-            )}
-          </div>
-        )}
-
         {myRespondentRow && (
           <div className="space-y-3">
             <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">Your Assessment</p>
@@ -827,6 +794,33 @@ export default function RecalibrationDetailPage() {
                 )
               }
             />
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">Calibrators</p>
+            <RespondentsAdminList respondents={respondents ?? []} />
+            {isPending && (
+              <AddCalibratorPanel
+                requestId={request.id}
+                existingPlayerIds={(respondents ?? []).map((r) => r.player_id)}
+                requestorPlayerId={request.player_id}
+                onAdded={(respondent) =>
+                  setState((prev) =>
+                    prev.stage === "loaded"
+                      ? {
+                          ...prev,
+                          data: {
+                            ...prev.data,
+                            respondents: [...(prev.data.respondents ?? []), respondent],
+                          },
+                        }
+                      : prev,
+                  )
+                }
+              />
+            )}
           </div>
         )}
 
