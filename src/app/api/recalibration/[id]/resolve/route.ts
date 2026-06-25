@@ -118,7 +118,7 @@ export async function POST(
     })
     .eq("id", requestId)
     .select(
-      "id, player_id, status, outcome, computed_average, resolved_rating, admin_notes, resolved_at",
+      "id, player_id, status, outcome, rating_at_request, requestor_notes, computed_average, resolved_rating, admin_notes, requested_at, resolved_at",
     )
     .single();
 

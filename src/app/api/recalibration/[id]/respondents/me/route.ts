@@ -3,9 +3,11 @@ import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { getAuthorizedPlayer } from "@/app/api/recalibration/_lib/auth";
 
 /**
- * PATCH /api/recalibration/[id]/respondents/me — a respondent submits or edits
- * their own rating+notes. Body: { rating, notes? }. Editable anytime before the
- * parent request leaves "pending".
+ * PATCH /api/recalibration/[id]/respondents/me — a respondent edits their own notes
+ * (and, for the legacy manual flow, optionally their rating). The structured survey
+ * (respondents/me/survey) is now the source of the rating, so `rating` is optional
+ * here; a notes-only update is allowed. Editable anytime before the parent request
+ * leaves "pending".
  */
 export async function PATCH(
   request: Request,
@@ -27,14 +29,20 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  const ratingProvided = body.rating !== undefined && body.rating !== null;
   const rating =
     typeof body.rating === "number" && Number.isFinite(body.rating) && body.rating >= 0
       ? body.rating
       : null;
-  if (rating === null) {
-    return NextResponse.json({ error: "rating (non-negative number) is required." }, { status: 400 });
+  if (ratingProvided && rating === null) {
+    return NextResponse.json({ error: "rating must be a non-negative number." }, { status: 400 });
   }
+  const notesProvided = body.notes !== undefined;
   const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null;
+
+  if (!ratingProvided && !notesProvided) {
+    return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
+  }
 
   const serviceClient = getServerServiceClient();
 
@@ -67,11 +75,18 @@ export async function PATCH(
 
   const now = new Date().toISOString();
 
+  const updates: Record<string, unknown> = { updated_at: now };
+  if (notesProvided) updates.notes = notes;
+  if (ratingProvided) {
+    updates.rating = rating;
+    updates.submitted_at = now;
+  }
+
   const { data: updated, error: updateError } = await serviceClient
     .from("recalibration_respondents")
-    .update({ rating, notes, submitted_at: now, updated_at: now })
+    .update(updates)
     .eq("id", respondentRow.id)
-    .select("id, recalibration_id, player_id, rating, notes, submitted_at")
+    .select("id, recalibration_id, player_id, notes, submitted_at")
     .single();
 
   if (updateError) {

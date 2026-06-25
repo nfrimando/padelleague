@@ -7,14 +7,22 @@ import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import SimilarPlayersSection from "@/app/dashboard/SimilarPlayersSection";
-import { InitialRatingInput } from "@/components/InitialRatingInput";
-import { RatingCalibrationHelper } from "@/components/RatingCalibrationHelper";
+import RecalibrationSurveyModal from "./RecalibrationSurveyModal";
 import { supabase } from "@/lib/supabase";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import type { Player } from "@/lib/types";
+import type { SurveyChoice, SurveyState } from "@/lib/recalibration/survey";
 
 const MIN_RESPONDENTS = 3;
+
+const CHOICE_LABELS: Record<SurveyChoice, string> = {
+  significantly_better: "Significantly better",
+  slightly_better: "Slightly better",
+  slightly_worse: "Slightly worse",
+  significantly_worse: "Significantly worse",
+  dont_know: "Didn't know",
+};
 
 type RequestStatus = "pending" | "resolved" | "cancelled";
 type RequestOutcome = "retained" | "updated" | null;
@@ -24,7 +32,8 @@ type RequestDetail = {
   player_id: number;
   status: RequestStatus;
   outcome: RequestOutcome;
-  rating_at_request: number;
+  // Rating fields are stripped from the response for non-admin respondents.
+  rating_at_request: number | null;
   requestor_notes: string | null;
   computed_average: number | null;
   resolved_rating: number | null;
@@ -38,9 +47,11 @@ type RequestorPlayer = {
   name: string | null;
   nickname: string | null;
   image_link: string | null;
-  initial_rating: number | null;
-  latest_rating: number | null;
+  initial_rating?: number | null;
+  latest_rating?: number | null;
 };
+
+type SurveySummary = { status: "in_progress" | "complete"; answeredCount: number };
 
 type RespondentRow = {
   id: number;
@@ -50,7 +61,22 @@ type RespondentRow = {
   notes: string | null;
   submitted_at: string | null;
   created_at: string;
+  survey_answers?: SurveyState | null;
   player?: { player_id: number; name: string | null; nickname: string | null; image_link: string | null } | null;
+};
+
+// The caller's own respondent row. Respondents get a sanitized shape (no rating,
+// only a survey status summary); an admin who is also a respondent gets the full row.
+type MyRespondentRow = {
+  id: number;
+  recalibration_id: number;
+  player_id: number;
+  notes: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  survey?: SurveySummary | null;
+  rating?: number | null;
+  survey_answers?: SurveyState | null;
 };
 
 type DetailResponse = {
@@ -58,7 +84,7 @@ type DetailResponse = {
   request: RequestDetail;
   requestorPlayer: RequestorPlayer | null;
   respondents: RespondentRow[] | null;
-  myRespondentRow: RespondentRow | null;
+  myRespondentRow: MyRespondentRow | null;
 };
 
 type PageState =
@@ -205,38 +231,86 @@ function AddCalibratorPanel({
   );
 }
 
+function RespondentSurveyTrail({ survey }: { survey: SurveyState }) {
+  const answered = survey.questions.filter((q) => q.choice != null);
+  if (answered.length === 0) {
+    return <p className="text-xs text-[#687FA3] italic">No comparisons answered yet.</p>;
+  }
+  return (
+    <ol className="space-y-1.5">
+      {answered.map((q) => (
+        <li key={q.order} className="flex items-center justify-between gap-3 text-xs">
+          <span className="text-white/70 truncate">
+            {q.anchorPlayerName ?? "Unknown player"}
+            {q.anchorPlayerNickname && (
+              <span className="text-[#687FA3]"> · {q.anchorPlayerNickname}</span>
+            )}
+          </span>
+          <span
+            className={`shrink-0 font-bold ${
+              q.choice === "dont_know" ? "text-[#687FA3]" : "text-white/80"
+            }`}
+          >
+            {CHOICE_LABELS[q.choice as SurveyChoice]}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function RespondentsAdminList({ respondents }: { respondents: RespondentRow[] }) {
+  const [expanded, setExpanded] = useState<number | null>(null);
+
   if (respondents.length === 0) {
     return <p className="text-sm text-[#687FA3]">No calibrators added yet.</p>;
   }
 
   return (
     <div className="space-y-2">
-      {respondents.map((r) => (
-        <div
-          key={r.id}
-          className="flex items-start justify-between gap-3 border border-white/10 rounded-xl px-4 py-3"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white">
-              {r.player?.name ?? "Unknown player"}
-              {r.player?.nickname && (
-                <span className="text-[#687FA3] font-normal ml-1.5">{r.player.nickname}</span>
+      {respondents.map((r) => {
+        const survey = r.survey_answers ?? null;
+        const hasTrail = !!survey && survey.questions.length > 0;
+        const isOpen = expanded === r.id;
+        return (
+          <div key={r.id} className="border border-white/10 rounded-xl px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">
+                  {r.player?.name ?? "Unknown player"}
+                  {r.player?.nickname && (
+                    <span className="text-[#687FA3] font-normal ml-1.5">{r.player.nickname}</span>
+                  )}
+                </p>
+                {r.notes && <p className="text-xs text-[#687FA3] mt-1 leading-relaxed">{r.notes}</p>}
+                {hasTrail && (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(isOpen ? null : r.id)}
+                    className="mt-1.5 text-[11px] font-bold uppercase tracking-widest text-[#00C8DC]/70 hover:text-[#00C8DC] transition-colors cursor-pointer"
+                  >
+                    {isOpen ? "Hide comparisons" : `View comparisons (${survey!.questions.filter((q) => q.choice != null).length})`}
+                  </button>
+                )}
+              </div>
+              {r.rating != null ? (
+                <span className="shrink-0 text-sm font-bold tabular-nums text-sky-300 bg-sky-900/30 border border-sky-700/60 rounded-full px-3 py-1">
+                  {r.rating.toFixed(2)}
+                </span>
+              ) : (
+                <span className="shrink-0 text-xs font-bold uppercase tracking-widest text-[#687FA3] bg-white/5 border border-white/10 rounded-full px-3 py-1">
+                  Awaiting
+                </span>
               )}
-            </p>
-            {r.notes && <p className="text-xs text-[#687FA3] mt-1 leading-relaxed">{r.notes}</p>}
+            </div>
+            {hasTrail && isOpen && (
+              <div className="mt-3 pt-3 border-t border-white/10">
+                <RespondentSurveyTrail survey={survey!} />
+              </div>
+            )}
           </div>
-          {r.rating != null ? (
-            <span className="shrink-0 text-sm font-bold tabular-nums text-sky-300 bg-sky-900/30 border border-sky-700/60 rounded-full px-3 py-1">
-              {r.rating.toFixed(2)}
-            </span>
-          ) : (
-            <span className="shrink-0 text-xs font-bold uppercase tracking-widest text-[#687FA3] bg-white/5 border border-white/10 rounded-full px-3 py-1">
-              Awaiting
-            </span>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -244,28 +318,29 @@ function RespondentsAdminList({ respondents }: { respondents: RespondentRow[] })
 function MyResponseForm({
   requestId,
   myRespondentRow,
-  requestorPlayerId,
+  calibratee,
   locked,
-  onSaved,
+  onNotesSaved,
+  onSurveyCompleted,
 }: {
   requestId: number;
-  myRespondentRow: RespondentRow;
-  requestorPlayerId: number;
+  myRespondentRow: MyRespondentRow;
+  calibratee: { name: string | null; nickname: string | null; image_link: string | null };
   locked: boolean;
-  onSaved: (respondent: RespondentRow) => void;
+  onNotesSaved: (notes: string | null) => void;
+  onSurveyCompleted: () => void;
 }) {
-  const [rating, setRating] = useState(myRespondentRow.rating != null ? String(myRespondentRow.rating) : "");
   const [notes, setNotes] = useState(myRespondentRow.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  async function handleSave() {
-    const ratingNum = Number(rating);
-    if (!Number.isFinite(ratingNum) || ratingNum < 0) {
-      setError("Enter a valid non-negative rating.");
-      return;
-    }
+  const surveyStatus =
+    myRespondentRow.survey?.status ?? myRespondentRow.survey_answers?.status ?? null;
+  const completed = surveyStatus === "complete";
+
+  async function handleSaveNotes() {
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -274,7 +349,7 @@ function MyResponseForm({
     const res = await fetch(`/api/recalibration/${requestId}/respondents/me`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({ rating: ratingNum, notes: notes || undefined }),
+      body: JSON.stringify({ notes }),
     });
 
     const json = await res.json();
@@ -284,23 +359,18 @@ function MyResponseForm({
       setError(json.error ?? "Failed to save.");
       return;
     }
-
-    onSaved(json.respondent as RespondentRow);
+    onNotesSaved(notes.trim() ? notes.trim() : null);
     setSaved(true);
   }
 
   if (locked) {
     return (
       <div className="border border-white/10 rounded-2xl p-5 space-y-2">
-        <div className="flex items-center gap-3 text-sm">
-          {myRespondentRow.rating != null ? (
-            <span className="bg-[#0E1523] border border-[#687FA3]/20 rounded-full px-3 py-1 text-sm font-semibold text-white">
-              {myRespondentRow.rating}
-            </span>
-          ) : (
-            <span className="text-[#687FA3] italic text-xs">No rating given</span>
-          )}
-        </div>
+        {completed || myRespondentRow.submitted_at ? (
+          <p className="text-sm font-bold text-emerald-300">Assessment recorded ✓</p>
+        ) : (
+          <p className="text-[#687FA3] italic text-xs">No assessment given</p>
+        )}
         {myRespondentRow.notes && (
           <p className="text-sm text-white/70 whitespace-pre-wrap">{myRespondentRow.notes}</p>
         )}
@@ -309,40 +379,41 @@ function MyResponseForm({
     );
   }
 
-  return (
-    <div className="border border-[#00C8DC]/20 bg-[#00C8DC]/5 rounded-2xl p-5 space-y-3">
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3] mb-1">
-            Your Rating
-          </label>
-          <InitialRatingInput
-            value={rating}
-            onChange={(v) => {
-              setRating(v);
-              setSaved(false);
-            }}
-            className="w-full bg-[#1a2540] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/60 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="shrink-0 bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-bold text-sm px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
-        >
-          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
-        </button>
-      </div>
+  const startLabel =
+    surveyStatus === "in_progress" ? "Resume recalibration" : "Start recalibration";
 
-      <RatingCalibrationHelper
-        currentPlayerId={requestorPlayerId}
-        rating={rating}
-        onRatingChange={(v) => {
-          setRating(v);
-          setSaved(false);
-        }}
-      />
+  return (
+    <div className="border border-[#00C8DC]/20 bg-[#00C8DC]/5 rounded-2xl p-5 space-y-4">
+      <div className="space-y-2">
+        <p className="text-sm text-white/80 leading-relaxed">
+          Rather than guessing a number, you&apos;ll answer a short series of head-to-head
+          comparisons against other players. We combine your answers into a rating —
+          you&apos;ll never need to see or pick a number.
+        </p>
+
+        {completed ? (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2.5">
+              Assessment recorded ✓
+            </span>
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="text-xs font-bold uppercase tracking-widest text-[#687FA3] hover:text-white transition-colors cursor-pointer"
+            >
+              Retake
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="w-full bg-[#00C8DC] hover:bg-white text-[#0E1523] font-black py-3 px-5 rounded-xl text-sm transition-colors cursor-pointer"
+          >
+            {startLabel}
+          </button>
+        )}
+      </div>
 
       <div className="space-y-1.5">
         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#687FA3]">
@@ -356,12 +427,28 @@ function MyResponseForm({
           }}
           maxLength={1000}
           rows={3}
-          placeholder="Why do you think this rating fits?"
+          placeholder="Anything the committee should know about this player?"
           className="w-full bg-[#1a2540] border border-[#687FA3]/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[#687FA3]/60 focus:outline-none focus:border-[#00C8DC]/50 transition-colors resize-none"
         />
+        <button
+          type="button"
+          onClick={handleSaveNotes}
+          disabled={saving}
+          className="text-xs font-bold text-[#00C8DC] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          {saving ? "Saving notes…" : saved ? "Notes saved ✓" : "Save notes"}
+        </button>
       </div>
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
+
+      <RecalibrationSurveyModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        requestId={requestId}
+        calibratee={calibratee}
+        onCompleted={onSurveyCompleted}
+      />
     </div>
   );
 }
@@ -374,7 +461,7 @@ function ResolutionPanel({
   onResolved,
 }: {
   requestId: number;
-  ratingAtRequest: number;
+  ratingAtRequest: number | null;
   computedAverage: number | null;
   ratedCount: number;
   onResolved: (request: RequestDetail) => void;
@@ -384,7 +471,8 @@ function ResolutionPanel({
   const [error, setError] = useState<string | null>(null);
 
   const notEnoughRatings = ratedCount < MIN_RESPONDENTS;
-  const delta = computedAverage != null ? computedAverage - ratingAtRequest : null;
+  const delta =
+    computedAverage != null && ratingAtRequest != null ? computedAverage - ratingAtRequest : null;
   const suggestion = notEnoughRatings
     ? `Waiting for at least ${MIN_RESPONDENTS} calibrator ratings (${ratedCount} so far).`
     : delta == null
@@ -434,7 +522,7 @@ function ResolutionPanel({
       <div>
         <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest mb-1">Review</p>
         <p className="text-sm text-white/80">
-          Current rating: <strong>{ratingAtRequest.toFixed(2)}</strong>
+          Current rating: <strong>{ratingAtRequest != null ? ratingAtRequest.toFixed(2) : "—"}</strong>
           {" · "}
           Computed average: <strong>{computedAverage != null ? computedAverage.toFixed(2) : "—"}</strong>
         </p>
@@ -505,16 +593,19 @@ function ResolvedSummary({ request }: { request: RequestDetail }) {
     );
   }
 
+  const hasNumbers = request.rating_at_request != null;
   return (
     <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-5 space-y-1">
       <p className="text-sm font-bold text-emerald-400">
         {request.outcome === "updated" ? "Rating Updated" : "Rating Retained"}
       </p>
-      <p className="text-xs text-white/70">
-        {request.outcome === "updated"
-          ? `${request.rating_at_request.toFixed(2)} → ${request.resolved_rating?.toFixed(2)}`
-          : `Stayed at ${request.rating_at_request.toFixed(2)}`}
-      </p>
+      {hasNumbers && (
+        <p className="text-xs text-white/70">
+          {request.outcome === "updated"
+            ? `${request.rating_at_request!.toFixed(2)} → ${request.resolved_rating?.toFixed(2)}`
+            : `Stayed at ${request.rating_at_request!.toFixed(2)}`}
+        </p>
+      )}
       {request.admin_notes && (
         <p className="text-xs text-[#687FA3] leading-relaxed mt-1">{request.admin_notes}</p>
       )}
@@ -642,7 +733,7 @@ export default function RecalibrationDetailPage() {
           <p className="text-white/50 text-sm mt-1">Requested {formatDate(request.requested_at)}</p>
         </div>
 
-        <PlayerCard player={playerForCard} size="lg" showLatestRating disableLink={!isAdmin} />
+        <PlayerCard player={playerForCard} size="lg" showLatestRating={isAdmin} disableLink={!isAdmin} />
 
         {request.requestor_notes && (
           <div className="border border-white/10 rounded-2xl p-4">
@@ -696,11 +787,43 @@ export default function RecalibrationDetailPage() {
             <MyResponseForm
               requestId={request.id}
               myRespondentRow={myRespondentRow}
-              requestorPlayerId={request.player_id}
+              calibratee={{
+                name: requestorPlayer?.name ?? null,
+                nickname: requestorPlayer?.nickname ?? null,
+                image_link: requestorPlayer?.image_link ?? null,
+              }}
               locked={!isPending}
-              onSaved={(respondent) =>
+              onNotesSaved={(notes) =>
                 setState((prev) =>
-                  prev.stage === "loaded" ? { ...prev, data: { ...prev.data, myRespondentRow: respondent } } : prev,
+                  prev.stage === "loaded" && prev.data.myRespondentRow
+                    ? {
+                        ...prev,
+                        data: {
+                          ...prev.data,
+                          myRespondentRow: { ...prev.data.myRespondentRow, notes },
+                        },
+                      }
+                    : prev,
+                )
+              }
+              onSurveyCompleted={() =>
+                setState((prev) =>
+                  prev.stage === "loaded" && prev.data.myRespondentRow
+                    ? {
+                        ...prev,
+                        data: {
+                          ...prev.data,
+                          myRespondentRow: {
+                            ...prev.data.myRespondentRow,
+                            submitted_at: new Date().toISOString(),
+                            survey: {
+                              status: "complete",
+                              answeredCount: prev.data.myRespondentRow.survey?.answeredCount ?? 0,
+                            },
+                          },
+                        },
+                      }
+                    : prev,
                 )
               }
             />

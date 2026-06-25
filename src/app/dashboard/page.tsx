@@ -49,6 +49,7 @@ type SignupRow = {
     status: "upcoming" | "ongoing" | "completed";
     registration_fee?: number | null;
     payment_instructions?: string | null;
+    visibility?: "draft" | "published" | null;
   } | null;
 };
 
@@ -245,13 +246,19 @@ function DashboardPageContent() {
     const supsResult = await supabase
       .from("signups_events")
       .select(
-        "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status, registration_fee, payment_instructions)",
+        "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status, registration_fee, payment_instructions, visibility)",
       )
       .eq("player_id", p.player_id)
       .order("created_at", { ascending: false });
 
     const typedSups = (supsResult.data ?? []) as unknown as SignupRow[];
-    setSignups(typedSups);
+    // Hide signups for unpublished (draft) events — unless payment is still owed,
+    // so a pending obligation (and its pay-now gate) stays visible to the player.
+    const visibleSups = typedSups.filter(
+      (s) =>
+        s.event?.visibility === "published" || s.status === "pending_payment",
+    );
+    setSignups(visibleSups);
 
     const signedUpEventIds = new Set(typedSups.map((s) => s.event_id));
     setOpenEvents(

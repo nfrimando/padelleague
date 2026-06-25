@@ -214,7 +214,9 @@ export default function HeroSection({
   }
 
   const signedUpEventIds = new Set(signups.map((s) => s.event_id));
-  const hasPendingPayment = signups.some((s) => s.status === "pending_payment");
+  const pendingPaymentSignup =
+    signups.find((s) => s.status === "pending_payment") ?? null;
+  const hasPendingPayment = pendingPaymentSignup !== null;
   // Hide played chips when any signup is pending payment — pay now takes priority
   const playedOnlyEventIds = hasPendingPayment
     ? []
@@ -629,6 +631,21 @@ export default function HeroSection({
         <RecalibrationRequestModal
           isOpen={recalModalOpen}
           onClose={() => setRecalModalOpen(false)}
+          pendingPayment={
+            pendingPaymentSignup
+              ? {
+                  signupId: pendingPaymentSignup.id,
+                  eventLabel: eventDisplayName(
+                    pendingPaymentSignup.event_id,
+                    eventMap,
+                    pendingPaymentSignup.event,
+                  ),
+                  registrationFee: pendingPaymentSignup.event?.registration_fee,
+                  paymentInstructions:
+                    pendingPaymentSignup.event?.payment_instructions,
+                }
+              : null
+          }
         />
       )}
 

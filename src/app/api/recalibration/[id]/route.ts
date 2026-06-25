@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { getAuthorizedPlayer } from "@/app/api/recalibration/_lib/auth";
 import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
+import { toRespondentSurveySummary, type SurveyState } from "@/lib/recalibration/survey";
 
 /**
  * GET /api/recalibration/[id] — visible to admins and to players who've been added
@@ -40,7 +41,7 @@ export async function GET(
 
   const { data: myRespondentRow } = await serviceClient
     .from("recalibration_respondents")
-    .select("id, recalibration_id, player_id, rating, notes, submitted_at, created_at")
+    .select("id, recalibration_id, player_id, rating, notes, submitted_at, created_at, survey_answers")
     .eq("recalibration_id", requestId)
     .eq("player_id", auth.playerId)
     .maybeSingle();
@@ -61,6 +62,44 @@ export async function GET(
     fetchLatestRatingsByPlayerIds(serviceClient, [recalRequest.player_id as number]),
   ]);
 
+  // Respondents must never see any rating — not the calibratee's current/initial
+  // rating, not their own derived rating, not the survey's audit numbers. They only
+  // get enough of their own survey to know whether to start / resume / retake.
+  if (!auth.isAdmin) {
+    const { initial_rating: _initial, ...requestorPublic } = requestorPlayer ?? {};
+    void _initial;
+    const {
+      rating_at_request: _rar,
+      computed_average: _avg,
+      resolved_rating: _resolved,
+      ...requestPublic
+    } = recalRequest;
+    void _rar;
+    void _avg;
+    void _resolved;
+
+    const survey = (myRespondentRow?.survey_answers as SurveyState | null) ?? null;
+    const mySurvey = survey ? toRespondentSurveySummary(survey) : null;
+
+    return NextResponse.json({
+      role: "respondent",
+      request: requestPublic,
+      requestorPlayer: requestorPlayer ? requestorPublic : null,
+      respondents: null,
+      myRespondentRow: myRespondentRow
+        ? {
+            id: myRespondentRow.id,
+            recalibration_id: myRespondentRow.recalibration_id,
+            player_id: myRespondentRow.player_id,
+            notes: myRespondentRow.notes,
+            submitted_at: myRespondentRow.submitted_at,
+            created_at: myRespondentRow.created_at,
+            survey: mySurvey,
+          }
+        : null,
+    });
+  }
+
   const requestorPlayerWithRating = requestorPlayer
     ? {
         ...requestorPlayer,
@@ -68,20 +107,10 @@ export async function GET(
       }
     : null;
 
-  if (!auth.isAdmin) {
-    return NextResponse.json({
-      role: "respondent",
-      request: recalRequest,
-      requestorPlayer: requestorPlayerWithRating,
-      respondents: null,
-      myRespondentRow,
-    });
-  }
-
   const { data: respondents } = await serviceClient
     .from("recalibration_respondents")
     .select(
-      "id, recalibration_id, player_id, rating, notes, submitted_at, created_at, player:players!player_id(player_id, name, nickname, image_link)",
+      "id, recalibration_id, player_id, rating, notes, submitted_at, created_at, survey_answers, player:players!player_id(player_id, name, nickname, image_link)",
     )
     .eq("recalibration_id", requestId)
     .order("created_at", { ascending: true });

@@ -4,10 +4,19 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import PendingPaymentPanel from "@/components/PendingPaymentPanel";
+
+type PendingPaymentInfo = {
+  signupId: string;
+  eventLabel: string;
+  registrationFee?: number | null;
+  paymentInstructions?: string | null;
+};
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  pendingPayment?: PendingPaymentInfo | null;
 };
 
 type Eligibility = {
@@ -23,7 +32,11 @@ function formatDate(iso: string): string {
   });
 }
 
-export default function RecalibrationRequestModal({ isOpen, onClose }: Props) {
+export default function RecalibrationRequestModal({
+  isOpen,
+  onClose,
+  pendingPayment,
+}: Props) {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [eligibility, setEligibility] = useState<Eligibility | null>(null);
@@ -47,6 +60,13 @@ export default function RecalibrationRequestModal({ isOpen, onClose }: Props) {
     setError(null);
     setSubmitted(false);
     setRequestorNotes("");
+
+    // A pending event payment blocks recalibration — skip the eligibility check.
+    if (pendingPayment) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     void (async () => {
@@ -72,7 +92,7 @@ export default function RecalibrationRequestModal({ isOpen, onClose }: Props) {
       }
       setLoading(false);
     })();
-  }, [isOpen]);
+  }, [isOpen, pendingPayment]);
 
   async function handleConfirm() {
     setSubmitting(true);
@@ -146,6 +166,31 @@ export default function RecalibrationRequestModal({ isOpen, onClose }: Props) {
           {loading ? (
             <div className="py-6 flex items-center justify-center">
               <div className="w-6 h-6 border-2 border-[#00C8DC] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : pendingPayment ? (
+            <div className="space-y-4">
+              <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl px-4 py-3">
+                <p className="font-bold text-orange-300 text-sm">
+                  Settle your pending payment first
+                </p>
+                <p className="text-orange-200/60 text-xs leading-relaxed mt-0.5">
+                  Complete your unpaid event registration to unlock rating
+                  recalibration requests.
+                </p>
+              </div>
+              <PendingPaymentPanel
+                signupId={pendingPayment.signupId}
+                eventLabel={pendingPayment.eventLabel}
+                registrationFee={pendingPayment.registrationFee}
+                paymentInstructions={pendingPayment.paymentInstructions}
+              />
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full bg-[#1a2540] hover:bg-[#1e2d50] border border-[#687FA3]/20 text-white/70 font-black py-2.5 px-4 rounded-xl text-sm transition-colors cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           ) : submitted ? (
             <div className="space-y-4">

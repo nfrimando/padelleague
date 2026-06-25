@@ -63,7 +63,9 @@ export async function POST(
       updated_at: now,
     })
     .eq("id", requestId)
-    .select("id, player_id, status, admin_notes, resolved_at")
+    .select(
+      "id, player_id, status, outcome, rating_at_request, requestor_notes, computed_average, resolved_rating, admin_notes, requested_at, resolved_at",
+    )
     .single();
 
   if (updateError) {
