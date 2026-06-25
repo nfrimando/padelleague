@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
+import SignInPrompt from "@/components/SignInPrompt";
 import PlayerCard from "@/components/PlayerCard";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import RecalibrationSurveyModal from "./RecalibrationSurveyModal";
@@ -619,6 +620,7 @@ function ResolvedSummary({ request }: { request: RequestDetail }) {
 
 export default function RecalibrationDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const pathname = usePathname();
   const [state, setState] = useState<PageState>({ stage: "loading" });
 
   async function load() {
@@ -665,13 +667,15 @@ export default function RecalibrationDetailPage() {
     );
   }
 
-  if (state.stage === "unauthenticated" || state.stage === "forbidden" || state.stage === "not-found") {
+  if (state.stage === "unauthenticated") {
+    return <SignInPrompt redirectTo={pathname} message="Sign in to view this page." />;
+  }
+
+  if (state.stage === "forbidden" || state.stage === "not-found") {
     const message =
-      state.stage === "unauthenticated"
-        ? "Sign in to view this page."
-        : state.stage === "forbidden"
-          ? "You don't have access to this recalibration request."
-          : "Recalibration request not found.";
+      state.stage === "forbidden"
+        ? "You don't have access to this recalibration request."
+        : "Recalibration request not found.";
     return (
       <div className="min-h-screen bg-[#0E1523] text-white flex flex-col">
         <SiteHeader />

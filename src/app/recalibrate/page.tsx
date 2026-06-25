@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
+import SignInPrompt from "@/components/SignInPrompt";
 import { supabase } from "@/lib/supabase";
 
 const MIN_RESPONDENTS = 3;
@@ -95,6 +97,7 @@ function RespondentBadge({
 }
 
 export default function RecalibrationListPage() {
+  const pathname = usePathname();
   const [state, setState] = useState<PageState>({ stage: "loading" });
 
   useEffect(() => {
@@ -142,14 +145,7 @@ export default function RecalibrationListPage() {
   }
 
   if (state.stage === "unauthenticated") {
-    return (
-      <div className="min-h-screen bg-[#0E1523] text-white flex flex-col">
-        <SiteHeader />
-        <div className="flex-1 flex items-center justify-center px-4">
-          <p className="text-white/60 text-sm">Sign in to view this page.</p>
-        </div>
-      </div>
-    );
+    return <SignInPrompt redirectTo={pathname} message="Sign in to view this page." />;
   }
 
   if (state.stage === "forbidden") {

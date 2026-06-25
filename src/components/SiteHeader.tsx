@@ -13,15 +13,21 @@ type SiteHeaderProps = {
   rightSlot?: ReactNode;
 };
 
-export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
-  const pathname = usePathname();
-  const currentPath = activePath ?? pathname;
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [showSignInDropdown, setShowSignInDropdown] = useState(false);
+// Inline Google + email sign-in trigger, anchored to `currentPath` so the
+// visitor lands back on whatever page they were on. Mounted independently in
+// the desktop and mobile nav slots (mutually exclusive via breakpoint classes),
+// each with its own open/closed state.
+function SignInDropdown({
+  currentPath,
+  triggerClassName,
+  panelClassName,
+}: {
+  currentPath: string;
+  triggerClassName: string;
+  panelClassName: string;
+}) {
+  const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
-  const unvotedCount = useUnvotedUpcomingCount(user?.email ?? null);
 
   const handleGoogleSignIn = async () => {
     await supabase.auth.signInWithOAuth({
@@ -32,6 +38,53 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
       },
     });
   };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button type="button" onClick={() => setOpen((v) => !v)} className={triggerClassName}>
+        Sign In
+      </button>
+      {open && (
+        <div className={panelClassName}>
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            className="w-full flex items-center justify-center gap-3 bg-white text-[#0E1523] font-semibold py-2.5 px-4 rounded-xl hover:bg-white/90 transition-colors text-sm"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+            </svg>
+            Continue with Google
+          </button>
+          <EmailAuthForm redirectTo={currentPath} onSuccess={() => setOpen(false)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
+  const pathname = usePathname();
+  const currentPath = activePath ?? pathname;
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+  const unvotedCount = useUnvotedUpcomingCount(user?.email ?? null);
 
   useEffect(() => {
     let mounted = true;
@@ -61,18 +114,6 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
       subscription.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowSignInDropdown(false);
-      }
-    };
-    if (showSignInDropdown) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showSignInDropdown]);
 
   const desktopLinkClass = (href: string) =>
     `hover:text-[#00C8DC] transition-colors ${
@@ -166,33 +207,11 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
               </a>
             ) : (
               !rightSlot && (
-                <div className="relative" ref={dropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowSignInDropdown((v) => !v)}
-                    className="bg-[#00C8DC] text-[#0E1523] px-4 py-2 rounded-full hover:bg-white transition-all text-sm font-bold"
-                  >
-                    Sign In
-                  </button>
-                  {showSignInDropdown && (
-                    <div className="absolute right-0 top-full mt-2 w-72 bg-[#0E1523] border border-[#162032] rounded-2xl shadow-2xl p-4 z-50">
-                      <button
-                        type="button"
-                        onClick={handleGoogleSignIn}
-                        className="w-full flex items-center justify-center gap-3 bg-white text-[#0E1523] font-semibold py-2.5 px-4 rounded-xl hover:bg-white/90 transition-colors text-sm"
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24">
-                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                        </svg>
-                        Continue with Google
-                      </button>
-                      <EmailAuthForm redirectTo={currentPath} onSuccess={() => setShowSignInDropdown(false)} />
-                    </div>
-                  )}
-                </div>
+                <SignInDropdown
+                  currentPath={currentPath}
+                  triggerClassName="bg-[#00C8DC] text-[#0E1523] px-4 py-2 rounded-full hover:bg-white transition-all text-sm font-bold"
+                  panelClassName="absolute right-0 top-full mt-2 w-72 bg-[#0E1523] border border-[#162032] rounded-2xl shadow-2xl p-4 z-50"
+                />
               )
             )}
             {rightSlot}
@@ -262,12 +281,11 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   Me
                 </a>
               ) : (
-                <a
-                  href="/join"
-                  className="text-[#00C8DC] hover:text-white transition-colors"
-                >
-                  Sign In
-                </a>
+                <SignInDropdown
+                  currentPath={currentPath}
+                  triggerClassName="text-[#00C8DC] hover:text-white transition-colors"
+                  panelClassName="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-[#0E1523] border border-[#162032] rounded-2xl shadow-2xl p-4 z-50"
+                />
               ))}
             </div>
           </div>

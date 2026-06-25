@@ -11,6 +11,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, LogOut } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
+import SignInPrompt from "@/components/SignInPrompt";
 import ProfileLinkingPanel from "@/components/ProfileLinkingPanel";
 import {
   fetchPlayerByEmail,
@@ -201,10 +202,6 @@ function DashboardPageContent() {
     };
   }, []);
 
-  useEffect(() => {
-    if (user === null) router.replace("/");
-  }, [user, router]);
-
   // ── Data loading (auth player's own data) ─────────────────────────────────
   const load = useCallback(async () => {
     if (!user) return;
@@ -352,7 +349,15 @@ function DashboardPageContent() {
     );
   }
 
-  if (user === null) return null;
+  if (user === null) {
+    return (
+      <SignInPrompt
+        redirectTo="/dashboard"
+        title="Dashboard"
+        message="Sign in to access your dashboard."
+      />
+    );
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (

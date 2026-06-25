@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
+import SignInPrompt from "@/components/SignInPrompt";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import { supabase } from "@/lib/supabase";
 import { checkIsAdmin } from "@/lib/adminCheck";
@@ -990,6 +991,7 @@ function CancelModal({
 
 export default function RecruitPage() {
   const { signupId } = useParams<{ signupId: string }>();
+  const pathname = usePathname();
   const [state, setState] = useState<RecruitPageState>({ stage: "loading" });
   const [currentPlayerId, setCurrentPlayerId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1096,16 +1098,7 @@ export default function RecruitPage() {
   }
 
   if (state.stage === "unauthenticated") {
-    return (
-      <div className="min-h-screen bg-[#0E1523] text-white flex flex-col">
-        <SiteHeader />
-        <div className="flex-1 flex items-center justify-center px-4">
-          <div className="text-center space-y-3">
-            <p className="text-white/60">Sign in to access this page.</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <SignInPrompt redirectTo={pathname} message="Sign in to access this page." />;
   }
 
   if (state.stage === "not-member") {

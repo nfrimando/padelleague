@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
+import SignInPrompt from "@/components/SignInPrompt";
 import { supabase } from "@/lib/supabase";
 import { MIN_REFERRER_RATINGS } from "@/lib/recruitConfig";
 
@@ -89,6 +91,7 @@ function RatingBadge({
 }
 
 export default function RecruitListPage() {
+  const pathname = usePathname();
   const [state, setState] = useState<PageState>({ stage: "loading" });
 
   useEffect(() => {
@@ -137,22 +140,10 @@ export default function RecruitListPage() {
 
   if (state.stage === "unauthenticated") {
     return (
-      <div className="min-h-screen bg-[#0E1523] text-white flex flex-col">
-        <SiteHeader />
-        <div className="flex-1 flex items-center justify-center px-4">
-          <div className="text-center space-y-4 max-w-sm">
-            <p className="text-white/60 text-sm">
-              Sign in to view pending member applications.
-            </p>
-            <Link
-              href="/join"
-              className="inline-block text-[#00C8DC] text-sm font-bold hover:underline"
-            >
-              Or apply to join the league →
-            </Link>
-          </div>
-        </div>
-      </div>
+      <SignInPrompt
+        redirectTo={pathname}
+        message="Sign in to view pending member applications."
+      />
     );
   }
 
