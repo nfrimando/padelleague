@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useParams, usePathname } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import SignInPrompt from "@/components/SignInPrompt";
@@ -202,6 +202,7 @@ function MyAssessmentPanel({
   onRowCreated,
   onNotesSaved,
   onSurveyCompleted,
+  onRemoved,
 }: {
   signupId: string;
   applicant: ApplicantInfo;
@@ -211,6 +212,7 @@ function MyAssessmentPanel({
   onRowCreated: () => void;
   onNotesSaved: (notes: string | null) => void;
   onSurveyCompleted: () => void;
+  onRemoved: () => void;
 }) {
   const [notes, setNotes] = useState(myReferrerRow?.notes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -218,11 +220,15 @@ function MyAssessmentPanel({
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const surveyStatus = myReferrerRow?.survey?.status ?? null;
   const completed = surveyStatus === "complete";
 
-  async function handleSelfAdd() {
+  // Create the referrer row, then jump straight into the survey. Reloading in the
+  // background keeps the row available for resume without flipping the button back.
+  async function handleStartAsNewAssessor() {
     if (currentPlayerId === null) return;
     setAdding(true);
     setError(null);
@@ -234,9 +240,10 @@ function MyAssessmentPanel({
     const json = await res.json();
     setAdding(false);
     if (!res.ok) {
-      setError(json.error ?? "Failed to add your assessment.");
+      setError(json.error ?? "Failed to start your assessment.");
       return;
     }
+    setModalOpen(true);
     onRowCreated();
   }
 
@@ -263,14 +270,33 @@ function MyAssessmentPanel({
     setNotesSaved(true);
   }
 
-  // No row yet — offer to add themselves (only while the application is open).
+  async function handleRemove() {
+    if (!myReferrerRow) return;
+    setRemoving(true);
+    setError(null);
+    const res = await fetch(
+      `/api/recruit/${signupId}/referrers/${myReferrerRow.id}`,
+      { method: "DELETE", headers: { ...(await authHeader()) } },
+    );
+    setRemoving(false);
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(json.error ?? "Failed to remove your assessment.");
+      return;
+    }
+    setConfirmRemove(false);
+    onRemoved();
+  }
+
+  const startLabel =
+    surveyStatus === "in_progress" ? "Resume assessment" : "Start assessment";
+
+  let body: ReactNode = null;
+
   if (!myReferrerRow) {
-    if (isLocked || currentPlayerId === null) return null;
-    return (
-      <div className="space-y-3">
-        <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">
-          Your Assessment
-        </p>
+    // No row yet — offer to assess (only while the application is open).
+    if (!isLocked && currentPlayerId !== null) {
+      body = (
         <div className="border border-dashed border-violet-400/20 rounded-2xl p-5 space-y-3">
           <div>
             <p className="text-sm font-semibold text-white">
@@ -286,25 +312,17 @@ function MyAssessmentPanel({
           {error && <p className="text-red-400 text-xs">{error}</p>}
           <button
             type="button"
-            onClick={handleSelfAdd}
+            onClick={handleStartAsNewAssessor}
             disabled={adding}
             className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
           >
-            {adding ? "Adding…" : "Add my assessment"}
+            {adding ? "Starting…" : "Start assessment"}
           </button>
         </div>
-      </div>
-    );
-  }
-
-  const startLabel =
-    surveyStatus === "in_progress" ? "Resume assessment" : "Start assessment";
-
-  return (
-    <div className="space-y-3">
-      <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">
-        Your Assessment
-      </p>
+      );
+    }
+  } else {
+    body = (
       <div className="border border-[#00C8DC]/20 bg-[#00C8DC]/5 rounded-2xl p-5 space-y-4">
         <div className="space-y-2">
           <p className="text-sm text-white/80 leading-relaxed">
@@ -376,15 +394,61 @@ function MyAssessmentPanel({
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
 
-        {modalOpen && (
-          <RecruitSurveyModal
-            onClose={() => setModalOpen(false)}
-            signupId={signupId}
-            applicant={applicant}
-            onCompleted={onSurveyCompleted}
-          />
+        {!isLocked && (
+          <div className="border-t border-white/10 pt-3">
+            {confirmRemove ? (
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[#687FA3]">
+                  Remove your assessment?
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRemove}
+                  disabled={removing}
+                  className="text-xs font-bold text-red-400 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {removing ? "Removing…" : "Yes, remove"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemove(false)}
+                  disabled={removing}
+                  className="text-xs text-[#687FA3] hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Keep
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmRemove(true)}
+                className="text-xs font-bold uppercase tracking-widest text-red-400/70 hover:text-red-400 transition-colors cursor-pointer"
+              >
+                Remove my assessment
+              </button>
+            )}
+          </div>
         )}
       </div>
+    );
+  }
+
+  if (!body && !modalOpen) return null;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-bold text-[#687FA3] uppercase tracking-widest">
+        Your Assessment
+      </p>
+      {body}
+      {modalOpen && (
+        <RecruitSurveyModal
+          onClose={() => setModalOpen(false)}
+          signupId={signupId}
+          applicant={applicant}
+          onCompleted={onSurveyCompleted}
+        />
+      )}
     </div>
   );
 }
@@ -1110,6 +1174,7 @@ export default function RecruitPage() {
                 onRowCreated={() => void load()}
                 onNotesSaved={updateMyNotes}
                 onSurveyCompleted={() => void load()}
+                onRemoved={() => void load()}
               />
             )}
 
