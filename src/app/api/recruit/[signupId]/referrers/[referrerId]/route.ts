@@ -36,43 +36,24 @@ export async function PATCH(
     );
   }
 
-  let body: { initial_rating?: unknown; notes?: unknown };
+  let body: { notes?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  // Ratings are survey-derived (or set by an admin override at approval) — never PATCHed.
+  // Only notes are editable here.
+  if (body.notes === undefined) {
+    return NextResponse.json({ error: "Provide notes to update." }, { status: 400 });
+  }
+
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
     submitted_by_player_id: auth.playerId,
+    notes: typeof body.notes === "string" ? body.notes.trim() || null : null,
   };
-
-  if (body.initial_rating !== undefined) {
-    if (
-      typeof body.initial_rating !== "number" ||
-      !Number.isFinite(body.initial_rating) ||
-      body.initial_rating < 0
-    ) {
-      return NextResponse.json(
-        { error: "initial_rating must be a non-negative number." },
-        { status: 400 },
-      );
-    }
-    patch.initial_rating = body.initial_rating;
-  }
-
-  if (body.notes !== undefined) {
-    patch.notes =
-      typeof body.notes === "string" ? body.notes.trim() || null : null;
-  }
-
-  if (Object.keys(patch).length === 1) {
-    return NextResponse.json(
-      { error: "Provide at least one of initial_rating or notes." },
-      { status: 400 },
-    );
-  }
 
   const { data, error } = await serviceClient
     .from("signups_players_referrers")

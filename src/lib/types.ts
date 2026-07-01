@@ -131,6 +131,9 @@ export type SignupPlayersReferrer = {
   created_at: string;
   updated_at: string;
   referrer?: Pick<Player, "player_id" | "name" | "nickname" | "image_link">;
+  // Comparison-survey summary attached by the recruit API (never exposes numbers
+  // to the responding referrer). null/undefined = no survey taken yet.
+  survey?: { status: "in_progress" | "complete"; answeredCount: number } | null;
 };
 
 // Maps to the `player_claims` table.

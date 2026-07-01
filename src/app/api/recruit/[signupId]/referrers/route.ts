@@ -12,7 +12,7 @@ export async function POST(
 
   const { signupId } = await params;
 
-  let body: { player_id?: unknown; initial_rating?: unknown; notes?: unknown };
+  let body: { player_id?: unknown; notes?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -24,11 +24,8 @@ export async function POST(
       ? body.player_id
       : null;
 
-  const initialRating =
-    typeof body.initial_rating === "number" && Number.isFinite(body.initial_rating) && body.initial_rating >= 0
-      ? body.initial_rating
-      : null;
-
+  // Ratings are never accepted here — they are derived from the comparison survey each
+  // referrer takes (or set by an admin override at approval). Rows start unrated.
   const notes =
     typeof body.notes === "string" && body.notes.trim()
       ? body.notes.trim()
@@ -76,7 +73,6 @@ export async function POST(
       referrer_player_id: playerId,
       is_named_referrer: isNamedReferrer,
       submitted_by_player_id: auth.playerId,
-      ...(initialRating !== null ? { initial_rating: initialRating } : {}),
       ...(notes !== null ? { notes } : {}),
     })
     .select(

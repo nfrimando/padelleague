@@ -13,6 +13,22 @@ export async function POST(
   const { signupId } = await params;
   const serviceClient = getServerServiceClient();
 
+  // Optional admin override: recruit at a directly-entered rating, bypassing the survey
+  // and the minimum-ratings requirement (for non-techy referrals that skip the process).
+  let overrideRating: number | null = null;
+  try {
+    const body = (await request.json()) as { override_rating?: unknown };
+    if (
+      typeof body?.override_rating === "number" &&
+      Number.isFinite(body.override_rating) &&
+      body.override_rating >= 0
+    ) {
+      overrideRating = Math.round(body.override_rating * 100) / 100;
+    }
+  } catch {
+    // No/invalid body — fall back to the computed average path below.
+  }
+
   const { data: signup, error: signupError } = await serviceClient
     .from("signups_players")
     .select(
@@ -50,7 +66,8 @@ export async function POST(
     (r) => r.initial_rating !== null,
   );
 
-  if (ratedRows.length < MIN_REFERRER_RATINGS) {
+  // Admin override skips the minimum-ratings gate and the averaging entirely.
+  if (overrideRating === null && ratedRows.length < MIN_REFERRER_RATINGS) {
     return NextResponse.json(
       {
         error: `At least ${MIN_REFERRER_RATINGS} referrer ratings are required. Currently ${ratedRows.length}.`,
@@ -60,11 +77,13 @@ export async function POST(
   }
 
   const avgRating =
-    Math.round(
-      (ratedRows.reduce((sum, r) => sum + Number(r.initial_rating), 0) /
-        ratedRows.length) *
-        100,
-    ) / 100;
+    overrideRating !== null
+      ? overrideRating
+      : Math.round(
+          (ratedRows.reduce((sum, r) => sum + Number(r.initial_rating), 0) /
+            ratedRows.length) *
+            100,
+        ) / 100;
 
   const name = (signup.applicant_name as string | null)?.trim();
   const nickname = (signup.applicant_nickname as string | null)?.trim();
@@ -133,5 +152,6 @@ export async function POST(
     ok: true,
     player_id: playerId,
     avg_rating: avgRating,
+    overridden: overrideRating !== null,
   });
 }
