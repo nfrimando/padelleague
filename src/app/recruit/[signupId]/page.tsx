@@ -1174,7 +1174,9 @@ export default function RecruitPage() {
                 onRowCreated={() => void load()}
                 onNotesSaved={updateMyNotes}
                 onSurveyCompleted={() => void load()}
-                onRemoved={() => void load()}
+                onRemoved={() =>
+                  myReferrerRow && removeReferrer(myReferrerRow.id)
+                }
               />
             )}
 
