@@ -27,6 +27,8 @@ CREATE TABLE public.events (
   description text,
   payment_instructions text,
   url_link text,
+  is_rated boolean NOT NULL DEFAULT true,
+  rating_details text,
   CONSTRAINT events_pkey PRIMARY KEY (event_id)
 );
 CREATE TABLE public.match_player_ratings (

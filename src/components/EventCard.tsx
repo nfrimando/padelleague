@@ -2,6 +2,11 @@
 
 import Link from "next/link";
 import { Event } from "@/lib/types";
+import {
+  isEventRated,
+  ratedStatusBadgeClass,
+  ratedStatusLabel,
+} from "@/lib/eventRatedStatus";
 
 type Props = {
   event: Event;
@@ -83,6 +88,7 @@ export default function EventCard({ event, isAccepted = false, currentPlayerRati
   const isOpen = event.registration_status === "open";
   const dateRange = formatDateRange(event.start_date, event.end_date);
   const restrictionTags = buildRestrictionTags(event);
+  const rated = isEventRated(event);
   const eligibilityHint = isOpen ? getEligibilityHint(event, currentPlayerRating) : null;
 
   return (
@@ -137,19 +143,22 @@ export default function EventCard({ event, isAccepted = false, currentPlayerRati
           <span>📅 {dateRange}</span>
         </div>
 
-        {/* Restriction tags */}
-        {restrictionTags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {restrictionTags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Rated + restriction tags */}
+        <div className="flex flex-wrap gap-1.5">
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${ratedStatusBadgeClass(rated)}`}
+          >
+            {ratedStatusLabel(rated)}
+          </span>
+          {restrictionTags.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
 
         {/* Eligibility hint */}
         {eligibilityHint && (

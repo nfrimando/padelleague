@@ -116,6 +116,13 @@ export async function PATCH(
   if (typeof body.notes === "string") update.notes = body.notes.trim() || null;
   if (typeof body.image_url === "string") update.image_url = body.image_url.trim() || null;
   if (typeof body.signup_list_visible === "boolean") update.signup_list_visible = body.signup_list_visible;
+  if (typeof body.is_rated === "boolean") update.is_rated = body.is_rated;
+  if (Object.prototype.hasOwnProperty.call(body, "rating_details")) {
+    update.rating_details =
+      typeof body.rating_details === "string" && body.rating_details.trim()
+        ? body.rating_details.trim()
+        : null;
+  }
   if (body.registration_status === "open" || body.registration_status === "closed") {
     update.registration_status = body.registration_status;
   }

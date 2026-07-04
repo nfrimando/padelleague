@@ -81,6 +81,8 @@ export type Event = {
   restrictions?: EventRestrictions | null;
   requires_payment?: boolean;
   signup_list_visible?: boolean;
+  is_rated?: boolean;
+  rating_details?: string | null;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;

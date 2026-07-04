@@ -73,6 +73,12 @@ export async function POST(request: Request) {
   if (!start_date) return NextResponse.json({ error: "start_date is required." }, { status: 400 });
   if (!signup_deadline) return NextResponse.json({ error: "signup_deadline is required." }, { status: 400 });
 
+  const is_rated = typeof body.is_rated === "boolean" ? body.is_rated : true;
+  const rating_details =
+    is_rated && typeof body.rating_details === "string" && body.rating_details.trim()
+      ? body.rating_details.trim()
+      : null;
+
   const end_date = typeof body.end_date === "string" && body.end_date.trim() ? body.end_date.trim() : null;
   const format = typeof body.format === "string" && body.format.trim() ? body.format.trim() : null;
   const player_limit = typeof body.player_limit === "number" && body.player_limit > 0 ? body.player_limit : null;
@@ -128,6 +134,8 @@ export async function POST(request: Request) {
       description,
       notes,
       image_url,
+      is_rated,
+      rating_details,
       restrictions: Object.keys(restrictions).length > 0 ? restrictions : null,
       visibility: "draft",
       created_by_player_id: player.player_id,

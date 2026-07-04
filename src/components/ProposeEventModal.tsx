@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import Toggle from "@/components/Toggle";
 
 type Props = {
   onClose: () => void;
@@ -19,6 +20,10 @@ export default function ProposeEventModal({ onClose }: Props) {
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [signupDeadline, setSignupDeadline] = useState("");
+
+  // Rating
+  const [isRated, setIsRated] = useState(true);
+  const [ratingDetails, setRatingDetails] = useState("");
 
   // Optional
   const [endDate, setEndDate] = useState("");
@@ -65,7 +70,9 @@ export default function ProposeEventModal({ onClose }: Props) {
       name: name.trim(),
       start_date: startDate,
       signup_deadline: signupDeadline,
+      is_rated: isRated,
     };
+    if (isRated && ratingDetails.trim()) body.rating_details = ratingDetails.trim();
     if (endDate) body.end_date = endDate;
     if (format.trim()) body.format = format.trim();
     if (playerPool && parseInt(playerPool, 10) > 0)
@@ -197,6 +204,31 @@ export default function ProposeEventModal({ onClose }: Props) {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-slate-700/60 mx-5" />
+
+            {/* Rating section */}
+            <div className="px-5 pt-4 pb-4 space-y-3">
+              <Toggle
+                checked={isRated}
+                onChange={setIsRated}
+                label="Rated event"
+                description="When on, playing this event affects player ratings. Turn off for casual / friendly events that don't count."
+              />
+              {isRated && (
+                <div>
+                  <label className={labelCls}>Rating Details</label>
+                  <textarea
+                    rows={2}
+                    className={inputCls}
+                    placeholder="How does this event affect ratings? (optional)"
+                    value={ratingDetails}
+                    onChange={(e) => setRatingDetails(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Divider */}

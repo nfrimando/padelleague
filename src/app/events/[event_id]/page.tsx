@@ -16,6 +16,11 @@ import {
   signupStatusBadgeClass,
   type EventSignupStatus,
 } from "@/lib/eventSignupStatus";
+import {
+  isEventRated,
+  ratedStatusBadgeClass,
+  ratedStatusLabel,
+} from "@/lib/eventRatedStatus";
 import { supabase } from "@/lib/supabase";
 import { checkIsAdmin } from "@/lib/adminCheck";
 import { Event, EventRestrictions } from "@/lib/types";
@@ -98,6 +103,8 @@ type EditForm = {
   image_url: string;
   signup_list_visible: boolean;
   registration_open: boolean;
+  is_rated: boolean;
+  rating_details: string;
 };
 
 function makeEditForm(event: EventWithCreator): EditForm {
@@ -123,6 +130,8 @@ function makeEditForm(event: EventWithCreator): EditForm {
     image_url: event.image_url ?? "",
     signup_list_visible: event.signup_list_visible ?? true,
     registration_open: event.registration_status === "open",
+    is_rated: event.is_rated ?? true,
+    rating_details: event.rating_details ?? "",
   };
 }
 
@@ -289,6 +298,10 @@ export default function EventDetailPage() {
       image_url: editForm.image_url || null,
       signup_list_visible: editForm.signup_list_visible,
       registration_status: editForm.registration_open ? "open" : "closed",
+      is_rated: editForm.is_rated,
+      rating_details: editForm.is_rated
+        ? editForm.rating_details.trim() || null
+        : null,
     };
     if (editForm.min_rating || editForm.max_rating) {
       body.min_rating = editForm.min_rating
@@ -386,6 +399,7 @@ export default function EventDetailPage() {
   };
 
   const isDraft = event?.visibility === "draft";
+  const rated = event ? isEventRated(event) : true;
 
   const restrictionTags: string[] = [];
   const r: EventRestrictions | null | undefined = event?.restrictions;
@@ -612,19 +626,23 @@ export default function EventDetailPage() {
                 <h1 className="text-2xl sm:text-3xl font-black text-slate-100 leading-tight">
                   {event.name ?? `Event #${event.event_id}`}
                 </h1>
-                {restrictionTags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {restrictionTags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 px-3 py-1 text-xs font-bold text-amber-300"
-                      >
-                        <Gauge size={13} />
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${ratedStatusBadgeClass(rated)}`}
+                  >
+                    <Gauge size={13} />
+                    {ratedStatusLabel(rated)}
+                  </span>
+                  {restrictionTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 px-3 py-1 text-xs font-bold text-amber-300"
+                    >
+                      <Gauge size={13} />
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               </div>
               {canEdit && !editing && (
                 <button
@@ -726,6 +744,27 @@ export default function EventDetailPage() {
                 </p>
               </div>
             )}
+
+            {/* Rating */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                  Rating
+                </h2>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${ratedStatusBadgeClass(rated)}`}
+                >
+                  {ratedStatusLabel(rated)}
+                </span>
+              </div>
+              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                {rated
+                  ? event.rating_details?.trim()
+                    ? event.rating_details
+                    : "Results from this event affect player ratings."
+                  : "This event is unrated — results don't affect player ratings."}
+              </p>
+            </div>
 
             {/* Players */}
             {signupsLoading ? (
@@ -1120,6 +1159,31 @@ export default function EventDetailPage() {
                 </div>
 
                 <div className="border-t border-slate-700/60" />
+
+                <Toggle
+                  checked={editForm.is_rated}
+                  onChange={(v) =>
+                    setEditForm((f) => (f ? { ...f, is_rated: v } : f))
+                  }
+                  label="Rated event"
+                  description="When on, playing this event affects player ratings. Turn off for casual / friendly events that don't count."
+                />
+                {editForm.is_rated && (
+                  <div>
+                    <label className={labelCls}>Rating Details</label>
+                    <textarea
+                      rows={2}
+                      className={inputCls}
+                      placeholder="How does this event affect ratings? (optional)"
+                      value={editForm.rating_details}
+                      onChange={(e) =>
+                        setEditForm((f) =>
+                          f ? { ...f, rating_details: e.target.value } : f,
+                        )
+                      }
+                    />
+                  </div>
+                )}
 
                 <Toggle
                   checked={editForm.registration_open}
