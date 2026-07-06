@@ -9,9 +9,18 @@ type Applicant = {
 };
 
 export async function notifyNewMemberApplication(applicant: Applicant): Promise<void> {
-  const to = process.env.ADMIN_NOTIFICATION_EMAIL;
-  if (!to) {
-    console.warn("[email] ADMIN_NOTIFICATION_EMAIL is not set — skipping notification");
+  const recipients = [
+    process.env.ADMIN_NOTIFICATION_EMAIL,
+    ...(process.env.RECRUIT_NOTIFICATION_EMAILS?.split(",") ?? []),
+  ]
+    .map((e) => e?.trim())
+    .filter((e): e is string => Boolean(e));
+
+  const to = [...new Set(recipients)];
+  if (to.length === 0) {
+    console.warn(
+      "[email] No recruit notification recipients configured — skipping notification",
+    );
     return;
   }
 

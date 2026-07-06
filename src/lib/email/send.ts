@@ -7,7 +7,7 @@ const MIN_SEND_INTERVAL_MS = 1500;
 let lastSendTime = 0;
 
 type SendEmailOptions = {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   from?: string;
