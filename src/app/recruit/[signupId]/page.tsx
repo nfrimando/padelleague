@@ -500,15 +500,21 @@ function ReferrerCard({
   isLocked,
   signupId,
   onDeleted,
+  onRatingSet,
 }: {
   referrer: SignupPlayersReferrer;
   isLocked: boolean;
   signupId: string;
   onDeleted: () => void;
+  onRatingSet: (updated: Partial<SignupPlayersReferrer> & { id: string }) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showTrail, setShowTrail] = useState(false);
+  const [editingRating, setEditingRating] = useState(false);
+  const [ratingInput, setRatingInput] = useState("");
+  const [submittingRating, setSubmittingRating] = useState(false);
+  const [ratingError, setRatingError] = useState<string | null>(null);
 
   async function handleDelete() {
     setDeleting(true);
@@ -529,6 +535,44 @@ function ReferrerCard({
     onDeleted();
   }
 
+  function startEditingRating() {
+    setRatingError(null);
+    setRatingInput(referrer.initial_rating !== null ? String(referrer.initial_rating) : "");
+    setEditingRating(true);
+  }
+
+  async function handleSaveRating() {
+    const rating = Number(ratingInput);
+    if (ratingInput.trim() === "" || !Number.isFinite(rating) || rating < 0) {
+      setRatingError("Enter a valid non-negative number.");
+      return;
+    }
+    setSubmittingRating(true);
+    setRatingError(null);
+    const res = await fetch(
+      `/api/recruit/${signupId}/referrers/${referrer.id}/manual-rating`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await authHeader()),
+        },
+        body: JSON.stringify({ rating }),
+      },
+    );
+    setSubmittingRating(false);
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setRatingError(json.error ?? "Failed to save rating.");
+      return;
+    }
+    const json = (await res.json()) as {
+      referrer: Partial<SignupPlayersReferrer> & { id: string };
+    };
+    onRatingSet(json.referrer);
+    setEditingRating(false);
+  }
+
   const referrerPlayer = referrer.referrer as Player | undefined;
   const displayName =
     referrerPlayer?.nickname ??
@@ -542,6 +586,9 @@ function ReferrerCard({
   const answeredCount = survey
     ? survey.questions.filter((q) => q.choice != null).length
     : 0;
+  const enteredByAdmin =
+    referrer.submitted_by_player_id != null &&
+    referrer.submitted_by_player_id !== referrer.referrer_player_id;
 
   return (
     <div className="border border-white/10 rounded-xl p-3 space-y-2">
@@ -571,21 +618,63 @@ function ReferrerCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-sm flex-wrap">
-        {ratingDisplay !== null ? (
-          <span className="bg-[#0E1523] border border-[#687FA3]/20 rounded-full px-3 py-1 text-sm font-semibold text-white">
-            {ratingDisplay}
-          </span>
-        ) : completed ? (
-          <span className="text-emerald-300 text-xs font-bold">
-            Assessment recorded ✓
-          </span>
-        ) : (
-          <span className="text-[#687FA3] italic text-xs">
-            Awaiting assessment
-          </span>
-        )}
-      </div>
+      {editingRating ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <InitialRatingInput
+            value={ratingInput}
+            onChange={setRatingInput}
+            disabled={submittingRating}
+            className="w-24 bg-[#1a2540] border border-[#687FA3]/20 rounded-lg px-2.5 py-1.5 text-sm text-white placeholder:text-[#687FA3]/50 focus:outline-none focus:border-[#00C8DC]/50 transition-colors"
+          />
+          <button
+            type="button"
+            onClick={handleSaveRating}
+            disabled={submittingRating}
+            className="text-xs font-bold text-[#00C8DC] hover:text-[#00C8DC]/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submittingRating ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditingRating(false)}
+            disabled={submittingRating}
+            className="text-xs text-[#687FA3] hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-sm flex-wrap">
+          {ratingDisplay !== null ? (
+            <span className="bg-[#0E1523] border border-[#687FA3]/20 rounded-full px-3 py-1 text-sm font-semibold text-white">
+              {ratingDisplay}
+            </span>
+          ) : completed ? (
+            <span className="text-emerald-300 text-xs font-bold">
+              Assessment recorded ✓
+            </span>
+          ) : (
+            <span className="text-[#687FA3] italic text-xs">
+              Awaiting assessment
+            </span>
+          )}
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={startEditingRating}
+              className="text-xs text-[#687FA3] hover:text-[#00C8DC] transition-colors cursor-pointer"
+            >
+              {ratingDisplay !== null ? "Edit" : "Enter rating"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {enteredByAdmin && (
+        <p className="text-[11px] text-[#687FA3] italic">Entered by admin</p>
+      )}
+
+      {ratingError && <p className="text-red-400 text-xs">{ratingError}</p>}
 
       {referrer.notes && (
         <p className="text-sm text-white/60 whitespace-pre-wrap">
@@ -1112,6 +1201,19 @@ export default function RecruitPage() {
     });
   }
 
+  function updateReferrerRating(
+    id: string,
+    patch: Partial<SignupPlayersReferrer>,
+  ) {
+    if (state.stage !== "loaded") return;
+    setState({
+      ...state,
+      referrers: state.referrers.map((r) =>
+        r.id === id ? { ...r, ...patch } : r,
+      ),
+    });
+  }
+
   if (state.stage === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0E1523]">
@@ -1288,6 +1390,7 @@ export default function RecruitPage() {
                       isLocked={isLocked}
                       signupId={signupId}
                       onDeleted={() => removeReferrer(referrer.id)}
+                      onRatingSet={(updated) => updateReferrerRating(referrer.id, updated)}
                     />
                   ))}
 
@@ -1327,6 +1430,7 @@ export default function RecruitPage() {
                       isLocked={isLocked}
                       signupId={signupId}
                       onDeleted={() => removeReferrer(referrer.id)}
+                      onRatingSet={(updated) => updateReferrerRating(referrer.id, updated)}
                     />
                   ))}
                 </div>
