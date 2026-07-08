@@ -1,3 +1,5 @@
+import type { SurveyState } from "@/lib/recalibration/survey";
+
 // ─── Notification preferences ─────────────────────────────────────────────────
 
 export type NotifType = "match_results" | "match_scheduled" | "predictions" | "recruit_invitation" | "signup_status";
@@ -136,6 +138,8 @@ export type SignupPlayersReferrer = {
   // Comparison-survey summary attached by the recruit API (never exposes numbers
   // to the responding referrer). null/undefined = no survey taken yet.
   survey?: { status: "in_progress" | "complete"; answeredCount: number } | null;
+  // Full comparison trail — admin-only; only present in the admin API response.
+  survey_answers?: SurveyState | null;
 };
 
 // Maps to the `player_claims` table.

@@ -17,6 +17,16 @@ import type {
 import { InitialRatingInput } from "@/components/InitialRatingInput";
 import ImageLightbox from "@/components/ImageLightbox";
 import RecruitSurveyModal from "./RecruitSurveyModal";
+import type { SurveyChoice, SurveyState } from "@/lib/recalibration/survey";
+
+const CHOICE_LABELS: Record<SurveyChoice, string> = {
+  significantly_better: "Significantly better",
+  slightly_better: "Slightly better",
+  relatively_same: "Relatively the same",
+  slightly_worse: "Slightly worse",
+  significantly_worse: "Significantly worse",
+  dont_know: "Didn't know",
+};
 
 type RecruitSignup = Pick<
   MembershipApplication,
@@ -453,6 +463,37 @@ function MyAssessmentPanel({
   );
 }
 
+/** Renders a referrer's answered head-to-head comparisons (admin-only). */
+function ReferrerSurveyTrail({ survey }: { survey: SurveyState }) {
+  const answered = survey.questions.filter((q) => q.choice != null);
+  if (answered.length === 0) {
+    return (
+      <p className="text-xs text-[#687FA3] italic">No comparisons answered yet.</p>
+    );
+  }
+  return (
+    <ol className="space-y-1.5">
+      {answered.map((q) => (
+        <li key={q.order} className="flex items-center justify-between gap-3 text-xs">
+          <span className="text-white/70 truncate">
+            {q.anchorPlayerName ?? "Unknown player"}
+            {q.anchorPlayerNickname && (
+              <span className="text-[#687FA3]"> · {q.anchorPlayerNickname}</span>
+            )}
+          </span>
+          <span
+            className={`shrink-0 font-bold ${
+              q.choice === "dont_know" ? "text-[#687FA3]" : "text-white/80"
+            }`}
+          >
+            {CHOICE_LABELS[q.choice as SurveyChoice]}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /** Admin-only read-only view of a referrer / community voter's assessment. */
 function ReferrerCard({
   referrer,
@@ -467,6 +508,7 @@ function ReferrerCard({
 }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showTrail, setShowTrail] = useState(false);
 
   async function handleDelete() {
     setDeleting(true);
@@ -495,6 +537,11 @@ function ReferrerCard({
   const ratingDisplay =
     referrer.initial_rating !== null ? String(referrer.initial_rating) : null;
   const completed = referrer.survey?.status === "complete";
+  const survey = referrer.survey_answers ?? null;
+  const hasTrail = !!survey && survey.questions.length > 0;
+  const answeredCount = survey
+    ? survey.questions.filter((q) => q.choice != null).length
+    : 0;
 
   return (
     <div className="border border-white/10 rounded-xl p-3 space-y-2">
@@ -544,6 +591,23 @@ function ReferrerCard({
         <p className="text-sm text-white/60 whitespace-pre-wrap">
           {referrer.notes}
         </p>
+      )}
+
+      {hasTrail && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowTrail((v) => !v)}
+            className="text-[11px] font-bold uppercase tracking-widest text-[#00C8DC]/70 hover:text-[#00C8DC] transition-colors cursor-pointer"
+          >
+            {showTrail ? "Hide comparisons" : `View comparisons (${answeredCount})`}
+          </button>
+          {showTrail && (
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <ReferrerSurveyTrail survey={survey!} />
+            </div>
+          )}
+        </div>
       )}
 
       {deleteError && <p className="text-red-400 text-xs">{deleteError}</p>}

@@ -29,6 +29,11 @@ function withSurveySummary(row: ReferrerRow) {
   };
 }
 
+/** Admin variant: keeps the summary but re-attaches the raw comparison trail. */
+function withSurveyAdmin(row: ReferrerRow) {
+  return { ...withSurveySummary(row), survey_answers: row.survey_answers ?? null };
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ signupId: string }> },
@@ -86,7 +91,7 @@ export async function GET(
   return NextResponse.json({
     signup,
     isAdmin: true,
-    referrers: rows.map(withSurveySummary),
-    myReferrerRow: ownRaw ? withSurveySummary(ownRaw) : null,
+    referrers: rows.map(withSurveyAdmin),
+    myReferrerRow: ownRaw ? withSurveyAdmin(ownRaw) : null,
   });
 }
