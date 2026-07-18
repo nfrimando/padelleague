@@ -32,11 +32,29 @@ export type LadderPlayer = {
   lastEvent: LadderStandingEvent;
 };
 
+export type LadderPendingMatchPlayer = {
+  player_id: string;
+  name: string;
+  nickname: string;
+};
+
+export type LadderPendingMatch = {
+  matchId: number;
+  status: "assigned" | "scheduled";
+  team1: [LadderPendingMatchPlayer, LadderPendingMatchPlayer];
+  team2: [LadderPendingMatchPlayer, LadderPendingMatchPlayer];
+  scheduleDeadlineAt: string | null;
+  dateLocal: string | null;
+  timeLocal: string | null;
+  venue: string | null;
+};
+
 export type LadderPageData = {
   hasActiveCycle: boolean;
   activeCycle: { id: number; label: string } | null;
   tiers: LadderTier[];
   groupedPlayers: Record<number, LadderPlayer[]>;
+  pendingMatchesByTier: Record<number, LadderPendingMatch[]>;
 };
 
 type TierRow = { id: number; name: string; rank: number; elo_floor: number | string };
@@ -132,7 +150,13 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
 
   const activeCycle = await fetchActiveCycle(db);
   if (activeCycle == null) {
-    return { hasActiveCycle: false, activeCycle: null, tiers, groupedPlayers: {} };
+    return {
+      hasActiveCycle: false,
+      activeCycle: null,
+      tiers,
+      groupedPlayers: {},
+      pendingMatchesByTier: {},
+    };
   }
 
   const { data: standingsData, error: standingsError } = await db
@@ -169,7 +193,13 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
 
   const playerIds = Array.from(latestByPlayer.keys()).map(Number);
   if (playerIds.length === 0) {
-    return { hasActiveCycle: true, activeCycle, tiers, groupedPlayers: {} };
+    return {
+      hasActiveCycle: true,
+      activeCycle,
+      tiers,
+      groupedPlayers: {},
+      pendingMatchesByTier: {},
+    };
   }
 
   const { data: playersData, error: playersError } = await db
@@ -213,7 +243,137 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
     });
   }
 
-  return { hasActiveCycle: true, activeCycle, tiers, groupedPlayers };
+  const pendingMatchesByTier = await fetchPendingLadderMatches(db, activeCycle.id, latestByPlayer);
+
+  return { hasActiveCycle: true, activeCycle, tiers, groupedPlayers, pendingMatchesByTier };
+}
+
+type PendingMatchTeamRow = {
+  match_id: number;
+  team_number: number | null;
+  player_1_id: number | null;
+  player_2_id: number | null;
+};
+
+// Roulette- and manually-created matches that are "assigned" (no date/time yet) or
+// "scheduled" (time confirmed, not yet completed) for the active cycle, bucketed by tier.
+// ladder_matches doesn't store tier directly, so tier is inferred from any participant's
+// current standing this cycle (all 4 players in an own-tier match share a tier by
+// construction).
+async function fetchPendingLadderMatches(
+  db: ServerClient,
+  cycleId: number,
+  latestByPlayer: Map<string, LadderStandingEvent>,
+): Promise<Record<number, LadderPendingMatch[]>> {
+  const pendingMatchesByTier: Record<number, LadderPendingMatch[]> = {};
+
+  const { data: cycleLadderMatches } = await db
+    .from("ladder_matches")
+    .select("match_id, schedule_deadline_at")
+    .eq("cycle_id", cycleId);
+
+  const candidateMatchIds = (cycleLadderMatches ?? []).map((m) => m.match_id as number);
+  if (candidateMatchIds.length === 0) return pendingMatchesByTier;
+
+  const deadlineByMatchId = new Map(
+    (cycleLadderMatches ?? []).map((m) => [
+      m.match_id as number,
+      m.schedule_deadline_at as string | null,
+    ]),
+  );
+
+  const { data: pendingMatchRows } = await db
+    .from("matches")
+    .select("match_id, status, date_local, time_local, venue")
+    .in("match_id", candidateMatchIds)
+    .in("status", ["assigned", "scheduled"]);
+
+  const pendingMatchIds = (pendingMatchRows ?? []).map((m) => m.match_id as number);
+  if (pendingMatchIds.length === 0) return pendingMatchesByTier;
+
+  const { data: teamsData } = await db
+    .from("match_teams")
+    .select("match_id, team_number, player_1_id, player_2_id")
+    .in("match_id", pendingMatchIds);
+
+  const teamRows = (teamsData ?? []) as PendingMatchTeamRow[];
+
+  const involvedPlayerIds = new Set<number>();
+  for (const t of teamRows) {
+    if (t.player_1_id != null) involvedPlayerIds.add(t.player_1_id);
+    if (t.player_2_id != null) involvedPlayerIds.add(t.player_2_id);
+  }
+
+  const { data: involvedPlayersData } = await db
+    .from("players")
+    .select("player_id, name, nickname")
+    .in("player_id", Array.from(involvedPlayerIds));
+
+  const involvedPlayerMap = new Map(
+    ((involvedPlayersData ?? []) as Array<{
+      player_id: number | string;
+      name: string | null;
+      nickname: string | null;
+    }>).map((p) => [String(p.player_id), p]),
+  );
+
+  const toPendingPlayer = (id: number | null): LadderPendingMatchPlayer | null => {
+    if (id == null) return null;
+    const p = involvedPlayerMap.get(String(id));
+    if (!p) return null;
+    return { player_id: String(id), name: p.name ?? "Unknown", nickname: p.nickname ?? "" };
+  };
+
+  for (const matchRow of (pendingMatchRows ?? []) as Array<{
+    match_id: number;
+    status: string;
+    date_local: string | null;
+    time_local: string | null;
+    venue: string | null;
+  }>) {
+    const matchId = matchRow.match_id;
+    const team1Row = teamRows.find((t) => t.match_id === matchId && t.team_number === 1);
+    const team2Row = teamRows.find((t) => t.match_id === matchId && t.team_number === 2);
+    if (!team1Row || !team2Row) continue;
+
+    const t1p1 = toPendingPlayer(team1Row.player_1_id);
+    const t1p2 = toPendingPlayer(team1Row.player_2_id);
+    const t2p1 = toPendingPlayer(team2Row.player_1_id);
+    const t2p2 = toPendingPlayer(team2Row.player_2_id);
+    if (!t1p1 || !t1p2 || !t2p1 || !t2p2) continue;
+
+    const tierId =
+      latestByPlayer.get(String(team1Row.player_1_id))?.tierAfterId ??
+      latestByPlayer.get(String(team1Row.player_2_id))?.tierAfterId ??
+      latestByPlayer.get(String(team2Row.player_1_id))?.tierAfterId ??
+      latestByPlayer.get(String(team2Row.player_2_id))?.tierAfterId ??
+      null;
+    if (tierId == null) continue;
+
+    const entry: LadderPendingMatch = {
+      matchId,
+      status: matchRow.status === "scheduled" ? "scheduled" : "assigned",
+      team1: [t1p1, t1p2],
+      team2: [t2p1, t2p2],
+      scheduleDeadlineAt: deadlineByMatchId.get(matchId) ?? null,
+      dateLocal: matchRow.date_local,
+      timeLocal: matchRow.time_local,
+      venue: matchRow.venue,
+    };
+
+    if (!pendingMatchesByTier[tierId]) pendingMatchesByTier[tierId] = [];
+    pendingMatchesByTier[tierId].push(entry);
+  }
+
+  for (const tierId of Object.keys(pendingMatchesByTier)) {
+    pendingMatchesByTier[Number(tierId)].sort((a, b) => {
+      const aDeadline = a.scheduleDeadlineAt ? new Date(a.scheduleDeadlineAt).getTime() : Infinity;
+      const bDeadline = b.scheduleDeadlineAt ? new Date(b.scheduleDeadlineAt).getTime() : Infinity;
+      return aDeadline - bDeadline;
+    });
+  }
+
+  return pendingMatchesByTier;
 }
 
 const getCachedLadderPageData = unstable_cache(

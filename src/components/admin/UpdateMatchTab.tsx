@@ -31,6 +31,8 @@ type MatchListRow = {
 const PAGE_SIZE = 20;
 
 const STATUS_CLS: Record<string, string> = {
+  assigned:
+    "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   scheduled:
     "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   cancelled:
@@ -136,7 +138,7 @@ export function UpdateMatchTab() {
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [listRefreshKey, setListRefreshKey] = useState(0);
-  const [statusFilter, setStatusFilter] = useState<"all" | "scheduled" | "cancelled" | "completed">("scheduled");
+  const [statusFilter, setStatusFilter] = useState<"all" | "assigned" | "scheduled" | "cancelled" | "completed">("scheduled");
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -198,7 +200,7 @@ export function UpdateMatchTab() {
   ) {
     const statuses =
       statusFilter === "all"
-        ? ["scheduled", "cancelled", "completed", "forfeit"]
+        ? ["assigned", "scheduled", "cancelled", "completed", "forfeit"]
         : [statusFilter];
 
     const { data: matchData, error: matchErr } = await supabase
@@ -673,6 +675,7 @@ export function UpdateMatchTab() {
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
               className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40"
             >
+              <option value="assigned">Assigned</option>
               <option value="scheduled">Scheduled</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
@@ -874,6 +877,11 @@ export function UpdateMatchTab() {
                   {updateMatchStatus === "completed" && (
                     <option value="completed" disabled>
                       completed (set via Complete Match tab)
+                    </option>
+                  )}
+                  {updateMatchStatus === "assigned" && (
+                    <option value="assigned" disabled>
+                      assigned (ladder roulette, not yet scheduled)
                     </option>
                   )}
                   {UPDATE_MATCH_STATUS_OPTIONS.map((status) => (

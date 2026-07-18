@@ -8,6 +8,7 @@ import { CompleteMatchTab } from "@/components/admin/CompleteMatchTab";
 import { CreatePlayerTab } from "@/components/admin/CreatePlayerTab";
 import { EditPlayerTab } from "@/components/admin/EditPlayerTab";
 import { EventsTab } from "@/components/admin/EventsTab";
+import { LadderRouletteTab } from "@/components/admin/LadderRouletteTab";
 import { MembersTab } from "@/components/admin/MembersTab";
 import { ScheduleMatchTab } from "@/components/admin/ScheduleMatchTab";
 import { UpdateMatchTab } from "@/components/admin/UpdateMatchTab";
@@ -27,7 +28,8 @@ type TabValue =
   | "SCHEDULE_MATCH"
   | "COMPLETE_MATCH"
   | "UPDATE_MATCH"
-  | "REVISE_SCORE";
+  | "REVISE_SCORE"
+  | "LADDER_ROULETTE";
 
 const NAV_GROUPS: {
   label: string;
@@ -54,6 +56,12 @@ const NAV_GROUPS: {
     label: "Events",
     items: [
       { value: "EVENTS", label: "Manage Events" },
+    ],
+  },
+  {
+    label: "Ladder",
+    items: [
+      { value: "LADDER_ROULETTE", label: "Roulette" },
     ],
   },
 ];
@@ -456,6 +464,8 @@ function AdminPageContent() {
                   <MembersTab enabled={activeTab === "MEMBERS" && isAdmin} />
                 ) : activeTab === "EVENTS" ? (
                   <EventsTab enabled={activeTab === "EVENTS" && isAdmin} />
+                ) : activeTab === "LADDER_ROULETTE" ? (
+                  <LadderRouletteTab />
                 ) : null}
               </AdminDataProvider>
             </main>

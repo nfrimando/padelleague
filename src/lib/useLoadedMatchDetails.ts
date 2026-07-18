@@ -3,7 +3,7 @@ import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 import { supabase } from "@/lib/supabase";
 import { LoadedMatchDetails, MatchPlayerSummary } from "@/lib/types";
 
-type MatchStatusValue = "completed" | "scheduled" | "forfeit" | "cancelled";
+type MatchStatusValue = "assigned" | "completed" | "scheduled" | "forfeit" | "cancelled";
 
 type Options = {
   matchId: string;
@@ -164,7 +164,7 @@ export function useLoadedMatchDetails({ matchId, enabled }: Options): Result {
 
       const nextStatus: MatchStatusValue =
         matchRow.status &&
-        ["completed", "scheduled", "forfeit", "cancelled"].includes(
+        ["assigned", "completed", "scheduled", "forfeit", "cancelled"].includes(
           matchRow.status,
         )
           ? (matchRow.status as MatchStatusValue)

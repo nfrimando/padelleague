@@ -18,7 +18,7 @@ import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
 import { notifyMatchUpdated } from "@/lib/email/notifications/matchUpdated";
 import { resolveMatchPredictions } from "@/lib/predictions/resolveMatchPredictions";
 
-type MatchStatus = "scheduled" | "completed" | "forfeit" | "cancelled";
+type MatchStatus = "assigned" | "scheduled" | "completed" | "forfeit" | "cancelled";
 
 type SetScoreInput = {
   team1Games: number;
@@ -67,6 +67,7 @@ type ValidationResult =
   | { valid: false; errors: string[] };
 
 const MATCH_STATUSES: MatchStatus[] = [
+  "assigned",
   "scheduled",
   "completed",
   "forfeit",
@@ -120,7 +121,7 @@ function validatePayload(payload: unknown): ValidationResult {
 
   const status = normalizeStatus(payload.status ?? "completed");
   if (!status) {
-    errors.push("status must be one of scheduled, completed, forfeit, cancelled.");
+    errors.push("status must be one of assigned, scheduled, completed, forfeit, cancelled.");
   }
 
   const eventId = normalizeOptionalPositiveInteger(payload.eventId);

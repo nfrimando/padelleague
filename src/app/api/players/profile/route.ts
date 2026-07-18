@@ -7,7 +7,7 @@ import { isUserAdmin } from "@/app/api/_lib/admin-check";
 import type { NotifType, PlayerNotificationPreferences } from "@/lib/types";
 import { fetchPlayerPrefs, setPlayerPref } from "@/lib/notificationPreferences";
 
-const VALID_NOTIF_TYPES: NotifType[] = ["match_results", "match_scheduled", "signup_status"];
+const VALID_NOTIF_TYPES: NotifType[] = ["match_results", "match_scheduled", "signup_status", "ladder_match_assigned"];
 
 type ProfileUpdateBody = {
   nickname?: string;

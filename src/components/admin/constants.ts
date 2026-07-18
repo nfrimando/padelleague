@@ -23,6 +23,7 @@ export const MATCH_STATUS_OPTIONS = [
   "scheduled",
   "forfeit",
   "cancelled",
+  "assigned",
 ] as const;
 
 export const UPDATE_MATCH_STATUS_OPTIONS = [

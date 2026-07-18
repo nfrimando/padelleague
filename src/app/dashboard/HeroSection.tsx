@@ -10,6 +10,8 @@ import EditProfileModal from "@/components/EditProfileModal";
 import EditScheduleModal from "@/app/dashboard/EditScheduleModal";
 import RecalibrationRequestModal from "@/app/dashboard/RecalibrationRequestModal";
 import PendingPaymentPanel from "@/components/PendingPaymentPanel";
+import { tierIconSrc, StarBadge } from "@/components/LadderTierBadge";
+import { useCurrentLadderStanding } from "@/lib/useCurrentLadderStanding";
 import type { Event, Player } from "@/lib/types";
 import type { DashboardStats } from "@/lib/useDashboardStats";
 
@@ -172,6 +174,9 @@ export default function HeroSection({
   const [hasSchedule, setHasSchedule] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const paymentPanelRef = useRef<HTMLDivElement>(null);
+  const { standing: ladderStanding } = useCurrentLadderStanding(
+    String(player.player_id),
+  );
 
   useEffect(() => {
     if (!showEditProfile) return;
@@ -389,22 +394,43 @@ export default function HeroSection({
           )}
         </div>
 
-        {displayRating && (
-          <div className="shrink-0 text-right sm:text-center">
-            <p className="text-[#00C8DC] text-3xl font-black tracking-tighter leading-none">
-              {displayRating}
-            </p>
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#687FA3] mt-1">
-              Current Rating
-            </p>
-            {showEditProfile && !adminTargetPlayerId && (
-              <button
-                type="button"
-                onClick={() => setRecalModalOpen(true)}
-                className="mt-1.5 text-[10px] font-bold text-[#687FA3] hover:text-[#00C8DC] underline-offset-2 hover:underline transition-colors cursor-pointer"
+        {(displayRating || ladderStanding) && (
+          <div className="shrink-0 flex items-center gap-4">
+            {ladderStanding && (
+              <Link
+                href="/ladder"
+                className="flex flex-col items-center gap-1 cursor-pointer group"
               >
-                Request Reassessment
-              </button>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={tierIconSrc(ladderStanding.tierName)}
+                  alt={ladderStanding.tierName}
+                  className="w-8 h-8 object-contain"
+                />
+                <StarBadge stars={ladderStanding.stars} />
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#687FA3] group-hover:text-[#00C8DC] transition-colors">
+                  {ladderStanding.tierName}
+                </span>
+              </Link>
+            )}
+            {displayRating && (
+              <div className="text-right sm:text-center">
+                <p className="text-[#00C8DC] text-3xl font-black tracking-tighter leading-none">
+                  {displayRating}
+                </p>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#687FA3] mt-1">
+                  Current Rating
+                </p>
+                {showEditProfile && !adminTargetPlayerId && (
+                  <button
+                    type="button"
+                    onClick={() => setRecalModalOpen(true)}
+                    className="mt-1.5 text-[10px] font-bold text-[#687FA3] hover:text-[#00C8DC] underline-offset-2 hover:underline transition-colors cursor-pointer"
+                  >
+                    Request Reassessment
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}

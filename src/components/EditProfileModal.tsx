@@ -29,6 +29,7 @@ type FormState = {
   notif_match_scheduled: boolean;
   notif_recruit_invitation: boolean;
   notif_signup_status: boolean;
+  notif_ladder_match_assigned: boolean;
   preferred_side: "left" | "right" | "both" | "";
   shirt_size: string;
   ig_handle: string;
@@ -56,6 +57,7 @@ export default function EditProfileModal({
     notif_match_scheduled: true,
     notif_recruit_invitation: true,
     notif_signup_status: true,
+    notif_ladder_match_assigned: true,
     preferred_side: player.preferred_side ?? "",
     shirt_size: player.shirt_size ?? "",
     ig_handle: player.ig_handle ?? "",
@@ -102,6 +104,7 @@ export default function EditProfileModal({
             match_scheduled?: boolean;
             recruit_invitation?: boolean;
             signup_status?: boolean;
+            ladder_match_assigned?: boolean;
           };
         };
         const prefs = json.notification_preferences ?? {};
@@ -111,6 +114,7 @@ export default function EditProfileModal({
           notif_match_scheduled: prefs.match_scheduled ?? true,
           notif_recruit_invitation: prefs.recruit_invitation ?? true,
           notif_signup_status: prefs.signup_status ?? true,
+          notif_ladder_match_assigned: prefs.ladder_match_assigned ?? true,
         }));
       } catch {
         // silently ignore; defaults stay true
@@ -170,6 +174,7 @@ export default function EditProfileModal({
             match_scheduled: form.notif_match_scheduled,
             recruit_invitation: form.notif_recruit_invitation,
             signup_status: form.notif_signup_status,
+            ladder_match_assigned: form.notif_ladder_match_assigned,
           },
         }),
       });
@@ -408,6 +413,12 @@ export default function EditProfileModal({
                   onChange={(v) => setForm((f) => ({ ...f, notif_signup_status: v }))}
                   label="Event Signup Updates"
                   description="When you're shortlisted, accepted, or confirmed for an event you signed up for."
+                />
+                <Toggle
+                  checked={form.notif_ladder_match_assigned}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_ladder_match_assigned: v }))}
+                  label="Ladder Roulette Matches"
+                  description="When the ladder roulette assigns you a match, and if it expires unplayed."
                 />
               </div>
             </div>

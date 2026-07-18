@@ -2,7 +2,7 @@ import type { SurveyState } from "@/lib/recalibration/survey";
 
 // ─── Notification preferences ─────────────────────────────────────────────────
 
-export type NotifType = "match_results" | "match_scheduled" | "predictions" | "recruit_invitation" | "signup_status";
+export type NotifType = "match_results" | "match_scheduled" | "predictions" | "recruit_invitation" | "signup_status" | "ladder_match_assigned";
 
 // Map of notif_type → subscribed. Missing key means subscribed (default true).
 export type PlayerNotificationPreferences = Partial<Record<NotifType, boolean>>;
@@ -189,7 +189,7 @@ export type MatchWithTeams = {
   sets?: MatchSet[];
 };
 
-export type MatchStatus = "scheduled" | "completed" | "forfeit" | "cancelled";
+export type MatchStatus = "assigned" | "scheduled" | "completed" | "forfeit" | "cancelled";
 
 export type MatchPlayerSummary = {
   player_id: number;

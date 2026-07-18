@@ -3,36 +3,13 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Star } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
+import { tierIconSrc, StarBadge } from "@/components/LadderTierBadge";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { supabase } from "@/lib/supabase";
 import { describeLadderEvent } from "@/lib/ladderEventDisplay";
-import type { LadderPlayer, LadderTier } from "@/lib/ladderData";
-
-const MAX_STARS = 2;
-
-function tierIconSrc(tierName: string): string {
-  return `/ladder/${tierName.trim().toLowerCase()}.png`;
-}
-
-function StarBadge({ stars }: { stars: number }) {
-  return (
-    <div className="flex items-center gap-0.5 shrink-0">
-      {Array.from({ length: MAX_STARS }, (_, i) => (
-        <Star
-          key={i}
-          className={
-            i < stars
-              ? "w-4 h-4 fill-[#00C8DC] text-[#00C8DC]"
-              : "w-4 h-4 text-[#687FA3]/30"
-          }
-        />
-      ))}
-    </div>
-  );
-}
+import type { LadderPendingMatch, LadderPlayer, LadderTier } from "@/lib/ladderData";
 
 function OptedInDot() {
   return (
@@ -43,16 +20,72 @@ function OptedInDot() {
   );
 }
 
+function pendingMatchTeamLabel(team: LadderPendingMatch["team1"]): string {
+  const label = (p: LadderPendingMatch["team1"][number]) => p.nickname || p.name;
+  return `${label(team[0])} & ${label(team[1])}`;
+}
+
+function PendingMatchRow({ match, now }: { match: LadderPendingMatch; now: number | null }) {
+  const deadline = match.scheduleDeadlineAt ? new Date(match.scheduleDeadlineAt) : null;
+  const hoursLeft =
+    deadline && now !== null ? (deadline.getTime() - now) / (1000 * 60 * 60) : null;
+  const urgent = hoursLeft !== null && hoursLeft < 48;
+  const expired = hoursLeft !== null && hoursLeft < 0;
+
+  const deadlineLabel = deadline
+    ? deadline.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
+
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-[#162032] bg-[#0f1729] px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-[#e2e8f0] truncate">
+          {pendingMatchTeamLabel(match.team1)}{" "}
+          <span className="text-[#687FA3]">vs</span>{" "}
+          {pendingMatchTeamLabel(match.team2)}
+        </span>
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+            match.status === "scheduled"
+              ? "bg-blue-500/10 text-blue-300"
+              : "bg-amber-500/10 text-amber-300"
+          }`}
+        >
+          {match.status}
+        </span>
+      </div>
+      <p className="pl-0.5 text-[10px] text-[#687FA3]/70">
+        {match.status === "scheduled" ? (
+          <>
+            {match.dateLocal ?? "date TBD"}
+            {match.timeLocal ? ` at ${match.timeLocal}` : ""}
+            {match.venue ? ` · ${match.venue}` : ""}
+          </>
+        ) : deadlineLabel ? (
+          <span className={expired ? "text-rose-400" : urgent ? "text-amber-400" : ""}>
+            {expired ? "Deadline passed — " : "Schedule by "}
+            {deadlineLabel}
+          </span>
+        ) : (
+          "Not yet scheduled"
+        )}
+      </p>
+    </div>
+  );
+}
+
 function LadderViewContent({
   hasActiveCycle,
   activeCycle,
   tiers,
   groupedPlayers,
+  pendingMatchesByTier,
 }: {
   hasActiveCycle: boolean;
   activeCycle: { id: number; label: string } | null;
   tiers: LadderTier[];
   groupedPlayers: Record<number, LadderPlayer[]>;
+  pendingMatchesByTier: Record<number, LadderPendingMatch[]>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,6 +95,13 @@ function LadderViewContent({
   useEffect(() => {
     setLocalGroupedPlayers(groupedPlayers);
   }, [groupedPlayers]);
+
+  // Deferred to a mount effect (rather than read directly during render) to avoid
+  // SSR/client hydration mismatches on the deadline urgency styling below.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+  }, []);
 
   const [optIn, setOptIn] = useState(false);
   const [savingOptIn, setSavingOptIn] = useState(false);
@@ -76,6 +116,9 @@ function LadderViewContent({
     : (tierNames[0] ?? "");
   const activeTier = tiers.find((t) => t.name === activeTierName) ?? null;
   const allActivePlayers = activeTier ? (localGroupedPlayers[activeTier.id] ?? []) : [];
+  const activeTierPendingMatches = activeTier
+    ? (pendingMatchesByTier[activeTier.id] ?? [])
+    : [];
 
   type LadderFilter = "optedIn" | "played" | "either" | "all";
   const rawFilter = searchParams.get("filter");
@@ -278,6 +321,19 @@ function LadderViewContent({
               })}
             </div>
 
+            {activeTierPendingMatches.length > 0 && (
+              <div className="mb-6">
+                <h2 className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60">
+                  Upcoming Matches
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {activeTierPendingMatches.map((match) => (
+                    <PendingMatchRow key={match.matchId} match={match} now={now} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {activePlayers.length === 0 ? (
               <p className="text-sm text-[#687FA3]">
                 {allActivePlayers.length === 0
@@ -325,6 +381,7 @@ export default function LadderView(props: {
   activeCycle: { id: number; label: string } | null;
   tiers: LadderTier[];
   groupedPlayers: Record<number, LadderPlayer[]>;
+  pendingMatchesByTier: Record<number, LadderPendingMatch[]>;
 }) {
   return (
     <Suspense fallback={null}>
