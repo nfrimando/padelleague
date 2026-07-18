@@ -28,6 +28,7 @@ export type LadderPlayer = {
   stars: number;
   isOptedIn: boolean;
   hasPlayedThisCycle: boolean;
+  winsThisCycle: number;
   lastEvent: LadderStandingEvent;
 };
 
@@ -152,9 +153,16 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
   // A player may have played a ladder match earlier in the cycle even if their
   // latest row is something else, so this scans every row, not just the latest.
   const hasLadderMatchThisCycle = new Set<string>();
+  // A win that also promotes the player still counts as a win for this tally.
+  const winsByPlayer = new Map<string, number>();
   for (const row of standingRows) {
     const pid = String(row.player_id);
-    if (row.source_type === "match") hasLadderMatchThisCycle.add(pid);
+    if (row.source_type === "match") {
+      hasLadderMatchThisCycle.add(pid);
+      if (row.event_type === "match_win" || row.event_type === "promotion") {
+        winsByPlayer.set(pid, (winsByPlayer.get(pid) ?? 0) + 1);
+      }
+    }
     if (latestByPlayer.has(pid)) continue;
     latestByPlayer.set(pid, toStandingEvent(row));
   }
@@ -189,6 +197,7 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
       stars: lastEvent.starsAfter,
       isOptedIn: info.is_ladder_opt_in ?? false,
       hasPlayedThisCycle: hasLadderMatchThisCycle.has(pid),
+      winsThisCycle: winsByPlayer.get(pid) ?? 0,
       lastEvent,
     };
 
@@ -199,6 +208,7 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
   for (const tierId of Object.keys(groupedPlayers)) {
     groupedPlayers[Number(tierId)].sort((a, b) => {
       if (b.stars !== a.stars) return b.stars - a.stars;
+      if (b.winsThisCycle !== a.winsThisCycle) return b.winsThisCycle - a.winsThisCycle;
       return getLastNameKey(a.name).localeCompare(getLastNameKey(b.name));
     });
   }

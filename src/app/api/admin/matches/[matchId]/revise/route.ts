@@ -7,6 +7,10 @@ import {
 import { readLedgerEventsForMatch } from "@/app/api/admin/_lib/ledger";
 import { calculateRatings } from "@/lib/ratingCalculator";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
+import {
+  syncLadderStandingsForMatch,
+  type SyncLadderStandingsResult,
+} from "@/lib/ladder/ladderStandingSync";
 import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
 import { resolveMatchPredictions } from "@/lib/predictions/resolveMatchPredictions";
 
@@ -537,6 +541,36 @@ export async function PATCH(
 
   // --- Post-complete (non-fatal) ---
 
+  // Ladder standing progression. syncLadderStandingsForMatch deletes any existing match-linked
+  // ladder event before recomputing, so this same call correctly re-derives the standing for a
+  // revised score — safe because revise is only reachable when this is each player's
+  // chronologically latest match (the eligibility check above), so the event being replaced is
+  // always each player's latest ladder event too.
+  let ladderWarning: string | null = null;
+  let ladderTiers: Array<{ id: number; name: string }> = [];
+  let ladderEvents: SyncLadderStandingsResult["events"] = [];
+  try {
+    const teamByPlayerId = new Map<number, 1 | 2>([
+      [team1.player_1_id, 1],
+      [team1.player_2_id, 1],
+      [team2.player_1_id, 2],
+      [team2.player_2_id, 2],
+    ]);
+    const ladderResult = await syncLadderStandingsForMatch(supabase, {
+      matchId,
+      playerIds,
+      teamByPlayerId,
+      winnerTeam: calculation.winnerTeam as 1 | 2,
+      occurredAt: (matchRow.date_local as string | null) ?? null,
+    });
+    ladderWarning = ladderResult.warning;
+    ladderTiers = ladderResult.tiers;
+    ladderEvents = ladderResult.events;
+  } catch (err) {
+    console.error("[ladder] Failed to sync ladder standings:", err);
+    ladderWarning = "Match revised, but failed to sync ladder standings.";
+  }
+
   // 12. Re-resolve predictions against the new winner
   await resolveMatchPredictions(supabase, matchId, { force: true })
     .catch((err) => console.error("[predictions] revise re-resolve failed:", err));
@@ -576,6 +610,7 @@ export async function PATCH(
         result: r.result as "win" | "loss",
       })),
       winnerTeam: calculation.winnerTeam as 1 | 2,
+      ladder: ladderEvents.length > 0 ? { tiers: ladderTiers, events: ladderEvents } : undefined,
     }).catch((err) => console.error("[email] notifyMatchCompleted (revise) failed:", err));
   }
 
@@ -590,6 +625,7 @@ export async function PATCH(
       ratings: insertedRatings ?? [],
       ledgerEvents,
       message: "Match score revised and ratings recalculated.",
+      ladderWarning,
     },
     { status: 200 },
   );

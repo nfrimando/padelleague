@@ -10,6 +10,10 @@ import {
 import { readLedgerEventsForMatch } from "@/app/api/admin/_lib/ledger";
 import { calculateRatings } from "@/lib/ratingCalculator";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
+import {
+  syncLadderStandingsForMatch,
+  type SyncLadderStandingsResult,
+} from "@/lib/ladder/ladderStandingSync";
 import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
 import { notifyMatchUpdated } from "@/lib/email/notifications/matchUpdated";
 import { resolveMatchPredictions } from "@/lib/predictions/resolveMatchPredictions";
@@ -667,6 +671,38 @@ export async function PATCH(
     // admin UI can confirm the ledger is synced. Non-fatal: a read failure must not roll back.
     const ledgerEvents = await readLedgerEventsForMatch(supabase, matchId);
 
+    // Ladder standing progression, if this match was flagged as ladder-relevant at scheduling time
+    // (see create/route.ts). Non-fatal, same pattern as the ladderWarning there — a satellite view,
+    // not part of the rating source of truth, so a failure here must not roll back the completion.
+    let ladderWarning: string | null = null;
+    let ladderTiers: Array<{ id: number; name: string }> = [];
+    let ladderEvents: SyncLadderStandingsResult["events"] = [];
+    const effectiveDateLocal =
+      validation.value.dateLocal !== undefined
+        ? validation.value.dateLocal
+        : matchSnapshot.date_local;
+    try {
+      const teamByPlayerId = new Map<number, 1 | 2>([
+        [team1.player_1_id, 1],
+        [team1.player_2_id, 1],
+        [team2.player_1_id, 2],
+        [team2.player_2_id, 2],
+      ]);
+      const ladderResult = await syncLadderStandingsForMatch(supabase, {
+        matchId,
+        playerIds,
+        teamByPlayerId,
+        winnerTeam: calculation.winnerTeam as 1 | 2,
+        occurredAt: effectiveDateLocal,
+      });
+      ladderWarning = ladderResult.warning;
+      ladderTiers = ladderResult.tiers;
+      ladderEvents = ladderResult.events;
+    } catch (err) {
+      console.error("[ladder] Failed to sync ladder standings:", err);
+      ladderWarning = "Match completed, but failed to sync ladder standings.";
+    }
+
     const { data: playerRows } = await supabase
       .from("players")
       .select("player_id,name,nickname,email,is_notifications_subscribed")
@@ -711,6 +747,7 @@ export async function PATCH(
           result: r.result as "win" | "loss",
         })),
         winnerTeam: calculation.winnerTeam as 1 | 2,
+        ladder: ladderEvents.length > 0 ? { tiers: ladderTiers, events: ladderEvents } : undefined,
       }).catch((err) => {
         console.error("[email] notifyMatchCompleted failed:", err);
         return null;
@@ -732,6 +769,7 @@ export async function PATCH(
         ledgerEvents,
         message: "Match updated as completed with sets and v3 ratings.",
         emails: completedEmailResult,
+        ladderWarning,
       },
       { status: 200 },
     );

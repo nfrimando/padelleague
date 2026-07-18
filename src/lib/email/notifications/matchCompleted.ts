@@ -12,6 +12,15 @@ type PlayerInfo = {
   is_notifications_subscribed?: boolean | null;
 };
 
+type LadderProgressionEvent = {
+  playerId: number;
+  eventType: "match_win" | "match_loss" | "promotion" | "demotion";
+  tierBeforeId: number | null;
+  tierAfterId: number;
+  starsBefore: number | null;
+  starsAfter: number;
+};
+
 type MatchCompletedData = {
   matchId: number;
   dateLocal: string | null;
@@ -27,6 +36,10 @@ type MatchCompletedData = {
     result: "win" | "loss";
   }>;
   winnerTeam: 1 | 2;
+  ladder?: {
+    tiers: Array<{ id: number; name: string }>;
+    events: LadderProgressionEvent[];
+  };
 };
 
 function displayName(p: PlayerInfo): string {
@@ -45,7 +58,44 @@ function buildScoreLabel(sets: Array<{ team_1_games: number; team_2_games: numbe
   return sets.map((s) => `${s.team_1_games}–${s.team_2_games}`).join(", ");
 }
 
-function buildEmailHtml({
+// Mirrors LadderView.tsx's MAX_STARS — duplicated because that component is "use client"
+// and can't be imported into this server-only email module.
+const LADDER_MAX_STARS = 2;
+
+function renderStars(count: number): string {
+  const filled = Math.max(0, Math.min(LADDER_MAX_STARS, count));
+  return "★".repeat(filled) + "☆".repeat(LADDER_MAX_STARS - filled);
+}
+
+function tierIconUrl(tierName: string): string {
+  return `${SITE_URL}/ladder/${tierName.trim().toLowerCase()}.png`;
+}
+
+function tierNameById(id: number | null, tiers: Array<{ id: number; name: string }>): string {
+  if (id == null) return "—";
+  return tiers.find((t) => t.id === id)?.name ?? "—";
+}
+
+// Small local phrase-builder, not a reuse of src/lib/ladderEventDisplay.ts's describeLadderEvent:
+// that helper pulls in a client-oriented relative-date formatter this email doesn't want, and has
+// no "demotion" case.
+function describeLadderProgress(
+  event: LadderProgressionEvent,
+  tiers: Array<{ id: number; name: string }>,
+): string {
+  switch (event.eventType) {
+    case "promotion":
+      return `Promoted to ${tierNameById(event.tierAfterId, tiers)}!`;
+    case "demotion":
+      return `Demoted to ${tierNameById(event.tierAfterId, tiers)}.`;
+    case "match_win":
+      return `${renderStars(event.starsBefore ?? 0)} → ${renderStars(event.starsAfter)} in ${tierNameById(event.tierAfterId, tiers)}`;
+    case "match_loss":
+      return `${renderStars(event.starsBefore ?? 0)} → ${renderStars(event.starsAfter)} in ${tierNameById(event.tierAfterId, tiers)}`;
+  }
+}
+
+export function buildEmailHtml({
   recipient,
   recipientTeam,
   team1Players,
@@ -58,6 +108,7 @@ function buildEmailHtml({
   dashboardUrl,
   unsubscribeMatchUrl,
   unsubscribeAllUrl,
+  ladderProgress,
 }: {
   recipient: PlayerInfo;
   recipientTeam: 1 | 2;
@@ -71,6 +122,10 @@ function buildEmailHtml({
   dashboardUrl: string;
   unsubscribeMatchUrl: string;
   unsubscribeAllUrl: string;
+  ladderProgress?: {
+    event: LadderProgressionEvent;
+    tiers: Array<{ id: number; name: string }>;
+  };
 }): string {
   const isWin = rating.result === "win";
   const resultLabel = isWin ? "Win" : "Loss";
@@ -101,6 +156,35 @@ function buildEmailHtml({
       </tr>`);
   }
 
+  let ladderSectionHtml = "";
+  if (ladderProgress) {
+    const { event, tiers } = ladderProgress;
+    const tierChanged = event.tierBeforeId !== event.tierAfterId;
+    const afterTierName = tierNameById(event.tierAfterId, tiers);
+    const description = describeLadderProgress(event, tiers);
+
+    const iconsCell = tierChanged
+      ? `
+        <img src="${tierIconUrl(tierNameById(event.tierBeforeId, tiers))}" width="32" height="32" alt="${tierNameById(event.tierBeforeId, tiers)}" style="vertical-align: middle;" />
+        <span style="margin: 0 6px; color: #9ca3af; font-size: 16px;">&rarr;</span>
+        <img src="${tierIconUrl(afterTierName)}" width="32" height="32" alt="${afterTierName}" style="vertical-align: middle;" />`
+      : `<img src="${tierIconUrl(afterTierName)}" width="40" height="40" alt="${afterTierName}" style="vertical-align: middle;" />`;
+
+    ladderSectionHtml = `
+      <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+        <p style="margin: 0 0 10px 0; color: #555; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Ladder Progress</p>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 90px; vertical-align: middle;">${iconsCell}</td>
+            <td style="vertical-align: middle; padding-left: 12px;">
+              <p style="margin: 0; font-weight: 700; font-size: 15px;">${afterTierName}</p>
+              <p style="margin: 4px 0 0 0; font-size: 13px; color: #374151;">${description}</p>
+            </td>
+          </tr>
+        </table>
+      </div>`;
+  }
+
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
       <h2 style="margin-bottom: 4px;">Match Results</h2>
@@ -128,7 +212,7 @@ function buildEmailHtml({
         <p style="margin: 8px 0 0 0; font-size: 14px; color: #374151;">${ratingLine}</p>
         <p style="margin: 4px 0 0 0; font-size: 12px; color: #9ca3af;">Team ${recipientTeam}</p>
       </div>
-
+      ${ladderSectionHtml}
       <a
         href="${dashboardUrl}"
         style="
@@ -209,6 +293,8 @@ export async function notifyMatchCompleted(data: MatchCompletedData): Promise<No
     const unsubscribeMatchUrl = buildUnsubscribeUrl(player.player_id, "match_results");
     const unsubscribeAllUrl = buildUnsubscribeUrl(player.player_id, "all");
 
+    const ladderEvent = data.ladder?.events.find((e) => e.playerId === player.player_id);
+
     const html = buildEmailHtml({
       recipient: player,
       recipientTeam: team,
@@ -222,6 +308,8 @@ export async function notifyMatchCompleted(data: MatchCompletedData): Promise<No
       dashboardUrl,
       unsubscribeMatchUrl,
       unsubscribeAllUrl,
+      ladderProgress:
+        ladderEvent && data.ladder ? { event: ladderEvent, tiers: data.ladder.tiers } : undefined,
     });
 
     const result = await sendEmail({ to: player.email, subject, html });

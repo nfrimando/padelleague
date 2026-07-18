@@ -300,6 +300,9 @@ function LadderViewContent({
                       />
                       <div className="flex items-center gap-2 shrink-0">
                         {player.isOptedIn && <OptedInDot />}
+                        <span className="text-[10px] font-semibold text-[#687FA3]/60 tabular-nums">
+                          {player.winsThisCycle}W
+                        </span>
                         <StarBadge stars={player.stars} />
                       </div>
                     </div>
