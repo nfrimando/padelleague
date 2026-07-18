@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
 import PlayerCard from "@/components/PlayerCard";
+import Toggle from "@/components/Toggle";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
@@ -101,6 +102,7 @@ export function ScheduleMatchTab() {
   const [timeLocal, setTimeLocal] = useState("");
   const [venue, setVenue] = useState("");
   const [matchType, setMatchType] = useState("");
+  const [isLadderMatch, setIsLadderMatch] = useState(true);
   const [slots, setSlots] = useState<Record<SlotKey, SlotState>>(EMPTY_SLOTS);
   type EmailNotifResult = {
     sent: Array<{ player_id: number; displayName: string }>;
@@ -111,6 +113,7 @@ export function ScheduleMatchTab() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [emailResult, setEmailResult] = useState<EmailNotifResult>(null);
+  const [ladderWarning, setLadderWarning] = useState<string | null>(null);
 
   const sortedSeasons = useMemo(
     () => matchSeasons.slice().sort((a, b) => b.id - a.id),
@@ -150,6 +153,7 @@ export function ScheduleMatchTab() {
     setError(null);
     setSuccess(null);
     setEmailResult(null);
+    setLadderWarning(null);
 
     const playerIds = [
       slots.t1p1.player?.player_id,
@@ -190,6 +194,7 @@ export function ScheduleMatchTab() {
           timeLocal: timeLocal || null,
           venue: venue.trim() || null,
           type: matchType.trim() || null,
+          isLadderMatch,
           team1: {
             player1Id: String(slots.t1p1.player!.player_id),
             player2Id: String(slots.t1p2.player!.player_id),
@@ -207,6 +212,7 @@ export function ScheduleMatchTab() {
         match?: { match_id: number };
         message?: string;
         emails?: EmailNotifResult;
+        ladderWarning?: string | null;
       };
 
       if (!response.ok) {
@@ -224,11 +230,13 @@ export function ScheduleMatchTab() {
       setVenue("");
       setMatchType("");
       setEventId("");
+      setIsLadderMatch(true);
       setSuccess(
         result.message ||
           `Match #${result.match?.match_id ?? ""} created successfully.`,
       );
       setEmailResult(result.emails ?? null);
+      setLadderWarning(result.ladderWarning ?? null);
       refreshScheduledMatches();
     } catch {
       setError("Unexpected error while creating match.");
@@ -347,6 +355,13 @@ export function ScheduleMatchTab() {
             </select>
           </div>
         </div>
+
+        <Toggle
+          checked={isLadderMatch}
+          onChange={setIsLadderMatch}
+          label="Ladder match"
+          description="Counts toward the tier ladder (own-tier match)."
+        />
       </section>
 
       {/* Team Assignment */}
@@ -428,6 +443,11 @@ export function ScheduleMatchTab() {
       {success && (
         <div className="rounded-md border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300 space-y-2">
           <p className="font-medium">{success}</p>
+          {ladderWarning && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {ladderWarning}
+            </p>
+          )}
           {emailResult && (
             <div className="pt-1 border-t border-emerald-200 dark:border-emerald-800/40">
               <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1.5">

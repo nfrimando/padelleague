@@ -64,7 +64,9 @@ export const formatMatchDate = (dateString: string | null) => {
 
 export function formatMatchDateRelative(dateString: string | null): string {
   if (!dateString) return "";
-  const date = new Date(`${dateString}T00:00:00`);
+  const date = new Date(
+    dateString.length <= 10 ? `${dateString}T00:00:00` : dateString,
+  );
   if (Number.isNaN(date.getTime())) return "";
   const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
   if (days <= 0) return "today";

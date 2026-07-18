@@ -154,17 +154,17 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
             <a href="/players" className={desktopLinkClass("/players")}>
               Players
             </a>
-            <a href="/leaderboard" className={desktopLinkClass("/leaderboard")}>
-              Leaderboard
-            </a>
             <a
-              href="/predict"
-              className={`hover:text-[#00C8DC] transition-colors inline-flex items-center gap-1 ${
-                currentPath === "/predict"
+              href="/ladder"
+              className={`hover:text-[#00C8DC] transition-colors ${
+                currentPath === "/ladder"
                   ? "text-white border-b-2 border-[#00C8DC] pb-1"
                   : "text-amber-400/80"
               }`}
             >
+              Ladder
+            </a>
+            <a href="/predict" className={`${desktopLinkClass("/predict")} inline-flex items-center gap-1`}>
               Predict
               {unvotedCount > 0 && (
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
@@ -224,7 +224,6 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   [
                     ["/matches", "Matches"],
                     ["/players", "Players"],
-                    ["/leaderboard", "Standings"],
                   ] as const
                 ).map(([href, label]) => (
                   <a
@@ -240,8 +239,18 @@ export default function SiteHeader({ activePath, rightSlot }: SiteHeaderProps) {
                   </a>
                 ))}
                 <a
+                  href="/ladder"
+                  className={
+                    currentPath === "/ladder"
+                      ? "text-[#00C8DC]"
+                      : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"
+                  }
+                >
+                  Ladder
+                </a>
+                <a
                   href="/predict"
-                  className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-amber-400/80 hover:text-[#00C8DC] transition-colors"}`}
+                  className={`inline-flex items-center gap-0.5 ${currentPath === "/predict" ? "text-[#00C8DC]" : "text-white/75 hover:text-[#00C8DC] transition-colors"}`}
                 >
                   Predict
                   {unvotedCount > 0 && (

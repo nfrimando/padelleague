@@ -34,6 +34,7 @@ export type Player = {
   shirt_size?: string | null;
   ig_handle?: string | null;
   is_duel_roulette_opt_in?: boolean;
+  is_ladder_opt_in?: boolean;
   created_at?: string;
   updated_at?: string;
 };

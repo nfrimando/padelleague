@@ -24,6 +24,7 @@ type FormState = {
   country: string;
   is_public: boolean;
   is_notifications_subscribed: boolean;
+  is_ladder_opt_in: boolean;
   notif_match_results: boolean;
   notif_match_scheduled: boolean;
   notif_recruit_invitation: boolean;
@@ -50,6 +51,7 @@ export default function EditProfileModal({
     country: player.country ?? "PH",
     is_public: player.is_public ?? false,
     is_notifications_subscribed: player.is_notifications_subscribed ?? false,
+    is_ladder_opt_in: player.is_ladder_opt_in ?? false,
     notif_match_results: true,
     notif_match_scheduled: true,
     notif_recruit_invitation: true,
@@ -71,6 +73,7 @@ export default function EditProfileModal({
       country: player.country ?? "PH",
       is_public: player.is_public ?? false,
       is_notifications_subscribed: player.is_notifications_subscribed ?? false,
+      is_ladder_opt_in: player.is_ladder_opt_in ?? false,
       preferred_side: player.preferred_side ?? "",
       shirt_size: player.shirt_size ?? "",
       ig_handle: player.ig_handle ?? "",
@@ -158,6 +161,7 @@ export default function EditProfileModal({
           country: form.country || null,
           is_public: form.is_public,
           is_notifications_subscribed: form.is_notifications_subscribed,
+          is_ladder_opt_in: form.is_ladder_opt_in,
           preferred_side: form.preferred_side || null,
           shirt_size: form.shirt_size || null,
           ig_handle: form.ig_handle.trim() || null,
@@ -359,6 +363,12 @@ export default function EditProfileModal({
             onChange={(v) => setForm((f) => ({ ...f, is_public: v }))}
             label="Public profile"
             description="Anyone can see your photo and contact details. When off, only league members can."
+          />
+          <Toggle
+            checked={form.is_ladder_opt_in}
+            onChange={(v) => setForm((f) => ({ ...f, is_ladder_opt_in: v }))}
+            label="Ladder opt-in"
+            description="Join the tier ladder pool. Used for matchmaking (including the upcoming roulette)."
           />
           <div className="space-y-3">
             <Toggle

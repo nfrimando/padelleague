@@ -19,6 +19,7 @@ type CreateMatchRequest = {
   timeLocal?: string | null;
   venue?: string | null;
   type?: string | null;
+  isLadderMatch: boolean;
   team1: TeamInput;
   team2: TeamInput;
 };
@@ -113,6 +114,7 @@ function validatePayload(payload: unknown): ValidationResult {
       timeLocal: normalizeOptionalString(payload.timeLocal),
       venue,
       type,
+      isLadderMatch: payload.isLadderMatch !== false,
       team1,
       team2,
     },
@@ -224,6 +226,38 @@ export async function POST(request: Request) {
     );
   }
 
+  let ladderWarning: string | null = null;
+  if (validation.value.isLadderMatch) {
+    const { data: activeCycle, error: activeCycleError } = await supabase
+      .from("ladder_cycles")
+      .select("id")
+      .eq("status", "active")
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeCycleError || !activeCycle) {
+      ladderWarning =
+        "Match created, but no active ladder cycle was found — this match was not counted toward the ladder.";
+    } else {
+      const { error: ladderMatchError } = await supabase
+        .from("ladder_matches")
+        .insert({
+          match_id: createdMatch.match_id,
+          cycle_id: activeCycle.id,
+          match_kind: "own_tier",
+        });
+
+      if (ladderMatchError) {
+        console.error(
+          "[ladder] Failed to record ladder_matches row:",
+          ladderMatchError,
+        );
+        ladderWarning = "Match created, but failed to record it as a ladder match.";
+      }
+    }
+  }
+
   const { data: playerDetails } = await supabase
     .from("players")
     .select("player_id,name,nickname,email,is_notifications_subscribed")
@@ -280,6 +314,7 @@ export async function POST(request: Request) {
       },
       message: "Scheduled match created successfully.",
       emails: emailResult,
+      ladderWarning,
     },
     { status: 201 },
   );

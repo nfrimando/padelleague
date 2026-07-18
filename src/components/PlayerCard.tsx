@@ -19,6 +19,7 @@ interface PlayerCardProps {
   ratingHistory?: RatingSparklinePoint[];
   loadingRating?: boolean;
   hrefBuilder?: (playerId: string) => string;
+  openInNewTab?: boolean;
 }
 
 export default function PlayerCard({
@@ -34,6 +35,7 @@ export default function PlayerCard({
   ratingHistory,
   loadingRating = false,
   hrefBuilder,
+  openInNewTab = false,
 }: PlayerCardProps) {
   const isLg = size === "lg";
   const hasCustomImage = !!(player?.image_link && player.image_link !== "null");
@@ -89,6 +91,8 @@ export default function PlayerCard({
       {playerHref ? (
         <Link
           href={playerHref}
+          target={openInNewTab ? "_blank" : undefined}
+          rel={openInNewTab ? "noopener noreferrer" : undefined}
           className="flex-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
         >
           <img
@@ -123,6 +127,8 @@ export default function PlayerCard({
               {playerHref ? (
                 <Link
                   href={playerHref}
+                  target={openInNewTab ? "_blank" : undefined}
+                  rel={openInNewTab ? "noopener noreferrer" : undefined}
                   className="inline-flex items-center gap-1 text-slate-900 dark:text-slate-100 decoration-transparent underline-offset-2 transition-colors duration-150 hover:text-sky-700 dark:hover:text-sky-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
                 >
                   {displayName}
