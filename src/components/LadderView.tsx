@@ -268,14 +268,14 @@ function LadderViewContent({
                   type="button"
                   onClick={toggleOptIn}
                   disabled={savingOptIn}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full border text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
                     optIn
                       ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
-                      : "bg-[#687FA3]/5 border-[#687FA3]/20 text-[#687FA3] hover:bg-[#687FA3]/10"
+                      : "bg-[#00C8DC] border-[#00C8DC] text-[#0E1523] shadow-[0_0_20px_rgba(0,200,220,0.45)] hover:bg-white hover:border-white hover:shadow-[0_0_24px_rgba(0,200,220,0.6)]"
                   }`}
                 >
                   <span
-                    className={`w-2 h-2 rounded-full ${optIn ? "bg-emerald-400" : "bg-[#687FA3]/50"}`}
+                    className={`w-2 h-2 rounded-full ${optIn ? "bg-emerald-400" : "bg-[#0E1523]"}`}
                   />
                   {optIn ? "In the ladder" : "Join the ladder"}
                 </button>
