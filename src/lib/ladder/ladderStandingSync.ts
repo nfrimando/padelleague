@@ -1,6 +1,5 @@
 import type { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
-import { fetchLatestLadderStandings } from "@/lib/ladder/ladderStandingLedger";
-import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
+import { ensureLadderPlacement, type TierBucketRow } from "@/lib/ladder/ladderPlacement";
 import {
   computeNextLadderStanding,
   type LadderStanding,
@@ -30,26 +29,6 @@ export type SyncLadderStandingsResult = {
   tiers: Array<{ id: number; name: string }>;
   events: LadderMatchProgressionEvent[];
 };
-
-type TierBucketRow = { id: number; name: string; rank: number; elo_floor: number };
-
-// Same bucketing as supabase/migrations/20260718000006_seed_ladder_cycle_1.sql:
-// LEAST(2, FLOOR((rating - elo_floor) / 0.5)), placed into the highest tier whose floor the
-// rating clears.
-function placeByRating(
-  rating: number,
-  tiers: TierBucketRow[],
-): { tierId: number; stars: number } | null {
-  const sorted = [...tiers].sort((a, b) => a.rank - b.rank);
-  let chosen: TierBucketRow | null = null;
-  for (const tier of sorted) {
-    if (rating >= tier.elo_floor) chosen = tier;
-  }
-  if (!chosen) return null;
-
-  const stars = Math.min(2, Math.max(0, Math.floor((rating - chosen.elo_floor) / 0.5)));
-  return { tierId: chosen.id, stars };
-}
 
 // Writes the ladder_standing_events rows produced by a match's outcome, for a match that has
 // already been flagged as ladder-relevant via a ladder_matches row (see create/route.ts). This is
@@ -126,57 +105,14 @@ export async function syncLadderStandingsForMatch(
   const tiers = tiersData as TierBucketRow[];
   const tierRows: LadderTierRow[] = tiers.map((t) => ({ id: t.id, rank: t.rank }));
 
-  const standingsByPlayer = await fetchLatestLadderStandings(supabase, cycleId, playerIds);
-
-  const warnings: string[] = [];
   const uniquePlayerIds = Array.from(new Set(playerIds));
-  const missingPlayerIds = uniquePlayerIds.filter(
-    (id) => !standingsByPlayer.has(String(id)),
+  const { standingsByPlayer, warnings: placementWarnings } = await ensureLadderPlacement(
+    supabase,
+    cycleId,
+    uniquePlayerIds,
+    matchOccurredAt,
   );
-
-  if (missingPlayerIds.length > 0) {
-    const ratingsByPlayer = await fetchLatestRatingsByPlayerIds(supabase, missingPlayerIds);
-
-    for (const playerId of missingPlayerIds) {
-      const rating = ratingsByPlayer.get(String(playerId));
-      if (rating === undefined || rating === null) {
-        warnings.push(`Player ${playerId} has no resolvable rating; skipped for this cycle.`);
-        continue;
-      }
-
-      const placement = placeByRating(rating, tiers);
-      if (!placement) {
-        warnings.push(`Player ${playerId} could not be placed into a tier; skipped.`);
-        continue;
-      }
-
-      const { error: seedError } = await supabase.from("ladder_standing_events").insert({
-        cycle_id: cycleId,
-        player_id: playerId,
-        event_type: "cycle_start",
-        tier_before_id: null,
-        tier_after_id: placement.tierId,
-        stars_before: null,
-        stars_after: placement.stars,
-        cushion_available: true,
-        source_type: "cycle_seed",
-        source_id: null,
-        occurred_at: matchOccurredAt,
-        metadata: { seed_rating: rating },
-      });
-
-      if (seedError) {
-        warnings.push(`Failed to place player ${playerId} into the ladder: ${seedError.message}`);
-        continue;
-      }
-
-      standingsByPlayer.set(String(playerId), {
-        tierId: placement.tierId,
-        stars: placement.stars,
-        cushionAvailable: true,
-      });
-    }
-  }
+  const warnings: string[] = [...placementWarnings];
 
   const events: LadderMatchProgressionEvent[] = [];
 

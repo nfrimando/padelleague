@@ -29,7 +29,7 @@ export type LadderPlayer = {
   isOptedIn: boolean;
   hasPlayedThisCycle: boolean;
   winsThisCycle: number;
-  lastEvent: LadderStandingEvent;
+  lastEvent: LadderStandingEvent | null;
 };
 
 export type LadderPendingMatchPlayer = {
@@ -95,7 +95,7 @@ function getLastNameKey(name: string): string {
   return parts[parts.length - 1].toLowerCase();
 }
 
-async function fetchActiveCycle(
+export async function fetchActiveCycle(
   db: ServerClient,
 ): Promise<{ id: number; label: string } | null> {
   const { data: active } = await db
@@ -191,7 +191,23 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
     latestByPlayer.set(pid, toStandingEvent(row));
   }
 
-  const playerIds = Array.from(latestByPlayer.keys()).map(Number);
+  // Opted-in players are shown even before they have a standing-event row (e.g. opted in but
+  // haven't been placed yet) — see ensureLadderPlacement in src/lib/ladder/ladderPlacement.ts,
+  // which normally places them immediately on opt-in / first match. This union is a defensive
+  // fallback for the rare case a player has no resolvable rating yet to be placed by.
+  const { data: optedInPlayersData, error: optedInError } = await db
+    .from("players")
+    .select("player_id")
+    .eq("is_ladder_opt_in", true);
+
+  if (optedInError) throw new Error(optedInError.message);
+
+  const optedInIds = ((optedInPlayersData ?? []) as Array<{ player_id: number | string }>).map(
+    (p) => String(p.player_id),
+  );
+
+  const playerIdSet = new Set<string>([...latestByPlayer.keys(), ...optedInIds]);
+  const playerIds = Array.from(playerIdSet).map(Number);
   if (playerIds.length === 0) {
     return {
       hasActiveCycle: true,
@@ -214,25 +230,34 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
     playerInfoMap.set(String(p.player_id), p);
   }
 
+  // Lowest-rank tier, used as a display fallback for opted-in players with no standing-event
+  // row and no resolvable rating to be placed by (tiers is ordered by rank ascending; rank 1 is
+  // the lowest tier per .claude/ladder.md).
+  const lowestTierId = tiers.length > 0 ? tiers[0].id : null;
+
   const groupedPlayers: Record<number, LadderPlayer[]> = {};
-  for (const [pid, lastEvent] of latestByPlayer) {
+  for (const pid of playerIdSet) {
     const info = playerInfoMap.get(pid);
     if (!info) continue;
+
+    const lastEvent = latestByPlayer.get(pid) ?? null;
+    const tierId = lastEvent ? lastEvent.tierAfterId : lowestTierId;
+    if (tierId == null) continue;
 
     const entry: LadderPlayer = {
       player_id: pid,
       name: info.name ?? "Unknown",
       nickname: info.nickname ?? "",
       image_link: info.image_link ?? null,
-      stars: lastEvent.starsAfter,
+      stars: lastEvent?.starsAfter ?? 0,
       isOptedIn: info.is_ladder_opt_in ?? false,
       hasPlayedThisCycle: hasLadderMatchThisCycle.has(pid),
       winsThisCycle: winsByPlayer.get(pid) ?? 0,
       lastEvent,
     };
 
-    if (!groupedPlayers[lastEvent.tierAfterId]) groupedPlayers[lastEvent.tierAfterId] = [];
-    groupedPlayers[lastEvent.tierAfterId].push(entry);
+    if (!groupedPlayers[tierId]) groupedPlayers[tierId] = [];
+    groupedPlayers[tierId].push(entry);
   }
 
   for (const tierId of Object.keys(groupedPlayers)) {

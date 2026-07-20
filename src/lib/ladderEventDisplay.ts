@@ -17,9 +17,11 @@ function humanizeEventType(eventType: string): string {
 // always-visible subtitle under a player's row. Unknown / future event types
 // fall through to a humanized label, mirroring describeRatingEvent's rule.
 export function describeLadderEvent(
-  event: LadderStandingEvent,
+  event: LadderStandingEvent | null,
   tiers: LadderTier[],
 ): string {
+  if (!event) return "Opted in — not yet placed this cycle";
+
   const when = formatMatchDateRelative(event.occurredAt);
   const suffix = when ? ` · ${when}` : "";
 
