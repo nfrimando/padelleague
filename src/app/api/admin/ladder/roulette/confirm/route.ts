@@ -14,7 +14,9 @@ function parsePlayer(value: unknown): ProposedPlayer | null {
   const displayName = value.displayName;
   if (!Number.isInteger(playerId) || playerId <= 0) return null;
   if (typeof displayName !== "string") return null;
-  return { playerId, displayName };
+  const rating = value.rating;
+  if (rating !== null && typeof rating !== "number") return null;
+  return { playerId, displayName, rating };
 }
 
 function parseGroup(value: unknown): ProposedGroup | null {

@@ -12,7 +12,7 @@ const buttonCls =
 
 type TierRow = { id: number; name: string };
 
-type ProposedPlayer = { playerId: number; displayName: string };
+type ProposedPlayer = { playerId: number; displayName: string; rating: number | null };
 type ProposedGroup = {
   team1: [ProposedPlayer, ProposedPlayer];
   team2: [ProposedPlayer, ProposedPlayer];
@@ -45,6 +45,12 @@ type SweepResponse = SweepResult & { cycleId?: number; error?: string };
 
 function teamLabel(team: [ProposedPlayer, ProposedPlayer]): string {
   return `${team[0].displayName} & ${team[1].displayName}`;
+}
+
+function teamAvgRating(team: [ProposedPlayer, ProposedPlayer]): number | null {
+  const ratings = team.map((p) => p.rating).filter((r): r is number => r !== null);
+  if (ratings.length === 0) return null;
+  return ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
 }
 
 export function LadderRouletteTab() {
@@ -288,14 +294,24 @@ export function LadderRouletteTab() {
                       No matches — not enough eligible players.
                     </p>
                   ) : (
-                    <ul className="pl-2 space-y-0.5">
-                      {tier.groups.map((g, i) => (
-                        <li key={i} className="text-sm">
-                          {teamLabel(g.team1)}{" "}
-                          <span className="text-slate-400">vs</span>{" "}
-                          {teamLabel(g.team2)}
-                        </li>
-                      ))}
+                    <ul className="pl-2 space-y-1">
+                      {tier.groups.map((g, i) => {
+                        const avg1 = teamAvgRating(g.team1);
+                        const avg2 = teamAvgRating(g.team2);
+                        return (
+                          <li key={i} className="text-sm">
+                            <div>
+                              {teamLabel(g.team1)}{" "}
+                              <span className="text-slate-400">vs</span>{" "}
+                              {teamLabel(g.team2)}
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                              avg {avg1 !== null ? avg1.toFixed(0) : "—"} vs{" "}
+                              {avg2 !== null ? avg2.toFixed(0) : "—"}
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                   {tier.skippedPlayers.length > 0 && (

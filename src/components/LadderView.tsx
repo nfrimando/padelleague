@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
@@ -25,7 +25,17 @@ function pendingMatchTeamLabel(team: LadderPendingMatch["team1"]): string {
   return `${label(team[0])} & ${label(team[1])}`;
 }
 
-function PendingMatchRow({ match, now }: { match: LadderPendingMatch; now: number | null }) {
+// Compact fixed-width card for the top-of-page horizontal ladder matches strip. Shows a
+// tier icon since this strip spans all tiers, unlike the old per-tier list this replaces.
+function LadderMatchScrollCard({
+  match,
+  tierName,
+  now,
+}: {
+  match: LadderPendingMatch;
+  tierName: string;
+  now: number | null;
+}) {
   const deadline = match.scheduleDeadlineAt ? new Date(match.scheduleDeadlineAt) : null;
   const hoursLeft =
     deadline && now !== null ? (deadline.getTime() - now) / (1000 * 60 * 60) : null;
@@ -37,12 +47,15 @@ function PendingMatchRow({ match, now }: { match: LadderPendingMatch; now: numbe
     : null;
 
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-[#162032] bg-[#0f1729] px-3 py-2">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-[#e2e8f0] truncate">
-          {pendingMatchTeamLabel(match.team1)}{" "}
-          <span className="text-[#687FA3]">vs</span>{" "}
-          {pendingMatchTeamLabel(match.team2)}
+    <div className="shrink-0 w-56 flex flex-col gap-1.5 rounded-lg border border-[#162032] bg-[#0f1729] px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#687FA3]">
+          <img
+            src={tierIconSrc(tierName)}
+            alt=""
+            className="w-3.5 h-3.5 object-contain shrink-0"
+          />
+          {tierName}
         </span>
         <span
           className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
@@ -54,7 +67,12 @@ function PendingMatchRow({ match, now }: { match: LadderPendingMatch; now: numbe
           {match.status}
         </span>
       </div>
-      <p className="pl-0.5 text-[10px] text-[#687FA3]/70">
+      <p className="text-sm text-[#e2e8f0] leading-snug">
+        {pendingMatchTeamLabel(match.team1)}
+        <span className="text-[#687FA3]"> vs </span>
+        {pendingMatchTeamLabel(match.team2)}
+      </p>
+      <p className="text-[10px] text-[#687FA3]/70">
         {match.status === "scheduled" ? (
           <>
             {match.dateLocal ?? "date TBD"}
@@ -116,9 +134,47 @@ function LadderViewContent({
     : (tierNames[0] ?? "");
   const activeTier = tiers.find((t) => t.name === activeTierName) ?? null;
   const allActivePlayers = activeTier ? (localGroupedPlayers[activeTier.id] ?? []) : [];
-  const activeTierPendingMatches = activeTier
-    ? (pendingMatchesByTier[activeTier.id] ?? [])
-    : [];
+
+  // Cross-tier, chronological (earliest→latest) list for the top-of-page horizontal strip.
+  // Scheduled matches sort by their actual date/time; undated "assigned" matches (still
+  // needing to be scheduled) have no date to sort by, so they're appended at the end —
+  // sorted among themselves by deadline — putting the most actionable matches rightmost.
+  const allPendingMatches = useMemo(() => {
+    const flat: Array<{ match: LadderPendingMatch; tierName: string }> = [];
+    for (const tier of tiers) {
+      for (const match of pendingMatchesByTier[tier.id] ?? []) {
+        flat.push({ match, tierName: tier.name });
+      }
+    }
+
+    const scheduled = flat
+      .filter((entry) => entry.match.status === "scheduled")
+      .sort((a, b) => {
+        const aKey = `${a.match.dateLocal ?? ""}T${a.match.timeLocal ?? ""}`;
+        const bKey = `${b.match.dateLocal ?? ""}T${b.match.timeLocal ?? ""}`;
+        return aKey.localeCompare(bKey);
+      });
+
+    const assigned = flat
+      .filter((entry) => entry.match.status === "assigned")
+      .sort((a, b) => {
+        const aDeadline = a.match.scheduleDeadlineAt
+          ? new Date(a.match.scheduleDeadlineAt).getTime()
+          : Infinity;
+        const bDeadline = b.match.scheduleDeadlineAt
+          ? new Date(b.match.scheduleDeadlineAt).getTime()
+          : Infinity;
+        return aDeadline - bDeadline;
+      });
+
+    return [...scheduled, ...assigned];
+  }, [tiers, pendingMatchesByTier]);
+
+  const matchStripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = matchStripRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [allPendingMatches.length]);
 
   type LadderFilter = "optedIn" | "played" | "either" | "all";
   const rawFilter = searchParams.get("filter");
@@ -214,6 +270,28 @@ function LadderViewContent({
           <p className="text-sm text-[#687FA3]">No tiers have been set up yet.</p>
         ) : (
           <>
+            {allPendingMatches.length > 0 && (
+              <div className="mb-6">
+                <h2 className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60">
+                  Ladder Matches
+                </h2>
+                <div
+                  ref={matchStripRef}
+                  className="flex gap-3 overflow-x-auto pb-2"
+                  style={{ scrollbarWidth: "none" }}
+                >
+                  {allPendingMatches.map(({ match, tierName }) => (
+                    <LadderMatchScrollCard
+                      key={match.matchId}
+                      match={match}
+                      tierName={tierName}
+                      now={now}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1 rounded-full border border-[#687FA3]/20 bg-[#687FA3]/5 p-1">
@@ -320,19 +398,6 @@ function LadderViewContent({
                 );
               })}
             </div>
-
-            {activeTierPendingMatches.length > 0 && (
-              <div className="mb-6">
-                <h2 className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60">
-                  Upcoming Matches
-                </h2>
-                <div className="flex flex-col gap-2">
-                  {activeTierPendingMatches.map((match) => (
-                    <PendingMatchRow key={match.matchId} match={match} now={now} />
-                  ))}
-                </div>
-              </div>
-            )}
 
             {activePlayers.length === 0 ? (
               <p className="text-sm text-[#687FA3]">

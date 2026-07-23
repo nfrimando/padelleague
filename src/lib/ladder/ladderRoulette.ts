@@ -1,5 +1,6 @@
 import type { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { fetchLatestLadderStandings } from "@/lib/ladder/ladderStandingLedger";
+import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 import {
   notifyLadderMatchAssigned,
   notifyLadderMatchExpired,
@@ -22,7 +23,7 @@ export type SweepResult = {
 
 export type RouletteSkippedPlayer = { playerId: number; displayName: string; reason: string };
 
-export type ProposedPlayer = { playerId: number; displayName: string };
+export type ProposedPlayer = { playerId: number; displayName: string; rating: number | null };
 export type ProposedGroup = {
   team1: [ProposedPlayer, ProposedPlayer];
   team2: [ProposedPlayer, ProposedPlayer];
@@ -66,12 +67,16 @@ function shuffle<T>(arr: T[]): T[] {
   return copy;
 }
 
-// Best-effort: prefer a 2-2 split of this group of 4 that doesn't repeat either pair's
-// partnership from that player's most recent roulette round. If every split repeats
-// a partnership, just accept a random one rather than blocking the round.
-function splitAvoidingRepeatPartners(
+// Prefer a 2-2 split of this group of 4 that (a) doesn't repeat either pair's
+// partnership from that player's most recent roulette round, and (b) among the
+// remaining candidates, minimizes the rating gap between the two teams. If every
+// split repeats a partnership, fall back to rating-balancing across all 3 splits
+// rather than blocking the round. A player with no resolvable rating is treated as
+// the average of the other 3 in the group, so one missing rating doesn't skew things.
+function splitBalanced(
   group: [number, number, number, number],
   lastPartner: Map<number, number>,
+  ratings: Map<string, number | null>,
 ): [[number, number], [number, number]] {
   const [a, b, c, d] = group;
   const splits: Array<[[number, number], [number, number]]> = [
@@ -79,15 +84,32 @@ function splitAvoidingRepeatPartners(
     [[a, c], [b, d]],
     [[a, d], [b, c]],
   ];
-  const shuffled = shuffle(splits);
+
+  const knownRatings = group
+    .map((id) => ratings.get(String(id)))
+    .filter((r): r is number => typeof r === "number");
+  const fallbackRating =
+    knownRatings.length > 0
+      ? knownRatings.reduce((sum, r) => sum + r, 0) / knownRatings.length
+      : 0;
+  const ratingOf = (id: number) => ratings.get(String(id)) ?? fallbackRating;
+
   const isRepeat = (pair: [number, number]) =>
     lastPartner.get(pair[0]) === pair[1] || lastPartner.get(pair[1]) === pair[0];
-  const nonRepeating = shuffled.find((s) => !isRepeat(s[0]) && !isRepeat(s[1]));
-  return nonRepeating ?? shuffled[0];
+  const nonRepeating = splits.filter((s) => !isRepeat(s[0]) && !isRepeat(s[1]));
+  const candidates = nonRepeating.length > 0 ? nonRepeating : splits;
+
+  const ratingGap = (s: [[number, number], [number, number]]) => {
+    const team1 = ratingOf(s[0][0]) + ratingOf(s[0][1]);
+    const team2 = ratingOf(s[1][0]) + ratingOf(s[1][1]);
+    return Math.abs(team1 - team2);
+  };
+
+  return candidates.reduce((best, s) => (ratingGap(s) < ratingGap(best) ? s : best));
 }
 
 // Most recent roulette-sourced partner per player this cycle, used only as a soft signal
-// for splitAvoidingRepeatPartners. Looks at each player's latest roulette match regardless
+// for splitBalanced. Looks at each player's latest roulette match regardless
 // of which tier it was in — good enough for a best-effort tie-breaker.
 async function getLastRoulettePartners(
   supabase: AdminSupabaseClient,
@@ -414,17 +436,19 @@ export async function generateLadderRouletteProposal(
     const lastPartner = await getLastRoulettePartners(supabase, cycleId, eligible);
     const displayNameById = await fetchDisplayNames(supabase, eligible);
     const displayName = (id: number) => displayNameById.get(id) ?? "Unknown";
+    const ratings = await fetchLatestRatingsByPlayerIds(supabase, eligible);
+    const rating = (id: number) => ratings.get(String(id)) ?? null;
 
     const groups: ProposedGroup[] = rawGroups.map((group) => {
-      const [[t1p1, t1p2], [t2p1, t2p2]] = splitAvoidingRepeatPartners(group, lastPartner);
+      const [[t1p1, t1p2], [t2p1, t2p2]] = splitBalanced(group, lastPartner, ratings);
       return {
         team1: [
-          { playerId: t1p1, displayName: displayName(t1p1) },
-          { playerId: t1p2, displayName: displayName(t1p2) },
+          { playerId: t1p1, displayName: displayName(t1p1), rating: rating(t1p1) },
+          { playerId: t1p2, displayName: displayName(t1p2), rating: rating(t1p2) },
         ],
         team2: [
-          { playerId: t2p1, displayName: displayName(t2p1) },
-          { playerId: t2p2, displayName: displayName(t2p2) },
+          { playerId: t2p1, displayName: displayName(t2p1), rating: rating(t2p1) },
+          { playerId: t2p2, displayName: displayName(t2p2), rating: rating(t2p2) },
         ],
       };
     });

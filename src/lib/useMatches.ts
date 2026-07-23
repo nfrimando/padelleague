@@ -56,6 +56,7 @@ export function useMatches(options: UseMatchesOptions = {}, enabled = true) {
         let query = supabase
           .from("matches")
           .select("*")
+          .neq("status", "assigned")
           .order("date_local", { ascending: false, nullsFirst: false })
           .order("time_local", { ascending: false, nullsFirst: false })
           .order("event_id", { ascending: false, nullsFirst: false })
