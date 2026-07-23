@@ -12,9 +12,17 @@ type PlayerInfo = {
   is_notifications_subscribed?: boolean | null;
 };
 
+type PlayerStanding = {
+  stars: number;
+  cushionAvailable: boolean;
+};
+
 type LadderMatchAssignedData = {
   matchId: number;
   tierName: string;
+  nextTierName: string | null;
+  prevTierName: string | null;
+  standings: Record<string, PlayerStanding>;
   deadlineLocal: string;
   team1Players: [PlayerInfo, PlayerInfo];
   team2Players: [PlayerInfo, PlayerInfo];
@@ -39,9 +47,12 @@ function displayName(p: PlayerInfo): string {
 function buildAssignedEmailHtml({
   recipient,
   recipientTeam,
+  recipientStanding,
   team1Players,
   team2Players,
   tierName,
+  nextTierName,
+  prevTierName,
   deadlineLocal,
   dashboardUrl,
   unsubscribeLadderUrl,
@@ -49,9 +60,12 @@ function buildAssignedEmailHtml({
 }: {
   recipient: PlayerInfo;
   recipientTeam: 1 | 2;
+  recipientStanding: PlayerStanding | undefined;
   team1Players: [PlayerInfo, PlayerInfo];
   team2Players: [PlayerInfo, PlayerInfo];
   tierName: string;
+  nextTierName: string | null;
+  prevTierName: string | null;
   deadlineLocal: string;
   dashboardUrl: string;
   unsubscribeLadderUrl: string;
@@ -61,6 +75,28 @@ function buildAssignedEmailHtml({
   const t2Name = `${displayName(team2Players[0])} & ${displayName(team2Players[1])}`;
   const recipientDisplayName = displayName(recipient);
   const opponentTeam = recipientTeam === 1 ? t2Name : t1Name;
+
+  const isPromotionMatch = recipientStanding?.stars === 2 && !!nextTierName;
+  const isDemotionMatch =
+    recipientStanding?.stars === 0 && recipientStanding.cushionAvailable === false && !!prevTierName;
+
+  const promotionHtml = isPromotionMatch
+    ? `
+      <div style="border: 1px solid #16a34a; background: #f0fdf4; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+        <p style="margin: 0 0 6px 0; color: #15803d; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Promotion match</p>
+        <p style="margin: 0; font-size: 14px; color: #166534;">You're at 2&#9733; in ${tierName} &mdash; win this match and you're promoted straight to <strong>${nextTierName}</strong>.</p>
+      </div>
+    `
+    : "";
+
+  const demotionHtml = isDemotionMatch
+    ? `
+      <div style="border: 1px solid #dc2626; background: #fef2f2; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+        <p style="margin: 0 0 6px 0; color: #b91c1c; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Demotion risk</p>
+        <p style="margin: 0; font-size: 14px; color: #991b1b;">You're at 0&#9733; in ${tierName} with no cushion left &mdash; lose this match and you'll drop to <strong>${prevTierName}</strong>.</p>
+      </div>
+    `
+    : "";
 
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
@@ -87,6 +123,13 @@ function buildAssignedEmailHtml({
         <p style="margin: 0; font-size: 16px; font-weight: 700; color: #92400e;">${deadlineLocal}</p>
         <p style="margin: 4px 0 0 0; font-size: 12px; color: #b45309;">Coordinate a time and court with your opponents: ${opponentTeam}. If it's not played by the deadline, this match is cancelled and no one loses stars.</p>
       </div>
+
+      ${promotionHtml}
+      ${demotionHtml}
+
+      <p style="color: #555; font-size: 14px;">
+        Message ${opponentTeam} to agree on a time and book a court, then post the scheduled time in the <strong>Padel League PH WhatsApp group</strong> so everyone knows it's happening.
+      </p>
 
       <a
         href="${dashboardUrl}"
@@ -227,9 +270,12 @@ export async function notifyLadderMatchAssigned(data: LadderMatchAssignedData): 
     const html = buildAssignedEmailHtml({
       recipient: player,
       recipientTeam: team,
+      recipientStanding: data.standings[String(player.player_id)],
       team1Players: data.team1Players,
       team2Players: data.team2Players,
       tierName: data.tierName,
+      nextTierName: data.nextTierName,
+      prevTierName: data.prevTierName,
       deadlineLocal: data.deadlineLocal,
       dashboardUrl,
       unsubscribeLadderUrl,

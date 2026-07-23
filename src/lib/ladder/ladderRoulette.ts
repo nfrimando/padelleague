@@ -504,6 +504,17 @@ export async function confirmLadderRouletteProposal(
     year: "numeric",
   });
 
+  const { data: allTiersData } = await supabase
+    .from("ladder_tiers")
+    .select("id, name, rank")
+    .order("rank", { ascending: true });
+  const allTiers = (allTiersData ?? []) as TierRow[];
+  const adjacentTierName = (tierId: number, direction: 1 | -1): string | null => {
+    const current = allTiers.find((t) => t.id === tierId);
+    if (!current) return null;
+    return allTiers.find((t) => t.rank === current.rank + direction)?.name ?? null;
+  };
+
   const tierResults: TierConfirmResult[] = [];
 
   for (const tierProposal of proposal.tiers) {
@@ -590,10 +601,23 @@ export async function confirmLadderRouletteProposal(
 
       if (playerDetails && playerDetails.length === 4) {
         const findPlayer = toPlayerInfoFinder(playerDetails as PlayerInfo[]);
+        const standingsByPlayer = await fetchLatestLadderStandings(
+          supabase,
+          cycleId,
+          groupPlayers.map((p) => p.playerId),
+        );
+        const standings: Record<string, { stars: number; cushionAvailable: boolean }> = {};
+        for (const p of groupPlayers) {
+          const s = standingsByPlayer.get(String(p.playerId));
+          if (s) standings[String(p.playerId)] = { stars: s.stars, cushionAvailable: s.cushionAvailable };
+        }
 
         await notifyLadderMatchAssigned({
           matchId,
           tierName: tierProposal.tierName,
+          nextTierName: adjacentTierName(tierProposal.tierId, 1),
+          prevTierName: adjacentTierName(tierProposal.tierId, -1),
+          standings,
           deadlineLocal,
           team1Players: [findPlayer(t1p1), findPlayer(t1p2)],
           team2Players: [findPlayer(t2p1), findPlayer(t2p2)],
