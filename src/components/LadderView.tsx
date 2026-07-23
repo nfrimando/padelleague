@@ -245,8 +245,8 @@ function LadderViewContent({
     <div className="min-h-screen bg-[#0E1523]">
       <SiteHeader activePath="/ladder" />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 pb-20">
-        <div className="mb-8 flex items-start justify-between gap-3">
+      <main className="pt-24 pb-20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 mb-8 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-white">
               Tier Ladder
@@ -263,21 +263,23 @@ function LadderViewContent({
         </div>
 
         {!hasActiveCycle ? (
-          <p className="text-sm text-[#687FA3]">
+          <p className="max-w-4xl mx-auto px-4 sm:px-6 text-sm text-[#687FA3]">
             The ladder hasn&apos;t started yet.
           </p>
         ) : tiers.length === 0 ? (
-          <p className="text-sm text-[#687FA3]">No tiers have been set up yet.</p>
+          <p className="max-w-4xl mx-auto px-4 sm:px-6 text-sm text-[#687FA3]">
+            No tiers have been set up yet.
+          </p>
         ) : (
           <>
             {allPendingMatches.length > 0 && (
               <div className="mb-6">
-                <h2 className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60">
+                <h2 className="max-w-4xl mx-auto px-4 sm:px-6 mb-2 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60">
                   Ladder Matches
                 </h2>
                 <div
                   ref={matchStripRef}
-                  className="flex gap-3 overflow-x-auto pb-2"
+                  className="flex gap-3 overflow-x-auto pb-2 px-4 sm:px-6"
                   style={{ scrollbarWidth: "none" }}
                 >
                   {allPendingMatches.map(({ match, tierName }) => (
@@ -292,6 +294,7 @@ function LadderViewContent({
               </div>
             )}
 
+            <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1 rounded-full border border-[#687FA3]/20 bg-[#687FA3]/5 p-1">
@@ -434,6 +437,7 @@ function LadderViewContent({
                 ))}
               </div>
             )}
+            </div>
           </>
         )}
       </main>
