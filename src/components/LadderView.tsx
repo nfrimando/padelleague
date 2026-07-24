@@ -176,6 +176,18 @@ function LadderViewContent({
     if (el) el.scrollLeft = el.scrollWidth;
   }, [allPendingMatches.length]);
 
+  const [isMatchStripOverflowing, setIsMatchStripOverflowing] = useState(false);
+  useEffect(() => {
+    const el = matchStripRef.current;
+    if (!el) return;
+    const checkOverflow = () =>
+      setIsMatchStripOverflowing(el.scrollWidth > el.clientWidth + 1);
+    checkOverflow();
+    const observer = new ResizeObserver(checkOverflow);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [allPendingMatches.length]);
+
   type LadderFilter = "optedIn" | "played" | "either" | "all";
   const rawFilter = searchParams.get("filter");
   const filter: LadderFilter =
@@ -279,7 +291,9 @@ function LadderViewContent({
                 </h2>
                 <div
                   ref={matchStripRef}
-                  className="flex gap-3 overflow-x-auto pb-2 px-4 sm:px-6"
+                  className={`flex gap-3 overflow-x-auto pb-2 px-4 sm:px-6 ${
+                    isMatchStripOverflowing ? "" : "justify-center"
+                  }`}
                   style={{ scrollbarWidth: "none" }}
                 >
                   {allPendingMatches.map(({ match, tierName }) => (
