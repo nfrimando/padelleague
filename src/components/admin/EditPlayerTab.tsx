@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import PlayerSearchBox from "@/components/PlayerSearchBox";
+import EditProfileModal from "@/components/EditProfileModal";
+import EditScheduleModal from "@/app/dashboard/EditScheduleModal";
 import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
@@ -31,6 +33,8 @@ export function EditPlayerTab() {
   const [savePlayerSuccess, setSavePlayerSuccess] = useState<string | null>(
     null,
   );
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [showEditScheduleModal, setShowEditScheduleModal] = useState(false);
 
   const filtered = usePlayerSearch(players, search);
 
@@ -280,7 +284,7 @@ export function EditPlayerTab() {
             </div>
           )}
 
-          <div>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void handleSavePlayer()}
@@ -289,8 +293,48 @@ export function EditPlayerTab() {
             >
               {savingPlayer ? "Saving…" : "Save Player"}
             </button>
+            <button
+              type="button"
+              onClick={() => setShowEditProfileModal(true)}
+              className="inline-flex items-center rounded-md border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              Edit Full Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowEditScheduleModal(true)}
+              className="inline-flex items-center rounded-md border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              Edit Schedule Preferences
+            </button>
           </div>
         </div>
+      )}
+
+      {selectedPlayer && (
+        <EditProfileModal
+          player={selectedPlayer}
+          adminTargetPlayerId={Number(selectedPlayer.player_id)}
+          isOpen={showEditProfileModal}
+          onClose={() => setShowEditProfileModal(false)}
+          onSaved={(updated) => {
+            setSelectedPlayer(updated);
+            setPlayers((current) =>
+              current.map((p) =>
+                String(p.player_id) === String(updated.player_id) ? updated : p,
+              ),
+            );
+          }}
+        />
+      )}
+
+      {selectedPlayer && (
+        <EditScheduleModal
+          playerId={Number(selectedPlayer.player_id)}
+          adminTargetPlayerId={Number(selectedPlayer.player_id)}
+          isOpen={showEditScheduleModal}
+          onClose={() => setShowEditScheduleModal(false)}
+        />
       )}
     </div>
   );

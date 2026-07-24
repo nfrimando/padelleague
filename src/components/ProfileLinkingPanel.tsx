@@ -181,8 +181,10 @@ export default function ProfileLinkingPanel({
               <p className="font-bold text-sm">Claim an existing profile</p>
             </div>
             <p className="text-[#687FA3] text-xs leading-relaxed">
-              If you&apos;ve played in previous seasons, find your name below
-              and submit a claim. An admin will verify and link your account.
+              If you have signed up via /join or you&apos;ve played before in
+              previous seasons and have not linked your email, find your name
+              below and submit a claim. An admin will verify and link your
+              account.
             </p>
 
             <div className="relative">
