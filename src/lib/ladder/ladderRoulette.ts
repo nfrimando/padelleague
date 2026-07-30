@@ -316,50 +316,11 @@ async function fetchDisplayNames(
   return result;
 }
 
-// Players currently seated (via match_teams) in a pending (assigned/scheduled) ladder
-// match this cycle, manual or roulette — used to keep the same player from being
-// double-booked across tiers/groups.
-async function fetchCommittedPlayerIds(
-  supabase: AdminSupabaseClient,
-  cycleId: number,
-): Promise<Set<number>> {
-  const committed = new Set<number>();
-
-  const { data: cycleLadderMatches } = await supabase
-    .from("ladder_matches")
-    .select("match_id")
-    .eq("cycle_id", cycleId);
-
-  const cycleMatchIds = (cycleLadderMatches ?? []).map((m) => m.match_id as number);
-  if (cycleMatchIds.length === 0) return committed;
-
-  const { data: pendingMatches } = await supabase
-    .from("matches")
-    .select("match_id")
-    .in("match_id", cycleMatchIds)
-    .in("status", ["assigned", "scheduled"]);
-
-  const pendingMatchIds = (pendingMatches ?? []).map((m) => m.match_id as number);
-  if (pendingMatchIds.length === 0) return committed;
-
-  const { data: pendingTeams } = await supabase
-    .from("match_teams")
-    .select("player_1_id, player_2_id")
-    .in("match_id", pendingMatchIds);
-
-  for (const t of pendingTeams ?? []) {
-    if (typeof t.player_1_id === "number") committed.add(t.player_1_id);
-    if (typeof t.player_2_id === "number") committed.add(t.player_2_id);
-  }
-
-  return committed;
-}
-
 // Neutrally cancels roulette-assigned matches (whether never scheduled, or scheduled but
 // never played) once their deadline has passed. No rating or ladder-standing impact, same
 // as plain cancellation. Run standalone via the admin "Sweep" button, and automatically as
-// the first step of generating a new proposal so swept players are immediately eligible
-// again.
+// the first step of generating a new proposal so stale assignments are cleared before a
+// new round goes out.
 export async function sweepExpiredLadderAssignments(
   supabase: AdminSupabaseClient,
   cycleId: number,
@@ -520,14 +481,15 @@ export async function generateLadderRouletteProposal(
   const optedInIds = (optedInPlayers ?? []).map((p) => p.player_id as number);
 
   const standingsByPlayer = await fetchLatestLadderStandings(supabase, cycleId, optedInIds);
-  const committedPlayerIds = await fetchCommittedPlayerIds(supabase, cycleId);
 
   const tierProposals: TierProposal[] = [];
 
   for (const tier of targetTiers) {
+    // Sitting on an unplayed assigned/scheduled ladder match does not remove a player
+    // from the pool — they can hold more than one outstanding assignment at a time.
     const eligible = optedInIds.filter((id) => {
       const standing = standingsByPlayer.get(String(id));
-      return standing !== undefined && standing.tierId === tier.id && !committedPlayerIds.has(id);
+      return standing !== undefined && standing.tierId === tier.id;
     });
 
     const lastPartner = await getLastLadderPartners(supabase, cycleId, eligible);
@@ -575,10 +537,10 @@ export async function generateLadderRouletteProposal(
 }
 
 // Phase 2: takes a proposal exactly as returned by generateLadderRouletteProposal (round
-// tripped through the admin's confirm click) and actually creates the matches. Freshly
-// re-checks that no player in the proposal has since become committed elsewhere (e.g. a
-// stale proposal confirmed after other changes) and skips any group affected, rather than
-// re-running the random pairing — the admin already reviewed this exact pairing.
+// tripped through the admin's confirm click) and actually creates the matches. It creates
+// the pairing exactly as reviewed rather than re-running the random pairing — the admin
+// already signed off on this one. Players already holding a pending ladder match are not
+// filtered out here either, matching generation: multiple outstanding assignments are fine.
 export async function confirmLadderRouletteProposal(
   supabase: AdminSupabaseClient,
   proposal: RouletteProposal,
@@ -600,7 +562,6 @@ export async function confirmLadderRouletteProposal(
   }
 
   const cycleId = proposal.cycleId;
-  const committedPlayerIds = await fetchCommittedPlayerIds(supabase, cycleId);
   const deadlineAt = new Date(
     Date.now() + proposal.deadlineDays * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -629,18 +590,6 @@ export async function confirmLadderRouletteProposal(
 
     for (const group of tierProposal.groups) {
       const groupPlayers = [...group.team1, ...group.team2];
-      const alreadyCommitted = groupPlayers.filter((p) => committedPlayerIds.has(p.playerId));
-      if (alreadyCommitted.length > 0) {
-        for (const p of groupPlayers) {
-          skippedPlayers.push({
-            playerId: p.playerId,
-            displayName: p.displayName,
-            reason: "already in a pending match (proposal went stale)",
-          });
-        }
-        continue;
-      }
-
       const [t1p1, t1p2] = group.team1.map((p) => p.playerId);
       const [t2p1, t2p2] = group.team2.map((p) => p.playerId);
 
@@ -698,7 +647,6 @@ export async function confirmLadderRouletteProposal(
       }
 
       matchesCreated.push(matchId);
-      for (const p of groupPlayers) committedPlayerIds.add(p.playerId);
 
       const { data: playerDetails } = await supabase
         .from("players")
