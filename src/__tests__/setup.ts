@@ -4,3 +4,6 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
 process.env.SUPABASE_SERVICE_ROLE_KEY    = "test-service-role-key";
 process.env.PAYMONGO_SECRET_KEY          = "sk_test_mock";
 process.env.PAYMONGO_WEBHOOK_SECRET      = "whsk_test_mock";
+// The Resend client throws at construction without a key, so anything importing a
+// module that transitively pulls in src/lib/email/client.ts needs this set.
+process.env.RESEND_API_KEY               = "re_test_mock";

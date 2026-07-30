@@ -27,6 +27,9 @@ export type ProposedPlayer = { playerId: number; displayName: string; rating: nu
 export type ProposedGroup = {
   team1: [ProposedPlayer, ProposedPlayer];
   team2: [ProposedPlayer, ProposedPlayer];
+  // Set only when no arrangement avoided a repeat partnership, so the admin can
+  // reroll or accept knowingly. Optional: `confirm` neither needs nor parses it.
+  repeatWarning?: string | null;
 };
 
 export type TierProposal = {
@@ -67,19 +70,27 @@ function shuffle<T>(arr: T[]): T[] {
   return copy;
 }
 
+export type Split = [[number, number], [number, number]];
+
+// A chosen 2-2 split, plus the partnership it was forced to repeat if no clean split
+// of this foursome existed (null in the normal case).
+export type GroupSplit = { split: Split; forcedRepeat: [number, number] | null };
+
 // Prefer a 2-2 split of this group of 4 that (a) doesn't repeat either pair's
-// partnership from that player's most recent roulette round, and (b) among the
+// partnership from that player's most recent ladder match, and (b) among the
 // remaining candidates, minimizes the rating gap between the two teams. If every
-// split repeats a partnership, fall back to rating-balancing across all 3 splits
-// rather than blocking the round. A player with no resolvable rating is treated as
-// the average of the other 3 in the group, so one missing rating doesn't skew things.
+// split repeats a partnership, fall back to rating-balancing across all 3 splits and
+// report the repeat via `forcedRepeat` rather than blocking the round — the caller
+// reshuffles to try to avoid this, and surfaces it to the admin when it can't.
+// A player with no resolvable rating is treated as the average of the other 3 in the
+// group, so one missing rating doesn't skew things.
 function splitBalanced(
   group: [number, number, number, number],
   lastPartner: Map<number, number>,
   ratings: Map<string, number | null>,
-): [[number, number], [number, number]] {
+): GroupSplit {
   const [a, b, c, d] = group;
-  const splits: Array<[[number, number], [number, number]]> = [
+  const splits: Split[] = [
     [[a, b], [c, d]],
     [[a, c], [b, d]],
     [[a, d], [b, c]],
@@ -97,21 +108,103 @@ function splitBalanced(
   const isRepeat = (pair: [number, number]) =>
     lastPartner.get(pair[0]) === pair[1] || lastPartner.get(pair[1]) === pair[0];
   const nonRepeating = splits.filter((s) => !isRepeat(s[0]) && !isRepeat(s[1]));
-  const candidates = nonRepeating.length > 0 ? nonRepeating : splits;
+  const clean = nonRepeating.length > 0;
+  const candidates = clean ? nonRepeating : splits;
 
-  const ratingGap = (s: [[number, number], [number, number]]) => {
+  const ratingGap = (s: Split) => {
     const team1 = ratingOf(s[0][0]) + ratingOf(s[0][1]);
     const team2 = ratingOf(s[1][0]) + ratingOf(s[1][1]);
     return Math.abs(team1 - team2);
   };
 
-  return candidates.reduce((best, s) => (ratingGap(s) < ratingGap(best) ? s : best));
+  const split = candidates.reduce((best, s) => (ratingGap(s) < ratingGap(best) ? s : best));
+  if (clean) return { split, forcedRepeat: null };
+  return { split, forcedRepeat: isRepeat(split[0]) ? split[0] : split[1] };
 }
 
-// Most recent roulette-sourced partner per player this cycle, used only as a soft signal
-// for splitBalanced. Looks at each player's latest roulette match regardless
-// of which tier it was in — good enough for a best-effort tie-breaker.
-async function getLastRoulettePartners(
+// How many randomized restarts to try before accepting the least-bad arrangement.
+// Each attempt is cheap (a shuffle plus an O(groups² · 16) repair scan over pools of
+// at most a few dozen players), so this stays well under a millisecond in practice.
+const MAX_GROUPING_ATTEMPTS = 40;
+
+// Chop a shuffled pool into foursomes and pick each one's 2-2 split. Exported for tests.
+//
+// Naively slicing the shuffle into fours fixes who shares a court *before* partner
+// history is consulted, which leaves splitBalanced only 3 candidate splits to work
+// with — sometimes all 3 repeat a partnership. So we do two things it can't: repair
+// a bad foursome by swapping a player with another group, and restart the whole
+// shuffle if repair isn't enough, keeping the best arrangement we saw. Leftovers
+// (pool size not divisible by 4) are returned for the caller to report as skipped.
+export function buildRouletteGroups(
+  eligible: number[],
+  lastPartner: Map<number, number>,
+  ratings: Map<string, number | null>,
+): { groups: GroupSplit[]; leftoverIds: number[] } {
+  if (eligible.length < 4) return { groups: [], leftoverIds: [...eligible] };
+
+  const groupCount = Math.floor(eligible.length / 4);
+  const splitOf = (g: [number, number, number, number]) =>
+    splitBalanced(g, lastPartner, ratings);
+
+  let best: { groups: GroupSplit[]; leftoverIds: number[]; repeats: number } | null = null;
+
+  for (let attempt = 0; attempt < MAX_GROUPING_ATTEMPTS; attempt++) {
+    const shuffled = shuffle(eligible);
+    const foursomes: Array<[number, number, number, number]> = [];
+    for (let i = 0; i < groupCount; i++) {
+      foursomes.push(shuffled.slice(i * 4, i * 4 + 4) as [number, number, number, number]);
+    }
+    const leftoverIds = shuffled.slice(groupCount * 4);
+    const splits = foursomes.map(splitOf);
+
+    // Repair pass: for each foursome still forcing a repeat, look for a single player
+    // swap with another foursome that cleans it up without breaking the donor.
+    for (let i = 0; i < foursomes.length; i++) {
+      if (splits[i].forcedRepeat === null) continue;
+
+      repair: for (let j = 0; j < foursomes.length; j++) {
+        if (i === j) continue;
+        for (let x = 0; x < 4; x++) {
+          for (let y = 0; y < 4; y++) {
+            const candidateI = [...foursomes[i]] as [number, number, number, number];
+            const candidateJ = [...foursomes[j]] as [number, number, number, number];
+            [candidateI[x], candidateJ[y]] = [candidateJ[y], candidateI[x]];
+
+            const splitI = splitOf(candidateI);
+            if (splitI.forcedRepeat !== null) continue;
+            const splitJ = splitOf(candidateJ);
+            if (splitJ.forcedRepeat !== null) continue;
+
+            foursomes[i] = candidateI;
+            foursomes[j] = candidateJ;
+            splits[i] = splitI;
+            splits[j] = splitJ;
+            break repair;
+          }
+        }
+      }
+    }
+
+    const repeats = splits.filter((s) => s.forcedRepeat !== null).length;
+    if (repeats === 0) return { groups: splits, leftoverIds };
+    if (best === null || repeats < best.repeats) {
+      best = { groups: splits, leftoverIds, repeats };
+    }
+  }
+
+  return best === null
+    ? { groups: [], leftoverIds: [...eligible] }
+    : { groups: best.groups, leftoverIds: best.leftoverIds };
+}
+
+// Most recent partner per player this cycle, across *all* ladder matches — roulette
+// and manually-created alike, so a hand-logged ladder match still blocks a repeat.
+// Looks at each player's latest ladder match regardless of which tier it was in.
+// Ordered by the played date when there is one, falling back to when the ladder_matches
+// row was inserted: a manual match logged today for a game played last week must not
+// outrank a newer roulette assignment. Expired/swept matches are deliberately still
+// counted — the pairing was already handed out once, so we'd rather not repeat it.
+async function getLastLadderPartners(
   supabase: AdminSupabaseClient,
   cycleId: number,
   playerIds: number[],
@@ -121,12 +214,23 @@ async function getLastRoulettePartners(
 
   const { data: priorMatches } = await supabase
     .from("ladder_matches")
-    .select("match_id, created_at")
-    .eq("cycle_id", cycleId)
-    .eq("source", "roulette")
-    .order("created_at", { ascending: false });
+    .select("match_id, created_at, matches(date_local)")
+    .eq("cycle_id", cycleId);
 
-  const priorMatchIds = (priorMatches ?? []).map((m) => m.match_id as number);
+  // The embed comes back as an object for a to-one relationship, but supabase-js hands
+  // back a single-element array when it can't infer that from the FK — accept both.
+  const sortKey = (row: { created_at: unknown; matches: unknown }): string => {
+    const embed = row.matches as
+      | { date_local?: string | null }
+      | Array<{ date_local?: string | null }>
+      | null
+      | undefined;
+    const joined = Array.isArray(embed) ? embed[0] : embed;
+    return joined?.date_local ?? (row.created_at as string | null) ?? "";
+  };
+  const priorMatchIds = [...(priorMatches ?? [])]
+    .sort((a, b) => sortKey(b).localeCompare(sortKey(a)))
+    .map((m) => m.match_id as number);
   if (priorMatchIds.length === 0) return result;
 
   const { data: teams } = await supabase
@@ -426,21 +530,20 @@ export async function generateLadderRouletteProposal(
       return standing !== undefined && standing.tierId === tier.id && !committedPlayerIds.has(id);
     });
 
-    const shuffled = shuffle(eligible);
-    const rawGroups: Array<[number, number, number, number]> = [];
-    for (let i = 0; i + 4 <= shuffled.length; i += 4) {
-      rawGroups.push(shuffled.slice(i, i + 4) as [number, number, number, number]);
-    }
-    const leftoverIds = shuffled.slice(rawGroups.length * 4);
-
-    const lastPartner = await getLastRoulettePartners(supabase, cycleId, eligible);
+    const lastPartner = await getLastLadderPartners(supabase, cycleId, eligible);
     const displayNameById = await fetchDisplayNames(supabase, eligible);
     const displayName = (id: number) => displayNameById.get(id) ?? "Unknown";
     const ratings = await fetchLatestRatingsByPlayerIds(supabase, eligible);
     const rating = (id: number) => ratings.get(String(id)) ?? null;
 
-    const groups: ProposedGroup[] = rawGroups.map((group) => {
-      const [[t1p1, t1p2], [t2p1, t2p2]] = splitBalanced(group, lastPartner, ratings);
+    const { groups: builtGroups, leftoverIds } = buildRouletteGroups(
+      eligible,
+      lastPartner,
+      ratings,
+    );
+
+    const groups: ProposedGroup[] = builtGroups.map(({ split, forcedRepeat }) => {
+      const [[t1p1, t1p2], [t2p1, t2p2]] = split;
       return {
         team1: [
           { playerId: t1p1, displayName: displayName(t1p1), rating: rating(t1p1) },
@@ -450,6 +553,9 @@ export async function generateLadderRouletteProposal(
           { playerId: t2p1, displayName: displayName(t2p1), rating: rating(t2p1) },
           { playerId: t2p2, displayName: displayName(t2p2), rating: rating(t2p2) },
         ],
+        repeatWarning: forcedRepeat
+          ? `${displayName(forcedRepeat[0])} & ${displayName(forcedRepeat[1])} partnered in their last ladder match — no alternative pairing available`
+          : null,
       };
     });
 

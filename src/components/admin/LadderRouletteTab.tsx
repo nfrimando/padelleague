@@ -16,6 +16,7 @@ type ProposedPlayer = { playerId: number; displayName: string; rating: number | 
 type ProposedGroup = {
   team1: [ProposedPlayer, ProposedPlayer];
   team2: [ProposedPlayer, ProposedPlayer];
+  repeatWarning?: string | null;
 };
 type SkippedPlayer = { playerId: number; displayName: string; reason: string };
 type TierProposal = {
@@ -207,6 +208,11 @@ export function LadderRouletteTab() {
   }
 
   const totalProposedMatches = proposal?.tiers.reduce((sum, t) => sum + t.groups.length, 0) ?? 0;
+  const totalRepeatWarnings =
+    proposal?.tiers.reduce(
+      (sum, t) => sum + t.groups.filter((g) => g.repeatWarning).length,
+      0,
+    ) ?? 0;
 
   return (
     <div className="space-y-6">
@@ -284,6 +290,12 @@ export function LadderRouletteTab() {
                 Proposed: {totalProposedMatches} match(es) across {proposal.tiers.length} tier(s).
                 Review below, then confirm to create them.
               </p>
+              {totalRepeatWarnings > 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠ {totalRepeatWarnings} match(es) repeat a partnership — Regenerate to
+                  reroll, or confirm to accept.
+                </p>
+              )}
               {proposal.tiers.map((tier) => (
                 <div key={tier.tierId}>
                   <p className="font-medium text-xs uppercase tracking-wide text-blue-600/80 dark:text-blue-400/80">
@@ -309,6 +321,11 @@ export function LadderRouletteTab() {
                               avg {avg1 !== null ? avg1.toFixed(0) : "—"} vs{" "}
                               {avg2 !== null ? avg2.toFixed(0) : "—"}
                             </div>
+                            {g.repeatWarning && (
+                              <div className="text-xs text-amber-600 dark:text-amber-400">
+                                ⚠ {g.repeatWarning}
+                              </div>
+                            )}
                           </li>
                         );
                       })}
