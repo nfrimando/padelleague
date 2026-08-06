@@ -1,6 +1,6 @@
 {
   "name": "padelleagueph",
-  "version": "4.1.1",
+  "version": "4.1.2",
   "private": true,
   "scripts": {
     "dev": "node -v && next dev",

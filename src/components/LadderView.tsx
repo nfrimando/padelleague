@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import InfoTooltip from "@/components/InfoTooltip";
-import { tierIconSrc, StarBadge } from "@/components/LadderTierBadge";
+import { tierIconSrc, StarBadge, CushionBadge } from "@/components/LadderTierBadge";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { supabase } from "@/lib/supabase";
 import { describeLadderEvent } from "@/lib/ladderEventDisplay";
@@ -135,6 +135,10 @@ function LadderViewContent({
     : (tierNames[0] ?? "");
   const activeTier = tiers.find((t) => t.name === activeTierName) ?? null;
   const allActivePlayers = activeTier ? (localGroupedPlayers[activeTier.id] ?? []) : [];
+
+  // The cushion only has consequences where there's a tier to fall to — a 0★ loss in the
+  // lowest tier (tiers arrive ordered by rank ascending) just floors, so hide it there.
+  const showCushion = activeTier != null && activeTier.rank > (tiers[0]?.rank ?? 1);
 
   // Cross-tier, chronological (earliest→latest) list for the top-of-page horizontal strip.
   // Scheduled matches sort by their actual date/time; undated "assigned" matches (still
@@ -450,6 +454,12 @@ function LadderViewContent({
                         <span className="text-[10px] font-semibold text-[#687FA3]/60 tabular-nums">
                           {player.winsThisCycle}W
                         </span>
+                        {showCushion && player.cushionAvailable !== null && (
+                          <CushionBadge
+                            cushionAvailable={player.cushionAvailable}
+                            atRisk={player.stars === 0 && !player.cushionAvailable}
+                          />
+                        )}
                         <StarBadge stars={player.stars} />
                       </div>
                     </div>

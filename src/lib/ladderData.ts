@@ -14,6 +14,7 @@ export type LadderStandingEvent = {
   tierAfterId: number;
   starsBefore: number | null;
   starsAfter: number;
+  cushionAvailable: boolean;
   sourceType: string | null;
   sourceId: string | null;
   occurredAt: string | null;
@@ -26,6 +27,8 @@ export type LadderPlayer = {
   nickname: string;
   image_link: string | null;
   stars: number;
+  // null = no standing event this cycle yet (opted in but not placed), so cushion is unknown.
+  cushionAvailable: boolean | null;
   isOptedIn: boolean;
   hasPlayedThisCycle: boolean;
   winsThisCycle: number;
@@ -65,6 +68,7 @@ type StandingRow = {
   tier_after_id: number;
   stars_before: number | null;
   stars_after: number;
+  cushion_available: boolean | null;
   source_type: string | null;
   source_id: string | null;
   occurred_at: string | null;
@@ -125,6 +129,7 @@ function toStandingEvent(row: StandingRow): LadderStandingEvent {
     tierAfterId: row.tier_after_id,
     starsBefore: row.stars_before,
     starsAfter: row.stars_after,
+    cushionAvailable: row.cushion_available ?? false,
     sourceType: row.source_type,
     sourceId: row.source_id,
     occurredAt: row.occurred_at,
@@ -162,7 +167,7 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
   const { data: standingsData, error: standingsError } = await db
     .from("ladder_standing_events")
     .select(
-      "player_id, event_type, tier_before_id, tier_after_id, stars_before, stars_after, source_type, source_id, occurred_at, created_at, metadata",
+      "player_id, event_type, tier_before_id, tier_after_id, stars_before, stars_after, cushion_available, source_type, source_id, occurred_at, created_at, metadata",
     )
     .eq("cycle_id", activeCycle.id)
     .order("occurred_at", { ascending: false, nullsFirst: false })
@@ -250,6 +255,7 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
       nickname: info.nickname ?? "",
       image_link: info.image_link ?? null,
       stars: lastEvent?.starsAfter ?? 0,
+      cushionAvailable: lastEvent?.cushionAvailable ?? null,
       isOptedIn: info.is_ladder_opt_in ?? false,
       hasPlayedThisCycle: hasLadderMatchThisCycle.has(pid),
       winsThisCycle: winsByPlayer.get(pid) ?? 0,

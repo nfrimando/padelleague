@@ -4,14 +4,17 @@ import { useEffect, useRef, useState } from "react";
 
 // Small "i" affordance with a hover/tap tooltip. Hover alone never fires on touch,
 // so the icon is a real button that toggles the bubble as well.
+// Pass `children` to use any other element as the trigger (e.g. the ladder cushion shield).
 export default function InfoTooltip({
   text,
   label = "More info",
   align = "center",
+  children,
 }: {
   text: string;
   label?: string;
   align?: "center" | "right";
+  children?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -46,14 +49,20 @@ export default function InfoTooltip({
         onMouseLeave={() => setHovered(false)}
         onFocus={() => setHovered(true)}
         onBlur={() => setHovered(false)}
-        className="inline-flex items-center justify-center text-[#687FA3]/60 hover:text-[#687FA3] transition-colors cursor-help rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00C8DC]/60"
+        className={`inline-flex items-center justify-center transition-colors rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00C8DC]/60 ${
+          children
+            ? "cursor-pointer"
+            : "text-[#687FA3]/60 hover:text-[#687FA3] cursor-help"
+        }`}
       >
-        <svg viewBox="0 0 12 12" className="w-3.5 h-3.5 fill-current">
-          <circle cx="6" cy="6" r="5.5" stroke="currentColor" strokeWidth="1" fill="none" />
-          <text x="6" y="9" textAnchor="middle" fontSize="7" fontWeight="bold" fill="currentColor">
-            i
-          </text>
-        </svg>
+        {children ?? (
+          <svg viewBox="0 0 12 12" className="w-3.5 h-3.5 fill-current">
+            <circle cx="6" cy="6" r="5.5" stroke="currentColor" strokeWidth="1" fill="none" />
+            <text x="6" y="9" textAnchor="middle" fontSize="7" fontWeight="bold" fill="currentColor">
+              i
+            </text>
+          </svg>
+        )}
       </button>
       <span
         role="tooltip"

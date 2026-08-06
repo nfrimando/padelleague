@@ -31,9 +31,15 @@ export function describeLadderEvent(
     case "match_win":
       return `Won a match · ${event.starsBefore ?? 0}★ → ${event.starsAfter}★${suffix}`;
     case "match_loss":
-      return `Lost a match · ${event.starsBefore ?? 0}★ → ${event.starsAfter}★${suffix}`;
+      // A loss at 0★ that spent the cushion reads as "0★ → 0★" otherwise, which hides the
+      // thing that actually changed.
+      return event.metadata?.cushion_consumed === true
+        ? `Lost a match · cushion used${suffix}`
+        : `Lost a match · ${event.starsBefore ?? 0}★ → ${event.starsAfter}★${suffix}`;
     case "promotion":
       return `Promoted to ${tierName(event.tierAfterId, tiers)}${suffix}`;
+    case "demotion":
+      return `Demoted to ${tierName(event.tierAfterId, tiers)}${suffix}`;
     case "cycle_reset":
       return `Cycle reset · dropped to ${tierName(event.tierAfterId, tiers)}${suffix}`;
     default:
