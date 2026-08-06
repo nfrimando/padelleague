@@ -222,8 +222,9 @@ export function LadderRouletteTab() {
         </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Generate a proposed set of matches for review, then confirm to actually create
-          them and email the players. Sweeps overdue assignments first. Players are
-          eligible even if they already have an unplayed ladder match outstanding.
+          them and email the players. Sweeps overdue assignments first. Players sitting on
+          an unscheduled assignment sit this one out, and when a tier doesn&rsquo;t divide
+          evenly into foursomes, whoever played most recently is deferred first.
         </p>
       </div>
 

@@ -197,41 +197,94 @@ export function buildRouletteGroups(
     : { groups: best.groups, leftoverIds: best.leftoverIds };
 }
 
-// Most recent partner per player this cycle, across *all* ladder matches — roulette
-// and manually-created alike, so a hand-logged ladder match still blocks a repeat.
-// Looks at each player's latest ladder match regardless of which tier it was in.
+// Decide who actually gets a match when the pool doesn't divide into foursomes. Ranks by
+// how long it's been since the player last *played* a ladder match — never-played first,
+// then oldest — and defers the tail. So the leftover seats are always taken from the
+// players who played most recently, and anyone waiting their turn is guaranteed a match
+// as long as their tier has four eligible players. Exported for tests.
+//
+// Shuffling before the (stable) sort matters: most of a young cycle's pool has never
+// played, and without it the tie would always be broken by player id, quietly freezing
+// the same people out every round.
+export function selectRoulettePool(
+  eligible: number[],
+  lastPlayedAt: Map<number, string>,
+): { selected: number[]; deferred: number[] } {
+  const capacity = Math.floor(eligible.length / 4) * 4;
+  if (capacity === 0) return { selected: [], deferred: [...eligible] };
+
+  const ranked = shuffle(eligible).sort((a, b) =>
+    (lastPlayedAt.get(a) ?? "").localeCompare(lastPlayedAt.get(b) ?? ""),
+  );
+
+  return { selected: ranked.slice(0, capacity), deferred: ranked.slice(capacity) };
+}
+
+export type LadderHistory = {
+  // Most recent partner per player this cycle, across *all* ladder matches — roulette
+  // and manually-created alike, so a hand-logged ladder match still blocks a repeat.
+  // Expired/swept matches are deliberately still counted — the pairing was already
+  // handed out once, so we'd rather not repeat it.
+  lastPartner: Map<number, number>;
+  // When each player last actually *played* a ladder match (completed or forfeit).
+  // Assignments they never turned up for don't count, so a lapsed match doesn't make
+  // a player look recently active. Absent from the map = never played one.
+  lastPlayedAt: Map<number, string>;
+  // Players holding a live assignment they haven't put a date on yet. They sit out the
+  // next roulette until they schedule it.
+  unscheduledPlayerIds: Set<number>;
+};
+
+// One pass over this cycle's ladder matches, producing everything the roulette needs to
+// know about a player's history. Looks at each player's ladder matches regardless of
+// which tier they were in.
+//
 // Ordered by the played date when there is one, falling back to when the ladder_matches
 // row was inserted: a manual match logged today for a game played last week must not
-// outrank a newer roulette assignment. Expired/swept matches are deliberately still
-// counted — the pairing was already handed out once, so we'd rather not repeat it.
-async function getLastLadderPartners(
+// outrank a newer roulette assignment.
+async function fetchLadderHistory(
   supabase: AdminSupabaseClient,
   cycleId: number,
   playerIds: number[],
-): Promise<Map<number, number>> {
-  const result = new Map<number, number>();
-  if (playerIds.length === 0) return result;
+): Promise<LadderHistory> {
+  const lastPartner = new Map<number, number>();
+  const lastPlayedAt = new Map<number, string>();
+  const unscheduledPlayerIds = new Set<number>();
+  const empty = { lastPartner, lastPlayedAt, unscheduledPlayerIds };
+  if (playerIds.length === 0) return empty;
 
   const { data: priorMatches } = await supabase
     .from("ladder_matches")
-    .select("match_id, created_at, matches(date_local)")
+    .select("match_id, created_at, expired_at, matches(date_local, status)")
     .eq("cycle_id", cycleId);
 
   // The embed comes back as an object for a to-one relationship, but supabase-js hands
   // back a single-element array when it can't infer that from the FK — accept both.
-  const sortKey = (row: { created_at: unknown; matches: unknown }): string => {
-    const embed = row.matches as
-      | { date_local?: string | null }
-      | Array<{ date_local?: string | null }>
-      | null
-      | undefined;
-    const joined = Array.isArray(embed) ? embed[0] : embed;
-    return joined?.date_local ?? (row.created_at as string | null) ?? "";
+  type MatchEmbed = { date_local?: string | null; status?: string | null };
+  const joinedMatch = (row: { matches: unknown }): MatchEmbed | null => {
+    const embed = row.matches as MatchEmbed | MatchEmbed[] | null | undefined;
+    return (Array.isArray(embed) ? embed[0] : embed) ?? null;
   };
-  const priorMatchIds = [...(priorMatches ?? [])]
-    .sort((a, b) => sortKey(b).localeCompare(sortKey(a)))
-    .map((m) => m.match_id as number);
-  if (priorMatchIds.length === 0) return result;
+  const sortKey = (row: { created_at: unknown; matches: unknown }): string =>
+    joinedMatch(row)?.date_local ?? (row.created_at as string | null) ?? "";
+
+  const priorRows = [...(priorMatches ?? [])].sort((a, b) =>
+    sortKey(b).localeCompare(sortKey(a)),
+  );
+  const priorMatchIds = priorRows.map((m) => m.match_id as number);
+  if (priorMatchIds.length === 0) return empty;
+
+  const playedAtByMatch = new Map<number, string>();
+  const unscheduledMatchIds = new Set<number>();
+  for (const row of priorRows) {
+    const matchId = row.match_id as number;
+    const status = joinedMatch(row)?.status ?? null;
+    if (status === "completed" || status === "forfeit") {
+      playedAtByMatch.set(matchId, sortKey(row));
+    } else if (status === "assigned" && row.expired_at == null) {
+      unscheduledMatchIds.add(matchId);
+    }
+  }
 
   const { data: teams } = await supabase
     .from("match_teams")
@@ -247,15 +300,28 @@ async function getLastLadderPartners(
 
   const relevant = new Set(playerIds);
   for (const t of teamsSorted) {
+    const matchId = t.match_id as number;
     const p1 = t.player_1_id as number | null;
     const p2 = t.player_2_id as number | null;
     if (p1 == null || p2 == null) continue;
     if (!relevant.has(p1) && !relevant.has(p2)) continue;
-    if (!result.has(p1)) result.set(p1, p2);
-    if (!result.has(p2)) result.set(p2, p1);
+
+    if (!lastPartner.has(p1)) lastPartner.set(p1, p2);
+    if (!lastPartner.has(p2)) lastPartner.set(p2, p1);
+
+    const playedAt = playedAtByMatch.get(matchId);
+    if (playedAt !== undefined) {
+      if (!lastPlayedAt.has(p1)) lastPlayedAt.set(p1, playedAt);
+      if (!lastPlayedAt.has(p2)) lastPlayedAt.set(p2, playedAt);
+    }
+
+    if (unscheduledMatchIds.has(matchId)) {
+      unscheduledPlayerIds.add(p1);
+      unscheduledPlayerIds.add(p2);
+    }
   }
 
-  return result;
+  return { lastPartner, lastPlayedAt, unscheduledPlayerIds };
 }
 
 async function resolveTierNameForPlayers(
@@ -434,8 +500,9 @@ export async function sweepExpiredLadderAssignments(
 // Phase 1: compute the proposed pairings for review, without writing anything. Sweeps
 // stale assignments first (a real, idempotent cleanup independent of whether the admin
 // goes on to confirm), then pools opted-in players currently standing in each target tier
-// who aren't already in a pending ladder match, and randomly pairs them into groups of 4.
-// Leftover players (pool not a multiple of 4) are reported as skipped.
+// who aren't sitting on an unscheduled assignment, prioritizes whoever has gone longest
+// without playing, and randomly pairs the resulting pool into groups of 4. Every player
+// left out — blocked, deferred, or short of a foursome — is reported as skipped.
 export async function generateLadderRouletteProposal(
   supabase: AdminSupabaseClient,
   params: { tierId?: number; deadlineDays: number },
@@ -481,25 +548,35 @@ export async function generateLadderRouletteProposal(
   const optedInIds = (optedInPlayers ?? []).map((p) => p.player_id as number);
 
   const standingsByPlayer = await fetchLatestLadderStandings(supabase, cycleId, optedInIds);
+  // Cycle-wide, so it's fetched once and read per tier.
+  const { lastPartner, lastPlayedAt, unscheduledPlayerIds } = await fetchLadderHistory(
+    supabase,
+    cycleId,
+    optedInIds,
+  );
 
   const tierProposals: TierProposal[] = [];
 
   for (const tier of targetTiers) {
-    // Sitting on an unplayed assigned/scheduled ladder match does not remove a player
-    // from the pool — they can hold more than one outstanding assignment at a time.
-    const eligible = optedInIds.filter((id) => {
+    const inTier = optedInIds.filter((id) => {
       const standing = standingsByPlayer.get(String(id));
       return standing !== undefined && standing.tierId === tier.id;
     });
 
-    const lastPartner = await getLastLadderPartners(supabase, cycleId, eligible);
-    const displayNameById = await fetchDisplayNames(supabase, eligible);
+    // A player still sitting on an assignment they haven't put a date on doesn't get
+    // handed another one. Scheduling it (or letting it expire) puts them back in.
+    const blockedIds = inTier.filter((id) => unscheduledPlayerIds.has(id));
+    const eligible = inTier.filter((id) => !unscheduledPlayerIds.has(id));
+
+    const displayNameById = await fetchDisplayNames(supabase, inTier);
     const displayName = (id: number) => displayNameById.get(id) ?? "Unknown";
     const ratings = await fetchLatestRatingsByPlayerIds(supabase, eligible);
     const rating = (id: number) => ratings.get(String(id)) ?? null;
 
+    const { selected, deferred } = selectRoulettePool(eligible, lastPlayedAt);
+
     const { groups: builtGroups, leftoverIds } = buildRouletteGroups(
-      eligible,
+      selected,
       lastPartner,
       ratings,
     );
@@ -521,11 +598,32 @@ export async function generateLadderRouletteProposal(
       };
     });
 
-    const skippedPlayers: RouletteSkippedPlayer[] = leftoverIds.map((id) => ({
-      playerId: id,
-      displayName: displayName(id),
-      reason: "insufficient pool",
-    }));
+    // When the tier couldn't field a single foursome, nobody was really deprioritized —
+    // say so plainly rather than blaming rotation.
+    const deferredReason =
+      selected.length === 0
+        ? "insufficient pool"
+        : "played most recently — deferred to next roulette";
+
+    const skippedPlayers: RouletteSkippedPlayer[] = [
+      ...blockedIds.map((id) => ({
+        playerId: id,
+        displayName: displayName(id),
+        reason: "holds an unscheduled ladder match",
+      })),
+      ...deferred.map((id) => ({
+        playerId: id,
+        displayName: displayName(id),
+        reason: deferredReason,
+      })),
+      // selectRoulettePool hands buildRouletteGroups a multiple of 4, so this is empty in
+      // practice — kept so a future change there can't silently drop players.
+      ...leftoverIds.map((id) => ({
+        playerId: id,
+        displayName: displayName(id),
+        reason: "insufficient pool",
+      })),
+    ];
 
     tierProposals.push({ tierId: tier.id, tierName: tier.name, groups, skippedPlayers });
   }
@@ -539,8 +637,8 @@ export async function generateLadderRouletteProposal(
 // Phase 2: takes a proposal exactly as returned by generateLadderRouletteProposal (round
 // tripped through the admin's confirm click) and actually creates the matches. It creates
 // the pairing exactly as reviewed rather than re-running the random pairing — the admin
-// already signed off on this one. Players already holding a pending ladder match are not
-// filtered out here either, matching generation: multiple outstanding assignments are fine.
+// already signed off on this one. Eligibility (unscheduled-assignment blocking, rotation
+// priority) is likewise not re-evaluated here; it was settled when the proposal was built.
 export async function confirmLadderRouletteProposal(
   supabase: AdminSupabaseClient,
   proposal: RouletteProposal,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildRouletteGroups, type GroupSplit } from "../../lib/ladder/ladderRoulette";
+import {
+  buildRouletteGroups,
+  selectRoulettePool,
+  type GroupSplit,
+} from "../../lib/ladder/ladderRoulette";
 
 // buildRouletteGroups is randomized (shuffle + restarts), so behavioural assertions are
 // repeated to make sure they hold for every arrangement it can produce, not just a lucky one.
@@ -123,5 +127,72 @@ describe("buildRouletteGroups", () => {
     const { groups } = buildRouletteGroups([1, 2, 3, 4], new Map(), ratings);
     expect(groups).toHaveLength(1);
     expect(groups[0].forcedRepeat).toBeNull();
+  });
+});
+
+describe("selectRoulettePool", () => {
+  it("always seats players who have never played a ladder match", () => {
+    // 1 and 2 have never played; the other four all have. Only four seats exist.
+    const eligible = [1, 2, 3, 4, 5, 6];
+    const lastPlayedAt = new Map([
+      [3, "2026-07-01"],
+      [4, "2026-07-02"],
+      [5, "2026-07-03"],
+      [6, "2026-07-04"],
+    ]);
+
+    for (let i = 0; i < RUNS; i++) {
+      const { selected, deferred } = selectRoulettePool(eligible, lastPlayedAt);
+      expect(selected).toHaveLength(4);
+      expect(selected).toContain(1);
+      expect(selected).toContain(2);
+      // The two most recent players are the ones bumped.
+      expect(deferred.sort()).toEqual([5, 6]);
+    }
+  });
+
+  it("defers the most recently played player when the pool has a remainder", () => {
+    const eligible = [1, 2, 3, 4, 5];
+    const lastPlayedAt = new Map([
+      [1, "2026-01-05"],
+      [2, "2026-02-05"],
+      [3, "2026-03-05"],
+      [4, "2026-04-05"],
+      [5, "2026-05-05"],
+    ]);
+
+    for (let i = 0; i < RUNS; i++) {
+      const { selected, deferred } = selectRoulettePool(eligible, lastPlayedAt);
+      expect(selected.sort()).toEqual([1, 2, 3, 4]);
+      expect(deferred).toEqual([5]);
+    }
+  });
+
+  it("selects a multiple of 4 and accounts for every player exactly once", () => {
+    const eligible = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+    for (let i = 0; i < RUNS; i++) {
+      const { selected, deferred } = selectRoulettePool(eligible, new Map());
+      expect(selected.length % 4).toBe(0);
+      expect(selected).toHaveLength(8);
+      expect([...selected, ...deferred].sort((a, b) => a - b)).toEqual(eligible);
+    }
+  });
+
+  it("defers everyone when the pool can't fill a single foursome", () => {
+    const { selected, deferred } = selectRoulettePool([1, 2, 3], new Map());
+    expect(selected).toEqual([]);
+    expect(deferred).toEqual([1, 2, 3]);
+  });
+
+  it("breaks recency ties randomly rather than always bumping the same player", () => {
+    // Nobody has played, so all five are equally stale and the odd one out must vary.
+    const bumped = new Set<number>();
+    for (let i = 0; i < RUNS; i++) {
+      const { deferred } = selectRoulettePool([1, 2, 3, 4, 5], new Map());
+      expect(deferred).toHaveLength(1);
+      bumped.add(deferred[0]);
+    }
+    expect(bumped.size).toBeGreaterThan(1);
   });
 });
