@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
+import InfoTooltip from "@/components/InfoTooltip";
 import { tierIconSrc, StarBadge } from "@/components/LadderTierBadge";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { supabase } from "@/lib/supabase";
@@ -14,7 +15,7 @@ import type { LadderPendingMatch, LadderPlayer, LadderTier } from "@/lib/ladderD
 function OptedInDot() {
   return (
     <span
-      title="Opted into the ladder"
+      title="In the roulette draw"
       className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"
     />
   );
@@ -264,7 +265,8 @@ function LadderViewContent({
               Tier Ladder
             </h1>
             <p className="mt-2 text-[#687FA3]">
-              Standings for the current cycle, grouped by tier.
+              Standings for the current cycle, grouped by tier. Anyone can play
+              ladder matches; the roulette draw is opt-in.
             </p>
           </div>
           {activeCycle && (
@@ -321,7 +323,7 @@ function LadderViewContent({
                         : "text-[#687FA3] hover:text-white"
                     }`}
                   >
-                    Opted In Only
+                    In Roulette
                   </button>
                   <button
                     type="button"
@@ -359,21 +361,28 @@ function LadderViewContent({
               </div>
 
               {isLinked ? (
-                <button
-                  type="button"
-                  onClick={toggleOptIn}
-                  disabled={savingOptIn}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full border text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
-                    optIn
-                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
-                      : "bg-[#00C8DC] border-[#00C8DC] text-[#0E1523] shadow-[0_0_20px_rgba(0,200,220,0.45)] hover:bg-white hover:border-white hover:shadow-[0_0_24px_rgba(0,200,220,0.6)]"
-                  }`}
-                >
-                  <span
-                    className={`w-2 h-2 rounded-full ${optIn ? "bg-emerald-400" : "bg-[#0E1523]"}`}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={toggleOptIn}
+                    disabled={savingOptIn}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full border text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
+                      optIn
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+                        : "bg-[#00C8DC] border-[#00C8DC] text-[#0E1523] shadow-[0_0_20px_rgba(0,200,220,0.45)] hover:bg-white hover:border-white hover:shadow-[0_0_24px_rgba(0,200,220,0.6)]"
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${optIn ? "bg-emerald-400" : "bg-[#0E1523]"}`}
+                    />
+                    {optIn ? "In the roulette" : "Join the roulette"}
+                  </button>
+                  <InfoTooltip
+                    label="What is the roulette?"
+                    align="right"
+                    text="The roulette auto-draws 2v2 ladder matches from opted-in players each cycle. Anyone can play ladder matches — opting in just enters you in the draw."
                   />
-                  {optIn ? "In the ladder" : "Join the ladder"}
-                </button>
+                </div>
               ) : (
                 <Link
                   href="/join"

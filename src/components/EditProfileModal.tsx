@@ -376,8 +376,8 @@ export default function EditProfileModal({
           <Toggle
             checked={form.is_ladder_opt_in}
             onChange={(v) => setForm((f) => ({ ...f, is_ladder_opt_in: v }))}
-            label="Ladder opt-in"
-            description="Join the tier ladder pool. Used for matchmaking (including the upcoming roulette)."
+            label="Ladder roulette"
+            description="Enter the roulette draw for auto-generated 2v2 ladder matches. You can play ladder matches either way."
           />
           <Toggle
             checked={form.is_duel_roulette_opt_in}
