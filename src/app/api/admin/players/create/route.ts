@@ -4,6 +4,7 @@ import {
   isRecord,
   normalizeOptionalString,
 } from "@/app/api/admin/_lib/auth";
+import { placePlayerInActiveCycle } from "@/lib/ladder/ladderPlacement";
 
 type CreatePlayerRequest = {
   name: string;
@@ -112,10 +113,21 @@ export async function POST(request: Request) {
     );
   }
 
+  // Starting rung in the active cycle. Players created without an initialRating have no
+  // resolvable rating to place by — ensureLadderPlacement skips them and says so in a warning.
+  const { warnings: ladderWarnings } = await placePlayerInActiveCycle(
+    supabase,
+    createdPlayer.player_id as number,
+  );
+  if (ladderWarnings.length > 0) {
+    console.warn("[players/create] ladder placement:", ladderWarnings.join(" "));
+  }
+
   return NextResponse.json(
     {
       player: createdPlayer,
       message: "Player created successfully.",
+      ladderWarning: ladderWarnings.length > 0 ? ladderWarnings.join(" ") : null,
     },
     { status: 201 },
   );

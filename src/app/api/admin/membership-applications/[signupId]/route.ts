@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
+import { placePlayerInActiveCycle } from "@/lib/ladder/ladderPlacement";
 
 const ALLOWED_STATUS_CHANGES = ["cancelled", "waitlisted"] as const;
 
@@ -153,7 +154,11 @@ export async function PATCH(
       );
     }
 
-    playerId = createdPlayer.player_id;
+    playerId = createdPlayer.player_id as number;
+  }
+
+  if (playerId === null) {
+    return NextResponse.json({ error: "Failed to resolve player." }, { status: 500 });
   }
 
   const { error: approveError } = await supabase
@@ -165,5 +170,16 @@ export async function PATCH(
     return NextResponse.json({ error: approveError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, approved: true, player_id: playerId });
+  // Starting rung in the active cycle for the new member. Non-fatal — see recruit/approve.
+  const { warnings: ladderWarnings } = await placePlayerInActiveCycle(supabase, playerId);
+  if (ladderWarnings.length > 0) {
+    console.warn("[membership-applications] ladder placement:", ladderWarnings.join(" "));
+  }
+
+  return NextResponse.json({
+    ok: true,
+    approved: true,
+    player_id: playerId,
+    ladderWarning: ladderWarnings.length > 0 ? ladderWarnings.join(" ") : null,
+  });
 }

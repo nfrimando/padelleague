@@ -6,8 +6,7 @@ import {
 import { isUserAdmin } from "@/app/api/_lib/admin-check";
 import type { NotifType, PlayerNotificationPreferences } from "@/lib/types";
 import { fetchPlayerPrefs, setPlayerPref } from "@/lib/notificationPreferences";
-import { fetchActiveCycle } from "@/lib/ladderData";
-import { ensureLadderPlacement } from "@/lib/ladder/ladderPlacement";
+import { placePlayerInActiveCycle } from "@/lib/ladder/ladderPlacement";
 
 const VALID_NOTIF_TYPES: NotifType[] = ["match_results", "match_scheduled", "signup_status", "ladder_match_assigned"];
 
@@ -249,18 +248,9 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (updates.is_ladder_opt_in === true) {
-    try {
-      const activeCycle = await fetchActiveCycle(serviceClient);
-      if (activeCycle) {
-        const { warnings } = await ensureLadderPlacement(serviceClient, activeCycle.id, [
-          playerId,
-        ]);
-        if (warnings.length > 0) {
-          console.warn("[profile] ladder placement on opt-in:", warnings.join(" "));
-        }
-      }
-    } catch (err) {
-      console.error("[profile] ladder placement on opt-in error:", err);
+    const { warnings } = await placePlayerInActiveCycle(serviceClient, playerId);
+    if (warnings.length > 0) {
+      console.warn("[profile] ladder placement on opt-in:", warnings.join(" "));
     }
   }
 

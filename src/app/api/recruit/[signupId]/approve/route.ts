@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
+import { placePlayerInActiveCycle } from "@/lib/ladder/ladderPlacement";
 import { MIN_REFERRER_RATINGS } from "@/lib/recruitConfig";
 
 export async function POST(
@@ -148,10 +149,19 @@ export async function POST(
     return NextResponse.json({ error: approveError.message }, { status: 500 });
   }
 
+  // Give the new member a starting rung in the active cycle so it's already there when they opt
+  // in or play their first ladder match. Non-fatal — they're approved either way. Applies to the
+  // existing-player branch too: that player may also be missing a standing row.
+  const { warnings: ladderWarnings } = await placePlayerInActiveCycle(serviceClient, playerId);
+  if (ladderWarnings.length > 0) {
+    console.warn("[recruit/approve] ladder placement:", ladderWarnings.join(" "));
+  }
+
   return NextResponse.json({
     ok: true,
     player_id: playerId,
     avg_rating: avgRating,
     overridden: overrideRating !== null,
+    ladderWarning: ladderWarnings.length > 0 ? ladderWarnings.join(" ") : null,
   });
 }

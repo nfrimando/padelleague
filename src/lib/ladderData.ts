@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export type LadderTier = {
   id: number;
@@ -100,7 +100,7 @@ function getLastNameKey(name: string): string {
 }
 
 export async function fetchActiveCycle(
-  db: ServerClient,
+  db: SupabaseClient,
 ): Promise<{ id: number; label: string } | null> {
   const { data: active } = await db
     .from("ladder_cycles")

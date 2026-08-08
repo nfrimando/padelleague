@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchLatestLadderStandings } from "@/lib/ladder/ladderStandingLedger";
+import { fetchActiveCycle } from "@/lib/ladderData";
 import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 import type { LadderStanding } from "@/lib/ladder/ladderStandingTransition";
 
@@ -105,4 +106,36 @@ export async function ensureLadderPlacement(
   }
 
   return { standingsByPlayer, warnings };
+}
+
+// Places a single player into the active cycle if they don't have a standing row yet. Used by
+// the player-creation paths (recruit approval, admin create) so a new member's rung exists from
+// day one, and by the ladder opt-in path. Deliberately does NOT touch `is_ladder_opt_in` —
+// placement is not enrollment; the roulette pool still filters on opt-in.
+//
+// Never throws: a ladder problem must not fail the approval/profile update that called it. The
+// caller logs the returned warnings and may surface them as a non-fatal `ladderWarning`.
+export async function placePlayerInActiveCycle(
+  supabase: SupabaseClient,
+  playerId: number,
+): Promise<{ placed: boolean; warnings: string[] }> {
+  try {
+    const activeCycle = await fetchActiveCycle(supabase);
+    if (!activeCycle) {
+      return { placed: false, warnings: ["No active ladder cycle; player not placed."] };
+    }
+
+    const { standingsByPlayer, warnings } = await ensureLadderPlacement(
+      supabase,
+      activeCycle.id,
+      [playerId],
+    );
+
+    return { placed: standingsByPlayer.has(String(playerId)), warnings };
+  } catch (err) {
+    return {
+      placed: false,
+      warnings: [err instanceof Error ? err.message : "Ladder placement failed."],
+    };
+  }
 }
