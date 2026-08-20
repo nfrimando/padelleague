@@ -1,11 +1,10 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
-import InfoTooltip from "@/components/InfoTooltip";
+import LadderOptInBanner from "@/components/LadderOptInBanner";
 import { tierIconSrc, StarBadge, CushionBadge } from "@/components/LadderTierBadge";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { supabase } from "@/lib/supabase";
@@ -127,6 +126,21 @@ function LadderViewContent({
   useEffect(() => {
     setOptIn(currentPlayer?.is_ladder_opt_in ?? false);
   }, [currentPlayer?.is_ladder_opt_in]);
+
+  // The viewer's own tier + stars for the status banner, derived from data already loaded
+  // rather than a fresh query — so the optimistic opt-in patch keeps banner and list in sync.
+  // null when the viewer isn't in the (120s-cached) payload yet; the banner just omits the chip.
+  const myStanding = useMemo(() => {
+    if (!currentPlayer) return null;
+    const meId = String(currentPlayer.player_id);
+    for (const tier of tiers) {
+      const me = (localGroupedPlayers[tier.id] ?? []).find(
+        (p) => p.player_id === meId,
+      );
+      if (me) return { tierName: tier.name, stars: me.stars };
+    }
+    return null;
+  }, [currentPlayer, tiers, localGroupedPlayers]);
 
   const tierNames = tiers.map((t) => t.name);
   const rawTier = searchParams.get("tier");
@@ -280,6 +294,15 @@ function LadderViewContent({
           )}
         </div>
 
+        <LadderOptInBanner
+          isLinked={isLinked}
+          optIn={optIn}
+          saving={savingOptIn}
+          onToggle={toggleOptIn}
+          tierName={myStanding?.tierName ?? null}
+          stars={myStanding?.stars ?? null}
+        />
+
         {!hasActiveCycle ? (
           <p className="max-w-4xl mx-auto px-4 sm:px-6 text-sm text-[#687FA3]">
             The ladder hasn&apos;t started yet.
@@ -315,85 +338,51 @@ function LadderViewContent({
             )}
 
             <div className="max-w-4xl mx-auto px-4 sm:px-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 rounded-full border border-[#687FA3]/20 bg-[#687FA3]/5 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setFilter("optedIn")}
-                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
-                      filter === "optedIn"
-                        ? "bg-[#1a2540] text-white"
-                        : "text-[#687FA3] hover:text-white"
-                    }`}
-                  >
-                    In Roulette
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilter("played")}
-                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
-                      filter === "played"
-                        ? "bg-[#1a2540] text-white"
-                        : "text-[#687FA3] hover:text-white"
-                    }`}
-                  >
-                    Played Only
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilter("either")}
-                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
-                      filter === "either"
-                        ? "bg-[#1a2540] text-white"
-                        : "text-[#687FA3] hover:text-white"
-                    }`}
-                  >
-                    Either
-                  </button>
-                </div>
-
-                {filter !== "all" && (
-                  <button
-                    type="button"
-                    onClick={() => setFilter("all")}
-                    className="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60 hover:text-white transition-colors cursor-pointer"
-                  >
-                    Clear filters
-                  </button>
-                )}
+            <div className="flex flex-wrap items-center gap-2 mb-6">
+              <div className="flex items-center gap-1 rounded-full border border-[#687FA3]/20 bg-[#687FA3]/5 p-1">
+                <button
+                  type="button"
+                  onClick={() => setFilter("optedIn")}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                    filter === "optedIn"
+                      ? "bg-[#1a2540] text-white"
+                      : "text-[#687FA3] hover:text-white"
+                  }`}
+                >
+                  In Roulette
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilter("played")}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                    filter === "played"
+                      ? "bg-[#1a2540] text-white"
+                      : "text-[#687FA3] hover:text-white"
+                  }`}
+                >
+                  Played Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilter("either")}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                    filter === "either"
+                      ? "bg-[#1a2540] text-white"
+                      : "text-[#687FA3] hover:text-white"
+                  }`}
+                >
+                  Either
+                </button>
               </div>
 
-              {isLinked ? (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={toggleOptIn}
-                    disabled={savingOptIn}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full border text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
-                      optIn
-                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
-                        : "bg-[#00C8DC] border-[#00C8DC] text-[#0E1523] shadow-[0_0_20px_rgba(0,200,220,0.45)] hover:bg-white hover:border-white hover:shadow-[0_0_24px_rgba(0,200,220,0.6)]"
-                    }`}
-                  >
-                    <span
-                      className={`w-2 h-2 rounded-full ${optIn ? "bg-emerald-400" : "bg-[#0E1523]"}`}
-                    />
-                    {optIn ? "In the roulette" : "Join the roulette"}
-                  </button>
-                  <InfoTooltip
-                    label="What is the roulette?"
-                    align="right"
-                    text="The roulette auto-draws 2v2 ladder matches from opted-in players each cycle. Anyone can play ladder matches — opting in just enters you in the draw."
-                  />
-                </div>
-              ) : (
-                <Link
-                  href="/join"
-                  className="text-[10px] font-black uppercase tracking-widest text-[#687FA3] hover:text-[#00C8DC] transition-colors"
+              {filter !== "all" && (
+                <button
+                  type="button"
+                  onClick={() => setFilter("all")}
+                  className="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-[#687FA3]/60 hover:text-white transition-colors cursor-pointer"
                 >
-                  Link your profile to join →
-                </Link>
+                  Clear filters
+                </button>
               )}
             </div>
 
@@ -428,6 +417,11 @@ function LadderViewContent({
                 );
               })}
             </div>
+
+            {/* The row dot's only explanation used to be a `title`, which never fires on touch. */}
+            <p className="flex items-center gap-1.5 mb-2 text-[10px] text-[#687FA3]/60">
+              <OptedInDot />= in the roulette draw
+            </p>
 
             {activePlayers.length === 0 ? (
               <p className="text-sm text-[#687FA3]">
