@@ -57,12 +57,34 @@ function parseTierProposal(value: unknown): TierProposal | null {
         .filter((s): s is { playerId: number; displayName: string; reason: string } => s !== null)
     : [];
 
+  // Client-side scratch data for the manual-override dropdowns; the created matches come
+  // from `groups` alone, so an absent or malformed roster is simply dropped.
+  const tierPlayers = Array.isArray(value.tierPlayers)
+    ? value.tierPlayers.map(parsePlayer).filter((p): p is ProposedPlayer => p !== null)
+    : [];
+
   return {
     tierId,
     tierName,
     groups: groups as ProposedGroup[],
     skippedPlayers,
+    tierPlayers,
   };
+}
+
+// The admin can hand-edit the drawn slots before confirming, so guard the one thing that
+// would silently create a broken round: the same player standing in two slots.
+function findDuplicatePlayer(proposal: RouletteProposal): ProposedPlayer | null {
+  const seen = new Set<number>();
+  for (const tier of proposal.tiers) {
+    for (const group of tier.groups) {
+      for (const player of [...group.team1, ...group.team2]) {
+        if (seen.has(player.playerId)) return player;
+        seen.add(player.playerId);
+      }
+    }
+  }
+  return null;
 }
 
 function parseProposal(value: unknown): RouletteProposal | null {
@@ -103,6 +125,14 @@ export async function POST(request: Request) {
   const proposal = parseProposal(payload.proposal);
   if (!proposal) {
     return NextResponse.json({ error: "Invalid or malformed proposal." }, { status: 400 });
+  }
+
+  const duplicate = findDuplicatePlayer(proposal);
+  if (duplicate) {
+    return NextResponse.json(
+      { error: `${duplicate.displayName} is assigned to more than one match.` },
+      { status: 400 },
+    );
   }
 
   const authResult = await getAuthorizedAdminClient(request);

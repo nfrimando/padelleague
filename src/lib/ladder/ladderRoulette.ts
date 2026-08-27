@@ -37,6 +37,10 @@ export type TierProposal = {
   tierName: string;
   groups: ProposedGroup[];
   skippedPlayers: RouletteSkippedPlayer[];
+  // Every opted-in player standing in this tier (assigned, blocked, or deferred alike).
+  // The admin UI uses it as the candidate list when manually overriding a drawn slot;
+  // `confirm` ignores it and creates exactly the groups it was handed.
+  tierPlayers: ProposedPlayer[];
 };
 
 export type RouletteProposal = {
@@ -570,7 +574,9 @@ export async function generateLadderRouletteProposal(
 
     const displayNameById = await fetchDisplayNames(supabase, inTier);
     const displayName = (id: number) => displayNameById.get(id) ?? "Unknown";
-    const ratings = await fetchLatestRatingsByPlayerIds(supabase, eligible);
+    // Ratings cover the whole tier, not just the eligible pool, so a manually
+    // swapped-in player still shows a rating in the admin review.
+    const ratings = await fetchLatestRatingsByPlayerIds(supabase, inTier);
     const rating = (id: number) => ratings.get(String(id)) ?? null;
 
     const { selected, deferred } = selectRoulettePool(eligible, lastPlayedAt);
@@ -625,7 +631,17 @@ export async function generateLadderRouletteProposal(
       })),
     ];
 
-    tierProposals.push({ tierId: tier.id, tierName: tier.name, groups, skippedPlayers });
+    const tierPlayers: ProposedPlayer[] = inTier
+      .map((id) => ({ playerId: id, displayName: displayName(id), rating: rating(id) }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+    tierProposals.push({
+      tierId: tier.id,
+      tierName: tier.name,
+      groups,
+      skippedPlayers,
+      tierPlayers,
+    });
   }
 
   return {

@@ -7,6 +7,8 @@ const labelCls =
   "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
 const inputCls =
   "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
+const slotSelectCls =
+  "w-full min-w-0 cursor-pointer truncate rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
 const buttonCls =
   "rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -24,6 +26,7 @@ type TierProposal = {
   tierName: string;
   groups: ProposedGroup[];
   skippedPlayers: SkippedPlayer[];
+  tierPlayers: ProposedPlayer[];
 };
 type SweepResult = { expiredMatchIds: number[]; warnings: string[] };
 type RouletteProposal = {
@@ -44,14 +47,87 @@ type GenerateResponse = { proposal?: RouletteProposal; error?: string };
 type ConfirmResponse = { cycleId?: number; tiers?: TierConfirmResult[]; error?: string };
 type SweepResponse = SweepResult & { cycleId?: number; error?: string };
 
-function teamLabel(team: [ProposedPlayer, ProposedPlayer]): string {
-  return `${team[0].displayName} & ${team[1].displayName}`;
-}
-
 function teamAvgRating(team: [ProposedPlayer, ProposedPlayer]): number | null {
   const ratings = team.map((p) => p.rating).filter((r): r is number => r !== null);
   if (ratings.length === 0) return null;
   return ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
+}
+
+type TeamKey = "team1" | "team2";
+type SlotRef = { groupIndex: number; team: TeamKey; slot: 0 | 1 };
+
+function groupKey(tierId: number, groupIndex: number): string {
+  return `${tierId}:${groupIndex}`;
+}
+
+function findAssignedSlot(tier: TierProposal, playerId: number): SlotRef | null {
+  for (let groupIndex = 0; groupIndex < tier.groups.length; groupIndex++) {
+    const group = tier.groups[groupIndex];
+    for (const team of ["team1", "team2"] as TeamKey[]) {
+      for (const slot of [0, 1] as const) {
+        if (group[team][slot].playerId === playerId) return { groupIndex, team, slot };
+      }
+    }
+  }
+  return null;
+}
+
+// Where a tier's player currently stands, for the dropdown option labels.
+function playerLocationLabel(tier: TierProposal, playerId: number): string {
+  const assigned = findAssignedSlot(tier, playerId);
+  return assigned ? `M${assigned.groupIndex + 1}` : "unassigned";
+}
+
+// Drop `incoming` into `target`. If they're already drawn into another slot in this tier
+// the two players trade places, so a manual override can never duplicate or drop anyone;
+// if they were sitting out, the player they replace takes their spot on the bench.
+// Repeat-partnership warnings on the groups we touched are cleared — they described the
+// arrangement the algorithm drew, not this one.
+function applySlotChange(
+  tier: TierProposal,
+  target: SlotRef,
+  incoming: ProposedPlayer,
+): { tier: TierProposal; touchedGroups: number[] } {
+  const outgoing = tier.groups[target.groupIndex][target.team][target.slot];
+  if (outgoing.playerId === incoming.playerId) return { tier, touchedGroups: [] };
+
+  const existing = findAssignedSlot(tier, incoming.playerId);
+  const groups: ProposedGroup[] = tier.groups.map((g) => ({
+    ...g,
+    team1: [...g.team1] as [ProposedPlayer, ProposedPlayer],
+    team2: [...g.team2] as [ProposedPlayer, ProposedPlayer],
+  }));
+
+  groups[target.groupIndex][target.team][target.slot] = incoming;
+
+  let skippedPlayers = tier.skippedPlayers;
+  if (existing) {
+    groups[existing.groupIndex][existing.team][existing.slot] = outgoing;
+  } else {
+    skippedPlayers = [
+      ...tier.skippedPlayers.filter((s) => s.playerId !== incoming.playerId),
+      {
+        playerId: outgoing.playerId,
+        displayName: outgoing.displayName,
+        reason: "manually swapped out",
+      },
+    ];
+  }
+
+  const touchedGroups = existing
+    ? Array.from(new Set([target.groupIndex, existing.groupIndex]))
+    : [target.groupIndex];
+
+  return {
+    tier: {
+      ...tier,
+      groups: groups.map((g, i) =>
+        touchedGroups.includes(i) ? { ...g, repeatWarning: null } : g,
+      ),
+      skippedPlayers,
+    },
+    touchedGroups,
+  };
 }
 
 export function LadderRouletteTab() {
@@ -63,6 +139,7 @@ export function LadderRouletteTab() {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<RouletteProposal | null>(null);
+  const [editedGroupKeys, setEditedGroupKeys] = useState<Set<string>>(new Set());
 
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -100,6 +177,7 @@ export function LadderRouletteTab() {
     setGenerating(true);
     setGenerateError(null);
     setProposal(null);
+    setEditedGroupKeys(new Set());
     setConfirmResult(null);
     setConfirmError(null);
 
@@ -170,11 +248,35 @@ export function LadderRouletteTab() {
       }
       setConfirmResult(result);
       setProposal(null);
+      setEditedGroupKeys(new Set());
     } catch {
       setConfirmError("Unexpected error while creating matches.");
     } finally {
       setConfirming(false);
     }
+  }
+
+  function handleSlotChange(tierId: number, target: SlotRef, incomingPlayerId: number) {
+    if (!proposal) return;
+    const tierIndex = proposal.tiers.findIndex((t) => t.tierId === tierId);
+    if (tierIndex === -1) return;
+
+    const tier = proposal.tiers[tierIndex];
+    const incoming = tier.tierPlayers.find((p) => p.playerId === incomingPlayerId);
+    if (!incoming) return;
+
+    const { tier: nextTier, touchedGroups } = applySlotChange(tier, target, incoming);
+    if (touchedGroups.length === 0) return;
+
+    const tiers = [...proposal.tiers];
+    tiers[tierIndex] = nextTier;
+    setProposal({ ...proposal, tiers });
+    setEditedGroupKeys((prev) => {
+      const next = new Set(prev);
+      for (const groupIndex of touchedGroups) next.add(groupKey(tierId, groupIndex));
+      return next;
+    });
+    setConfirmError(null);
   }
 
   async function handleSweep() {
@@ -291,6 +393,11 @@ export function LadderRouletteTab() {
                 Proposed: {totalProposedMatches} match(es) across {proposal.tiers.length} tier(s).
                 Review below, then confirm to create them.
               </p>
+              <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
+                Every slot is editable — pick any player in the tier to override the draw.
+                Choosing someone already drawn swaps the two; choosing an unassigned player
+                benches the one they replace.
+              </p>
               {totalRepeatWarnings > 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   ⚠ {totalRepeatWarnings} match(es) repeat a partnership — Regenerate to
@@ -307,20 +414,54 @@ export function LadderRouletteTab() {
                       No matches — not enough eligible players.
                     </p>
                   ) : (
-                    <ul className="pl-2 space-y-1">
+                    <ul className="pl-2 space-y-2">
                       {tier.groups.map((g, i) => {
                         const avg1 = teamAvgRating(g.team1);
                         const avg2 = teamAvgRating(g.team2);
+                        const edited = editedGroupKeys.has(groupKey(tier.tierId, i));
+                        const renderSlot = (team: TeamKey, slot: 0 | 1) => (
+                          <select
+                            key={`${team}-${slot}`}
+                            aria-label={`Match ${i + 1} player`}
+                            value={g[team][slot].playerId}
+                            onChange={(e) =>
+                              handleSlotChange(
+                                tier.tierId,
+                                { groupIndex: i, team, slot },
+                                Number(e.target.value),
+                              )
+                            }
+                            className={slotSelectCls}
+                          >
+                            {tier.tierPlayers.map((p) => (
+                              <option key={p.playerId} value={p.playerId}>
+                                {p.displayName}
+                                {p.rating !== null ? ` · ${p.rating.toFixed(0)}` : ""} ·{" "}
+                                {playerLocationLabel(tier, p.playerId)}
+                              </option>
+                            ))}
+                          </select>
+                        );
+
                         return (
-                          <li key={i} className="text-sm">
-                            <div>
-                              {teamLabel(g.team1)}{" "}
-                              <span className="text-slate-400">vs</span>{" "}
-                              {teamLabel(g.team2)}
+                          <li key={i} className="text-sm space-y-1">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                              <div className="grid grid-cols-2 gap-1.5 flex-1 min-w-0">
+                                {renderSlot("team1", 0)}
+                                {renderSlot("team1", 1)}
+                              </div>
+                              <span className="text-[10px] uppercase tracking-wide text-slate-400 text-center shrink-0">
+                                vs
+                              </span>
+                              <div className="grid grid-cols-2 gap-1.5 flex-1 min-w-0">
+                                {renderSlot("team2", 0)}
+                                {renderSlot("team2", 1)}
+                              </div>
                             </div>
                             <div className="text-xs text-slate-500 dark:text-slate-400">
-                              avg {avg1 !== null ? avg1.toFixed(0) : "—"} vs{" "}
+                              M{i + 1} — avg {avg1 !== null ? avg1.toFixed(0) : "—"} vs{" "}
                               {avg2 !== null ? avg2.toFixed(0) : "—"}
+                              {edited && " · manually edited"}
                             </div>
                             {g.repeatWarning && (
                               <div className="text-xs text-amber-600 dark:text-amber-400">
