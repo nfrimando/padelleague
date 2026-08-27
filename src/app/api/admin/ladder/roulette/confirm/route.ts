@@ -90,20 +90,13 @@ function findDuplicatePlayer(proposal: RouletteProposal): ProposedPlayer | null 
 function parseProposal(value: unknown): RouletteProposal | null {
   if (!isRecord(value)) return null;
   const cycleId = Number(value.cycleId);
-  const deadlineDays = Number(value.deadlineDays);
   if (!Number.isInteger(cycleId) || cycleId <= 0) return null;
-  if (!Number.isFinite(deadlineDays) || deadlineDays <= 0) return null;
   if (!Array.isArray(value.tiers)) return null;
 
   const tiers = value.tiers.map(parseTierProposal);
   if (tiers.some((t) => t === null)) return null;
 
-  return {
-    cycleId,
-    deadlineDays,
-    sweep: { expiredMatchIds: [], warnings: [] },
-    tiers: tiers as TierProposal[],
-  };
+  return { cycleId, tiers: tiers as TierProposal[] };
 }
 
 export async function POST(request: Request) {

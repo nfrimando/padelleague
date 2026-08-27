@@ -30,22 +30,10 @@ function pendingMatchTeamLabel(team: LadderPendingMatch["team1"]): string {
 function LadderMatchScrollCard({
   match,
   tierName,
-  now,
 }: {
   match: LadderPendingMatch;
   tierName: string;
-  now: number | null;
 }) {
-  const deadline = match.scheduleDeadlineAt ? new Date(match.scheduleDeadlineAt) : null;
-  const hoursLeft =
-    deadline && now !== null ? (deadline.getTime() - now) / (1000 * 60 * 60) : null;
-  const urgent = hoursLeft !== null && hoursLeft < 48;
-  const expired = hoursLeft !== null && hoursLeft < 0;
-
-  const deadlineLabel = deadline
-    ? deadline.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    : null;
-
   return (
     <div className="shrink-0 w-56 flex flex-col gap-1.5 rounded-lg border border-[#162032] bg-[#0f1729] px-3 py-2.5">
       <div className="flex items-center justify-between gap-2">
@@ -79,11 +67,6 @@ function LadderMatchScrollCard({
             {match.timeLocal ? ` at ${match.timeLocal}` : ""}
             {match.venue ? ` · ${match.venue}` : ""}
           </>
-        ) : deadlineLabel ? (
-          <span className={expired ? "text-rose-400" : urgent ? "text-amber-400" : ""}>
-            {expired ? "Deadline passed — " : "Schedule by "}
-            {deadlineLabel}
-          </span>
         ) : (
           "Not yet scheduled"
         )}
@@ -113,13 +96,6 @@ function LadderViewContent({
   useEffect(() => {
     setLocalGroupedPlayers(groupedPlayers);
   }, [groupedPlayers]);
-
-  // Deferred to a mount effect (rather than read directly during render) to avoid
-  // SSR/client hydration mismatches on the deadline urgency styling below.
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    setNow(Date.now());
-  }, []);
 
   const [optIn, setOptIn] = useState(false);
   const [savingOptIn, setSavingOptIn] = useState(false);
@@ -157,7 +133,7 @@ function LadderViewContent({
   // Cross-tier, chronological (earliest→latest) list for the top-of-page horizontal strip.
   // Scheduled matches sort by their actual date/time; undated "assigned" matches (still
   // needing to be scheduled) have no date to sort by, so they're appended at the end —
-  // sorted among themselves by deadline — putting the most actionable matches rightmost.
+  // oldest assignment first — putting the most actionable matches rightmost.
   const allPendingMatches = useMemo(() => {
     const flat: Array<{ match: LadderPendingMatch; tierName: string }> = [];
     for (const tier of tiers) {
@@ -176,15 +152,7 @@ function LadderViewContent({
 
     const assigned = flat
       .filter((entry) => entry.match.status === "assigned")
-      .sort((a, b) => {
-        const aDeadline = a.match.scheduleDeadlineAt
-          ? new Date(a.match.scheduleDeadlineAt).getTime()
-          : Infinity;
-        const bDeadline = b.match.scheduleDeadlineAt
-          ? new Date(b.match.scheduleDeadlineAt).getTime()
-          : Infinity;
-        return aDeadline - bDeadline;
-      });
+      .sort((a, b) => a.match.matchId - b.match.matchId);
 
     return [...scheduled, ...assigned];
   }, [tiers, pendingMatchesByTier]);
@@ -330,7 +298,6 @@ function LadderViewContent({
                       key={match.matchId}
                       match={match}
                       tierName={tierName}
-                      now={now}
                     />
                   ))}
                 </div>

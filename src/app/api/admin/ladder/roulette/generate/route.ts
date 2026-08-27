@@ -6,8 +6,6 @@ import {
 } from "@/app/api/admin/_lib/auth";
 import { generateLadderRouletteProposal } from "@/lib/ladder/ladderRoulette";
 
-const DEFAULT_DEADLINE_DAYS = 7;
-
 export async function POST(request: Request) {
   let payload: unknown = {};
 
@@ -30,18 +28,6 @@ export async function POST(request: Request) {
     );
   }
 
-  let deadlineDays = DEFAULT_DEADLINE_DAYS;
-  if (payload.deadlineDays !== undefined && payload.deadlineDays !== null) {
-    const parsed = Number(payload.deadlineDays);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      return NextResponse.json(
-        { error: "deadlineDays must be a positive number." },
-        { status: 400 },
-      );
-    }
-    deadlineDays = parsed;
-  }
-
   const authResult = await getAuthorizedAdminClient(request);
   if (!authResult.ok) {
     return authResult.response;
@@ -49,7 +35,6 @@ export async function POST(request: Request) {
 
   const result = await generateLadderRouletteProposal(authResult.supabase, {
     tierId: tierId ?? undefined,
-    deadlineDays,
   });
 
   if (!result.ok) {

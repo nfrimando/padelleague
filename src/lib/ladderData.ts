@@ -46,7 +46,6 @@ export type LadderPendingMatch = {
   status: "assigned" | "scheduled";
   team1: [LadderPendingMatchPlayer, LadderPendingMatchPlayer];
   team2: [LadderPendingMatchPlayer, LadderPendingMatchPlayer];
-  scheduleDeadlineAt: string | null;
   dateLocal: string | null;
   timeLocal: string | null;
   venue: string | null;
@@ -300,18 +299,11 @@ async function fetchPendingLadderMatches(
 
   const { data: cycleLadderMatches } = await db
     .from("ladder_matches")
-    .select("match_id, schedule_deadline_at")
+    .select("match_id")
     .eq("cycle_id", cycleId);
 
   const candidateMatchIds = (cycleLadderMatches ?? []).map((m) => m.match_id as number);
   if (candidateMatchIds.length === 0) return pendingMatchesByTier;
-
-  const deadlineByMatchId = new Map(
-    (cycleLadderMatches ?? []).map((m) => [
-      m.match_id as number,
-      m.schedule_deadline_at as string | null,
-    ]),
-  );
 
   const { data: pendingMatchRows } = await db
     .from("matches")
@@ -386,7 +378,6 @@ async function fetchPendingLadderMatches(
       status: matchRow.status === "scheduled" ? "scheduled" : "assigned",
       team1: [t1p1, t1p2],
       team2: [t2p1, t2p2],
-      scheduleDeadlineAt: deadlineByMatchId.get(matchId) ?? null,
       dateLocal: matchRow.date_local,
       timeLocal: matchRow.time_local,
       venue: matchRow.venue,
@@ -396,12 +387,10 @@ async function fetchPendingLadderMatches(
     pendingMatchesByTier[tierId].push(entry);
   }
 
+  // Oldest assignment first (match_id is monotonic with creation), so the matches that
+  // have been waiting longest lead each tier's list.
   for (const tierId of Object.keys(pendingMatchesByTier)) {
-    pendingMatchesByTier[Number(tierId)].sort((a, b) => {
-      const aDeadline = a.scheduleDeadlineAt ? new Date(a.scheduleDeadlineAt).getTime() : Infinity;
-      const bDeadline = b.scheduleDeadlineAt ? new Date(b.scheduleDeadlineAt).getTime() : Infinity;
-      return aDeadline - bDeadline;
-    });
+    pendingMatchesByTier[Number(tierId)].sort((a, b) => a.matchId - b.matchId);
   }
 
   return pendingMatchesByTier;

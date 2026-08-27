@@ -185,6 +185,61 @@ describe("selectRoulettePool", () => {
     expect(deferred).toEqual([1, 2, 3]);
   });
 
+  it("defers players who already have a scheduled match, however long ago they played", () => {
+    // 5 and 6 have a game on the calendar and have never played a ladder match, so on
+    // recency alone they'd rank first. The four with nothing scheduled take the seats.
+    const eligible = [1, 2, 3, 4, 5, 6];
+    const lastPlayedAt = new Map([
+      [1, "2026-07-01"],
+      [2, "2026-07-02"],
+      [3, "2026-07-03"],
+      [4, "2026-07-04"],
+    ]);
+
+    for (let i = 0; i < RUNS; i++) {
+      const { selected, deferred } = selectRoulettePool(
+        eligible,
+        lastPlayedAt,
+        new Set([5, 6]),
+      );
+      expect(selected.sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+      expect(deferred.sort((a, b) => a - b)).toEqual([5, 6]);
+    }
+  });
+
+  it("still seats a player with a scheduled match when there are seats to spare", () => {
+    // Only one player is deprioritized and the pool divides evenly, so nobody sits out.
+    const eligible = [1, 2, 3, 4];
+
+    for (let i = 0; i < RUNS; i++) {
+      const { selected, deferred } = selectRoulettePool(eligible, new Map(), new Set([1]));
+      expect(selected.sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+      expect(deferred).toEqual([]);
+    }
+  });
+
+  it("ranks by recency within the group that has a scheduled match", () => {
+    // All five have a match scheduled, so the tie is broken by who played most recently.
+    const eligible = [1, 2, 3, 4, 5];
+    const lastPlayedAt = new Map([
+      [1, "2026-01-05"],
+      [2, "2026-02-05"],
+      [3, "2026-03-05"],
+      [4, "2026-04-05"],
+      [5, "2026-05-05"],
+    ]);
+
+    for (let i = 0; i < RUNS; i++) {
+      const { selected, deferred } = selectRoulettePool(
+        eligible,
+        lastPlayedAt,
+        new Set(eligible),
+      );
+      expect(selected.sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+      expect(deferred).toEqual([5]);
+    }
+  });
+
   it("breaks recency ties randomly rather than always bumping the same player", () => {
     // Nobody has played, so all five are equally stale and the odd one out must vary.
     const bumped = new Set<number>();
