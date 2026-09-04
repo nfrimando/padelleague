@@ -3,6 +3,7 @@ import {
   getAuthorizedAdminClient,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import { reanchorPlayerChainsAfter } from "@/lib/ratings/reanchorChain";
 
 export async function DELETE(
   request: Request,
@@ -26,7 +27,7 @@ export async function DELETE(
 
   const { data: match, error: matchError } = await supabase
     .from("matches")
-    .select("match_id,status")
+    .select("match_id,status,result_recorded_at")
     .eq("match_id", matchId)
     .maybeSingle();
 
@@ -48,6 +49,25 @@ export async function DELETE(
       { status: 400 },
     );
   }
+
+  // Capture who played before the teams row goes away — deleting this match's ratings pulls its
+  // ledger event out of their chains, and everything they played afterwards has to be re-anchored.
+  const { data: teamRows, error: teamRowsError } = await supabase
+    .from("match_teams")
+    .select("player_1_id,player_2_id")
+    .eq("match_id", matchId);
+  if (teamRowsError) {
+    return NextResponse.json(
+      { error: teamRowsError.message || "Failed to load match teams." },
+      { status: 500 },
+    );
+  }
+  const affectedPlayerIds = (teamRows ?? []).flatMap((team) =>
+    [team.player_1_id, team.player_2_id].filter(
+      (id): id is number => typeof id === "number",
+    ),
+  );
+  const pivotAt = (match.result_recorded_at as string | null) ?? null;
 
   const { error: deleteRatingsError } = await supabase
     .from("match_player_ratings")
@@ -82,6 +102,24 @@ export async function DELETE(
     );
   }
 
+  // Ladder standings are keyed by source_id text, so nothing cascades — clear them here or they
+  // outlive the match they describe.
+  const { error: deleteLadderEventsError } = await supabase
+    .from("ladder_standing_events")
+    .delete()
+    .eq("source_type", "match")
+    .eq("source_id", String(matchId));
+  if (deleteLadderEventsError) {
+    return NextResponse.json(
+      {
+        error:
+          deleteLadderEventsError.message ||
+          "Failed to delete ladder standing events.",
+      },
+      { status: 500 },
+    );
+  }
+
   const { error: deleteTeamsError } = await supabase
     .from("match_teams")
     .delete()
@@ -104,8 +142,30 @@ export async function DELETE(
     );
   }
 
+  // Close the hole this deletion left in the players' rating chains. Non-fatal: the match is
+  // already gone, so a failure here is a warning, not a rollback.
+  let reanchorWarnings: string[] = [];
+  let reanchoredMatchCount = 0;
+  try {
+    const report = await reanchorPlayerChainsAfter(supabase, {
+      pivotAt,
+      playerIds: affectedPlayerIds,
+    });
+    reanchorWarnings = report.warnings;
+    reanchoredMatchCount = report.adjustments.length;
+  } catch (err) {
+    console.error("[ratings] Failed to re-anchor chains after delete:", err);
+    reanchorWarnings = [
+      "Match deleted, but failed to re-anchor the players' rating chains.",
+    ];
+  }
+
   return NextResponse.json(
-    { message: `Match #${matchId} deleted successfully.` },
+    {
+      message: `Match #${matchId} deleted successfully.`,
+      reanchoredRatings: reanchoredMatchCount,
+      warnings: reanchorWarnings.length > 0 ? reanchorWarnings : undefined,
+    },
     { status: 200 },
   );
 }

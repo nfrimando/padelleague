@@ -36,6 +36,7 @@ CREATE TABLE public.matches (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   reminder_sent_at timestamp without time zone,
   youtube_link text,
+  result_recorded_at timestamp with time zone,
   CONSTRAINT matches_pkey PRIMARY KEY (match_id)
 );
 CREATE TABLE public.match_teams (

@@ -6,6 +6,7 @@ import {
 } from "@/app/api/admin/_lib/auth";
 import { readLedgerEventsForMatch } from "@/app/api/admin/_lib/ledger";
 import { calculateRatings } from "@/lib/ratingCalculator";
+import { reanchorPlayerChainsAfter } from "@/lib/ratings/reanchorChain";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 import {
   syncLadderStandingsForMatch,
@@ -34,8 +35,15 @@ function compareNullableStringDesc(a: string | null, b: string | null): number {
 
 type MatchMeta = {
   priority: number;
+  recordedAt: string | null;
   dateLocal: string | null;
   timeLocal: string | null;
+};
+
+type MatchRelationRow = {
+  date_local?: string | null;
+  time_local?: string | null;
+  result_recorded_at?: string | null;
 };
 
 function isFiniteNumber(value: unknown): value is number {
@@ -121,7 +129,9 @@ export async function PATCH(
   // Verify match exists and is completed
   const { data: matchRow, error: matchError } = await supabase
     .from("matches")
-    .select("match_id, status, winner_team, date_local, time_local, venue")
+    .select(
+      "match_id, status, winner_team, date_local, time_local, venue, result_recorded_at",
+    )
     .eq("match_id", matchId)
     .maybeSingle();
 
@@ -179,10 +189,14 @@ export async function PATCH(
   ];
 
   // Server-side eligibility check: this must be the latest completed match for all 4 players.
-  // Uses same priority + date/time/id ordering as the client hook and resolvePreMatchRatings.ts.
+  // "Latest" means latest in the ledger, so it orders by matches.result_recorded_at — the same
+  // anchor player_rating_events.occurred_at is stamped from (see 20260904000000) — and only falls
+  // back to play date/time/id for a match that has no anchor yet.
   const { data: allRatings, error: allRatingsError } = await supabase
     .from("match_player_ratings")
-    .select("player_id, match_id, formula_name, matches(date_local, time_local)")
+    .select(
+      "player_id, match_id, formula_name, matches(date_local, time_local, result_recorded_at)",
+    )
     .in("player_id", playerIds);
 
   if (allRatingsError) {
@@ -200,8 +214,8 @@ export async function PATCH(
     match_id: number | null;
     formula_name: string | null;
     matches:
-      | { date_local?: string | null; time_local?: string | null }
-      | Array<{ date_local?: string | null; time_local?: string | null }>
+      | MatchRelationRow
+      | Array<MatchRelationRow>
       | null;
   }>) {
     const pId = typeof row.player_id === "number" ? row.player_id : null;
@@ -209,6 +223,7 @@ export async function PATCH(
     if (pId === null || mId === null) continue;
 
     const matchMeta = Array.isArray(row.matches) ? row.matches[0] : row.matches;
+    const recordedAt = matchMeta?.result_recorded_at ?? null;
     const dateLocal = matchMeta?.date_local ?? null;
     const timeLocal = matchMeta?.time_local ?? null;
     const priority = toPriority(row.formula_name);
@@ -216,13 +231,15 @@ export async function PATCH(
     const playerMap = preferredByPlayerAndMatch.get(pId) ?? new Map<number, MatchMeta>();
     const existing = playerMap.get(mId);
     if (!existing || priority >= existing.priority) {
-      playerMap.set(mId, { priority, dateLocal, timeLocal });
+      playerMap.set(mId, { priority, recordedAt, dateLocal, timeLocal });
     }
     preferredByPlayerAndMatch.set(pId, playerMap);
   }
 
   const findLatestMatchId = (perMatch: PlayerMatchMap): number | null => {
     const sorted = Array.from(perMatch.entries()).sort(([aId, aVal], [bId, bVal]) => {
+      const byRecordedAt = compareNullableStringDesc(aVal.recordedAt, bVal.recordedAt);
+      if (byRecordedAt !== 0) return byRecordedAt;
       const byDate = compareNullableStringDesc(aVal.dateLocal, bVal.dateLocal);
       if (byDate !== 0) return byDate;
       const byTime = compareNullableStringDesc(aVal.timeLocal, bVal.timeLocal);
@@ -541,6 +558,25 @@ export async function PATCH(
 
   // --- Post-complete (non-fatal) ---
 
+  // The match keeps its original ledger anchor across a revision, so a changed rating_post can
+  // orphan whatever each player played next. The eligibility check above normally rules that out;
+  // this is the belt-and-braces pass for the cases it can't see (e.g. a rating row edited by hand).
+  const resultRecordedAt =
+    (matchRow.result_recorded_at as string | null) ?? null;
+  let reanchorWarnings: string[] = [];
+  try {
+    const reanchorReport = await reanchorPlayerChainsAfter(supabase, {
+      pivotAt: resultRecordedAt,
+      playerIds,
+    });
+    reanchorWarnings = reanchorReport.warnings;
+  } catch (err) {
+    console.error("[ratings] Failed to re-anchor chains after revise:", err);
+    reanchorWarnings = [
+      "Match revised, but failed to re-anchor the players' rating chains.",
+    ];
+  }
+
   // Ladder standing progression. syncLadderStandingsForMatch deletes any existing match-linked
   // ladder event before recomputing, so this same call correctly re-derives the standing for a
   // revised score — safe because revise is only reachable when this is each player's
@@ -561,7 +597,8 @@ export async function PATCH(
       playerIds,
       teamByPlayerId,
       winnerTeam: calculation.winnerTeam as 1 | 2,
-      occurredAt: (matchRow.date_local as string | null) ?? null,
+      // Same timeline as the rating ledger: when the result was recorded, not when it was played.
+      occurredAt: resultRecordedAt ?? (matchRow.date_local as string | null) ?? null,
     });
     ladderWarning = ladderResult.warning;
     ladderTiers = ladderResult.tiers;
@@ -626,6 +663,7 @@ export async function PATCH(
       ledgerEvents,
       message: "Match score revised and ratings recalculated.",
       ladderWarning,
+      warnings: reanchorWarnings.length > 0 ? reanchorWarnings : undefined,
     },
     { status: 200 },
   );

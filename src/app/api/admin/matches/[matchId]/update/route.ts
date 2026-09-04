@@ -9,6 +9,7 @@ import {
 } from "@/app/api/admin/_lib/auth";
 import { readLedgerEventsForMatch } from "@/app/api/admin/_lib/ledger";
 import { calculateRatings } from "@/lib/ratingCalculator";
+import { reanchorPlayerChainsAfter } from "@/lib/ratings/reanchorChain";
 import { resolvePreMatchRatings } from "@/lib/resolvePreMatchRatings";
 import {
   syncLadderStandingsForMatch,
@@ -672,6 +673,31 @@ export async function PATCH(
     // admin UI can confirm the ledger is synced. Non-fatal: a read failure must not roll back.
     const ledgerEvents = await readLedgerEventsForMatch(supabase, matchId);
 
+    // The trigger also stamped matches.result_recorded_at, which is where this match sits in every
+    // player's ledger. Normally that's the tail and there is nothing to do; it isn't when a match
+    // that was un-completed gets completed again, since the anchor is sticky.
+    const { data: anchorRow } = await supabase
+      .from("matches")
+      .select("result_recorded_at")
+      .eq("match_id", matchId)
+      .maybeSingle();
+    const resultRecordedAt =
+      (anchorRow?.result_recorded_at as string | null) ?? null;
+
+    let reanchorWarnings: string[] = [];
+    try {
+      const reanchorReport = await reanchorPlayerChainsAfter(supabase, {
+        pivotAt: resultRecordedAt,
+        playerIds,
+      });
+      reanchorWarnings = reanchorReport.warnings;
+    } catch (err) {
+      console.error("[ratings] Failed to re-anchor chains after completion:", err);
+      reanchorWarnings = [
+        "Match completed, but failed to re-anchor the players' rating chains.",
+      ];
+    }
+
     // Ladder standing progression, if this match was flagged as ladder-relevant at scheduling time
     // (see create/route.ts). Non-fatal, same pattern as the ladderWarning there — a satellite view,
     // not part of the rating source of truth, so a failure here must not roll back the completion.
@@ -694,7 +720,9 @@ export async function PATCH(
         playerIds,
         teamByPlayerId,
         winnerTeam: calculation.winnerTeam as 1 | 2,
-        occurredAt: effectiveDateLocal,
+        // Anchor standings on the same timeline as the rating ledger: when the result was
+        // recorded, not the calendar date it was played on.
+        occurredAt: resultRecordedAt ?? effectiveDateLocal,
       });
       ladderWarning = ladderResult.warning;
       ladderTiers = ladderResult.tiers;
@@ -771,6 +799,7 @@ export async function PATCH(
         message: "Match updated as completed with sets and v3 ratings.",
         emails: completedEmailResult,
         ladderWarning,
+        warnings: reanchorWarnings.length > 0 ? reanchorWarnings : undefined,
       },
       { status: 200 },
     );
