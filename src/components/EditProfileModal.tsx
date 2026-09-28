@@ -31,6 +31,7 @@ type FormState = {
   notif_recruit_invitation: boolean;
   notif_signup_status: boolean;
   notif_ladder_match_assigned: boolean;
+  notif_partner_invite: boolean;
   preferred_side: "left" | "right" | "both" | "";
   shirt_size: string;
   ig_handle: string;
@@ -60,6 +61,7 @@ export default function EditProfileModal({
     notif_recruit_invitation: true,
     notif_signup_status: true,
     notif_ladder_match_assigned: true,
+    notif_partner_invite: true,
     preferred_side: player.preferred_side ?? "",
     shirt_size: player.shirt_size ?? "",
     ig_handle: player.ig_handle ?? "",
@@ -108,6 +110,7 @@ export default function EditProfileModal({
             recruit_invitation?: boolean;
             signup_status?: boolean;
             ladder_match_assigned?: boolean;
+            partner_invite?: boolean;
           };
         };
         const prefs = json.notification_preferences ?? {};
@@ -118,6 +121,7 @@ export default function EditProfileModal({
           notif_recruit_invitation: prefs.recruit_invitation ?? true,
           notif_signup_status: prefs.signup_status ?? true,
           notif_ladder_match_assigned: prefs.ladder_match_assigned ?? true,
+          notif_partner_invite: prefs.partner_invite ?? true,
         }));
       } catch {
         // silently ignore; defaults stay true
@@ -179,6 +183,7 @@ export default function EditProfileModal({
             recruit_invitation: form.notif_recruit_invitation,
             signup_status: form.notif_signup_status,
             ladder_match_assigned: form.notif_ladder_match_assigned,
+            partner_invite: form.notif_partner_invite,
           },
         }),
       });
@@ -431,6 +436,12 @@ export default function EditProfileModal({
                   onChange={(v) => setForm((f) => ({ ...f, notif_ladder_match_assigned: v }))}
                   label="Ladder Roulette Matches"
                   description="When the ladder roulette assigns you a match, and if it expires unplayed."
+                />
+                <Toggle
+                  checked={form.notif_partner_invite}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_partner_invite: v }))}
+                  label="Partner Invites"
+                  description="When someone invites you to be their partner for a paired event, and when your pair changes."
                 />
               </div>
             </div>

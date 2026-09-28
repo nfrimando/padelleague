@@ -2,7 +2,7 @@ import type { SurveyState } from "@/lib/recalibration/survey";
 
 // ─── Notification preferences ─────────────────────────────────────────────────
 
-export type NotifType = "match_results" | "match_scheduled" | "predictions" | "recruit_invitation" | "signup_status" | "ladder_match_assigned";
+export type NotifType = "match_results" | "match_scheduled" | "predictions" | "recruit_invitation" | "signup_status" | "ladder_match_assigned" | "partner_invite";
 
 // Map of notif_type → subscribed. Missing key means subscribed (default true).
 export type PlayerNotificationPreferences = Partial<Record<NotifType, boolean>>;
@@ -86,6 +86,9 @@ export type Event = {
   signup_list_visible?: boolean;
   is_rated?: boolean;
   rating_details?: string | null;
+  // 'paired' events require (or encourage) signing up with a partner. Optional so
+  // existing Event literals keep compiling; treat a missing value as 'individual'.
+  signup_mode?: "individual" | "paired";
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -100,12 +103,48 @@ export type SeasonSignup = {
   applicant_contact?: string | null;
   applicant_email?: string | null;
   status: "applied" | "pending_payment" | "accepted" | "waitlisted" | "cancelled";
+  // Set only while the owning pair is 'accepted' — a non-null pair_id means
+  // "confirmed partner". See event_signup_pairs.
+  pair_id?: string | null;
+  looking_for_partner?: boolean;
   created_at: string;
   updated_at: string;
 };
 
 // Alias for SeasonSignup — use this for new code.
 export type EventSignup = SeasonSignup;
+
+// ─── Paired event signups ──────────────────────────────────────────────────────
+
+export type EventPairStatus = "pending" | "accepted" | "declined" | "cancelled";
+
+// Maps to the `event_signup_pairs` table. The row IS the invite: it exists from the
+// moment the initiator picks a partner, before the invitee has any signup row.
+export type EventSignupPair = {
+  id: string;
+  event_id: number;
+  initiator_player_id: number;
+  invitee_player_id: number;
+  status: EventPairStatus;
+  invited_by_player_id?: number | null;
+  responded_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// A pair flattened from the point of view of one member, for API responses and UI.
+export type PairPartnerView = {
+  pair_id: string;
+  status: EventPairStatus;
+  role: "initiator" | "invitee";
+  partner: {
+    player_id: number;
+    name: string | null;
+    nickname: string | null;
+    image_link: string | null;
+    latest_rating?: number | null;
+  } | null;
+};
 
 // Maps to rows in `signups_players`.
 // player_id is null until an admin approves and links/creates the member profile.

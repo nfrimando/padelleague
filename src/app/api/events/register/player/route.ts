@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
+import {
+  insertOrReviveSignup,
+  loadLatestSignup,
+} from "@/app/api/events/_lib/pairs";
 
 type PlayerRegisterBody = {
   event_id?: unknown;
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
 
   const { data: event, error: eventError } = await serviceClient
     .from("events")
-    .select("event_id, registration_status, deleted_at")
+    .select("event_id, registration_status, deleted_at, signup_mode")
     .eq("event_id", eventId)
     .is("deleted_at", null)
     .eq("registration_status", "open")
@@ -73,14 +77,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: existingSignup, error: existingSignupError } = await serviceClient
-    .from("signups_events")
-    .select("id, status")
-    .eq("event_id", eventId)
-    .eq("player_id", playerId)
-    .maybeSingle();
-
-  if (existingSignupError) {
+  let existingSignup;
+  try {
+    existingSignup = await loadLatestSignup(serviceClient, eventId, playerId);
+  } catch (error) {
+    console.error("Existing signup lookup error:", error);
     return NextResponse.json(
       { error: "Failed to validate existing signup." },
       { status: 500 },
@@ -100,17 +101,17 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: signup, error: signupError } = await serviceClient
-    .from("signups_events")
-    .insert({
-      event_id: eventId,
-      player_id: playerId,
-      status: "applied",
-    })
-    .select("id")
-    .single();
+  // This route is unauthenticated, so it never sends partner invites. On a paired
+  // event the player is signed up solo and flagged for the host to match up.
+  const lookingForPartner = event.signup_mode === "paired";
 
-  if (signupError || !signup) {
+  let signup;
+  try {
+    signup = await insertOrReviveSignup(serviceClient, eventId, playerId, {
+      lookingForPartner,
+    });
+  } catch (error) {
+    console.error("Failed to create signup:", error);
     return NextResponse.json(
       { error: "Failed to create signup." },
       { status: 500 },
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(
-    { registered: true, signup_id: signup.id },
+    { registered: true, signup_id: signup.id, looking_for_partner: lookingForPartner },
     { status: 201 },
   );
 }

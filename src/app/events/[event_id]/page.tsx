@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Gauge, X } from "lucide-react";
@@ -8,12 +8,18 @@ import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import Toggle from "@/components/Toggle";
 import EventSignupConfirmModal from "@/components/EventSignupConfirmModal";
-import PendingPaymentPanel from "@/components/PendingPaymentPanel";
+import EventPairSignupModal from "@/components/EventPairSignupModal";
+import EventSignupCta, {
+  EventSignupStickyBar,
+  resolveSignupState,
+  type ViewerSignupInfo,
+} from "@/components/EventSignupCta";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { useEventSignup } from "@/lib/useEventSignup";
 import {
   signupStatusLabel,
   signupStatusBadgeClass,
+  LOOKING_FOR_PARTNER_BADGE_CLASS,
   type EventSignupStatus,
 } from "@/lib/eventSignupStatus";
 import {
@@ -23,7 +29,7 @@ import {
 } from "@/lib/eventRatedStatus";
 import { supabase } from "@/lib/supabase";
 import { checkIsAdmin } from "@/lib/adminCheck";
-import { Event, EventRestrictions } from "@/lib/types";
+import { Event, EventRestrictions, PairPartnerView } from "@/lib/types";
 
 type EventCreator = {
   player_id: number;
@@ -46,15 +52,38 @@ type ManagedSignupRow = RosterPlayer & {
   id: string;
   status: EventSignupStatus;
   paid: boolean;
+  pair_id: string | null;
+  looking_for_partner: boolean;
+};
+
+type PendingInvite = {
+  pair_id: string;
+  initiator: RosterPlayer | null;
+  invitee: RosterPlayer | null;
+  created_at: string;
 };
 
 type SignupsResponse = {
+  signupMode?: "individual" | "paired";
   signupListVisible: boolean;
   canManage: boolean;
-  viewerSignup: { id: string | null; status: EventSignupStatus } | null;
-  roster: RosterPlayer[];
+  viewerSignup: ViewerSignupInfo | null;
+  viewerIncomingInvite?: PairPartnerView | null;
+  roster: (RosterPlayer & { pair_id?: string | null })[];
   signups?: ManagedSignupRow[];
   statusCounts?: Record<EventSignupStatus, number>;
+  pairCounts?: {
+    accepted_pairs: number;
+    pending_invites: number;
+    solo_looking: number;
+  };
+  pendingInvites?: PendingInvite[];
+  capacity?: {
+    player_limit: number | null;
+    accepted_players: number;
+    accepted_pairs: number;
+    remaining: number | null;
+  };
   hidden?: boolean;
 };
 
@@ -159,6 +188,9 @@ export default function EventDetailPage() {
   const [signupsData, setSignupsData] = useState<SignupsResponse | null>(null);
   const [signupsLoading, setSignupsLoading] = useState(true);
   const [showSignupModal, setShowSignupModal] = useState(false);
+  const [showPairModal, setShowPairModal] = useState(false);
+  const [pairBusy, setPairBusy] = useState(false);
+  const [pairError, setPairError] = useState<string | null>(null);
   const [paymentJustCompleted, setPaymentJustCompleted] = useState(false);
   const [updatingSignupId, setUpdatingSignupId] = useState<string | null>(null);
   const [signupStatusError, setSignupStatusError] = useState<string | null>(null);
@@ -230,29 +262,32 @@ export default function EventDetailPage() {
     void checkAdmin();
   }, [isLinked]);
 
-  // Load roster + viewer's own signup status
-  useEffect(() => {
-    let cancelled = false;
-    async function loadSignups() {
-      setSignupsLoading(true);
+  // Load roster + viewer's own signup status. Extracted so every mutation can
+  // refetch the real state instead of patching it optimistically.
+  const loadSignups = useCallback(
+    async (options: { showSpinner?: boolean } = {}) => {
+      if (options.showSpinner !== false) setSignupsLoading(true);
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
       const res = await fetch(`/api/events/${eventId}/signups`, { headers });
-      if (cancelled) return;
       if (res.ok) {
         const json = (await res.json()) as SignupsResponse;
         setSignupsData(json);
       }
       setSignupsLoading(false);
+    },
+    [eventId],
+  );
+
+  useEffect(() => {
+    async function run() {
+      await loadSignups();
     }
-    void loadSignups();
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId]);
+    void run();
+  }, [loadSignups]);
 
   const isCreator =
     isLinked &&
@@ -410,24 +445,192 @@ export default function EventDetailPage() {
   else if (r?.max_rating != null)
     restrictionTags.push(`Suggested rating ≤ ${r.max_rating}`);
 
-  const viewerSignupStatus = signupsData?.viewerSignup?.status ?? null;
-  const viewerSignupId = signupsData?.viewerSignup?.id ?? null;
-  const canSignUpAgain = !viewerSignupStatus || viewerSignupStatus === "cancelled";
-  const showOwnStatusInPlayers = Boolean(
-    signupsData?.canManage && viewerSignupStatus && !canSignUpAgain,
-  );
+  const signupMode = signupsData?.signupMode ?? event?.signup_mode ?? "individual";
+  const isPairedEvent = signupMode === "paired";
+  const viewerSignup = signupsData?.viewerSignup ?? null;
+  const viewerIncomingInvite = signupsData?.viewerIncomingInvite ?? null;
   const isVerifiedPlayer = isLinked && !!player?.is_profile_complete;
+  const isManager = Boolean(signupsData?.canManage);
+
+  const ctaState = event
+    ? resolveSignupState({
+        event,
+        signupMode,
+        viewerSignup,
+        viewerIncomingInvite,
+        isSignedIn: Boolean(player) || isLinked,
+        isLinked,
+        isVerified: isVerifiedPlayer,
+      })
+    : null;
+
+  // The partner's own row, so the card can show whether they've paid.
+  const partnerStatus = useMemo(() => {
+    const partnerId = viewerSignup?.pair?.partner?.player_id;
+    if (!partnerId || viewerSignup?.pair?.status !== "accepted") return null;
+    const row = signupsData?.signups?.find(
+      (s) => s.player_id != null && Number(s.player_id) === Number(partnerId),
+    );
+    return row ? { status: row.status, paid: row.paid } : null;
+  }, [signupsData?.signups, viewerSignup?.pair]);
+
+  // Players the partner picker must not offer: the viewer, and anyone already
+  // holding a live signup or pair for this event.
+  const excludedPartnerIds = useMemo(() => {
+    const ids = new Set<number>();
+    if (player?.player_id != null) ids.add(Number(player.player_id));
+    for (const row of signupsData?.signups ?? []) {
+      if (row.player_id == null) continue;
+      if (row.status === "cancelled") continue;
+      // A solo player looking for a partner is exactly who we want to offer.
+      if (row.looking_for_partner && row.pair_id === null) continue;
+      ids.add(Number(row.player_id));
+    }
+    for (const invite of signupsData?.pendingInvites ?? []) {
+      if (invite.initiator?.player_id != null) ids.add(Number(invite.initiator.player_id));
+      if (invite.invitee?.player_id != null) ids.add(Number(invite.invitee.player_id));
+    }
+    return [...ids];
+  }, [player, signupsData?.signups, signupsData?.pendingInvites]);
+
+  // Group the manager list so partners sit together in one block. Preserves the
+  // server's ordering: a pair takes the position of whichever half came first.
+  const groupedSignups = useMemo(() => {
+    const rows = signupsData?.signups ?? [];
+    const entries: { pairId: string | null; rows: ManagedSignupRow[] }[] = [];
+    const indexByPair = new Map<string, number>();
+
+    for (const row of rows) {
+      if (row.pair_id) {
+        const existing = indexByPair.get(row.pair_id);
+        if (existing != null) {
+          entries[existing].rows.push(row);
+          continue;
+        }
+        indexByPair.set(row.pair_id, entries.length);
+        entries.push({ pairId: row.pair_id, rows: [row] });
+        continue;
+      }
+      entries.push({ pairId: null, rows: [row] });
+    }
+    return entries;
+  }, [signupsData?.signups]);
+
+  // Same grouping for the public roster, which only carries accepted players.
+  const groupedRoster = useMemo(() => {
+    const rows = signupsData?.roster ?? [];
+    const pairs: (RosterPlayer & { pair_id?: string | null })[][] = [];
+    const solos: (RosterPlayer & { pair_id?: string | null })[] = [];
+    const indexByPair = new Map<string, number>();
+
+    for (const row of rows) {
+      const pairId = row.pair_id ?? null;
+      if (!pairId) {
+        solos.push(row);
+        continue;
+      }
+      const existing = indexByPair.get(pairId);
+      if (existing != null) {
+        pairs[existing].push(row);
+        continue;
+      }
+      indexByPair.set(pairId, pairs.length);
+      pairs.push([row]);
+    }
+    return { pairs, solos };
+  }, [signupsData?.roster]);
+
+  const scrollToCta = () => {
+    document
+      .getElementById("event-signup-cta")
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const handleSignupConfirm = async () => {
     if (!event) return;
     const outcome = await handleSignup(event.event_id);
     if (outcome === "registered") {
-      setSignupsData((d) =>
-        d ? { ...d, viewerSignup: { id: null, status: "applied" } } : d,
-      );
       setShowSignupModal(false);
+      await loadSignups({ showSpinner: false });
     }
   };
+
+  /** Solo signup — on a paired event this flags the player as looking for a partner. */
+  const handleSignupSolo = async () => {
+    if (!event) return;
+    if (!isPairedEvent) {
+      setShowSignupModal(true);
+      return;
+    }
+    setPairError(null);
+    const outcome = await handleSignup(event.event_id, { lookingForPartner: true });
+    if (outcome === "registered") {
+      setShowPairModal(false);
+      await loadSignups({ showSpinner: false });
+    }
+  };
+
+  const handleSignupWithPartner = async (partnerPlayerId: number) => {
+    if (!event) return;
+    setPairError(null);
+    const outcome = await handleSignup(event.event_id, { partnerPlayerId });
+    if (outcome === "registered") {
+      setShowPairModal(false);
+      await loadSignups({ showSpinner: false });
+    }
+  };
+
+  /** Shared wrapper for the pair endpoints — all of them just refetch on success. */
+  const callPairEndpoint = async (
+    path: string,
+    method: "POST" | "DELETE",
+  ): Promise<boolean> => {
+    if (!event) return false;
+    setPairBusy(true);
+    setPairError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setPairError("Not authenticated.");
+      setPairBusy(false);
+      return false;
+    }
+
+    const res = await fetch(path, {
+      method,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setPairError(json.error ?? "Something went wrong. Please try again.");
+      setPairBusy(false);
+      return false;
+    }
+
+    await loadSignups({ showSpinner: false });
+    setPairBusy(false);
+    return true;
+  };
+
+  const handleAcceptInvite = (pairId: string) =>
+    void callPairEndpoint(
+      `/api/events/${eventId}/pairs/${pairId}/accept`,
+      "POST",
+    );
+
+  const handleDeclineInvite = (pairId: string) =>
+    void callPairEndpoint(
+      `/api/events/${eventId}/pairs/${pairId}/decline`,
+      "POST",
+    );
+
+  const handleCancelPair = (pairId: string) =>
+    void callPairEndpoint(`/api/events/${eventId}/pairs/${pairId}`, "DELETE");
+
+  const handleWithdraw = () =>
+    void callPairEndpoint(`/api/events/${eventId}/signups/me/cancel`, "POST");
 
   const handleChangeSignupStatus = async (
     signupId: string,
@@ -655,6 +858,33 @@ export default function EventDetailPage() {
               )}
             </div>
 
+            {/* Sign up CTA — the primary call to action, stated unambiguously */}
+            <div id="event-signup-cta">
+              <EventSignupCta
+                event={event}
+                signupMode={signupMode}
+                viewerSignup={viewerSignup}
+                viewerIncomingInvite={viewerIncomingInvite}
+                partnerStatus={partnerStatus}
+                isSignedIn={Boolean(player) || isLinked}
+                isLinked={isLinked}
+                isVerified={isVerifiedPlayer}
+                isManager={isManager}
+                loading={signupsLoading}
+                busy={pairBusy || signupSubmitting}
+                error={pairError ?? signupError}
+                onSignupSolo={() => void handleSignupSolo()}
+                onOpenPartnerPicker={() => {
+                  setPairError(null);
+                  setShowPairModal(true);
+                }}
+                onAcceptInvite={handleAcceptInvite}
+                onDeclineInvite={handleDeclineInvite}
+                onCancelPair={handleCancelPair}
+                onWithdraw={handleWithdraw}
+              />
+            </div>
+
             {/* Creator */}
             {event.creator && (
               <div className="flex items-center gap-2 text-sm text-slate-400">
@@ -777,11 +1007,10 @@ export default function EventDetailPage() {
                   <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">
                     Players
                   </h2>
-                  {showOwnStatusInPlayers && viewerSignupStatus && (
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${signupStatusBadgeClass(viewerSignupStatus)}`}
-                    >
-                      Your status: {signupStatusLabel(viewerSignupStatus)}
+                  {signupsData.capacity?.player_limit != null && (
+                    <span className="text-xs font-medium text-slate-500">
+                      {signupsData.capacity.accepted_players} /{" "}
+                      {signupsData.capacity.player_limit} players
                     </span>
                   )}
                 </div>
@@ -807,6 +1036,64 @@ export default function EventDetailPage() {
                     )}
                   </div>
                 )}
+                {isPairedEvent && signupsData.pairCounts && (
+                  <div className="flex flex-wrap gap-2">
+                    {signupsData.pairCounts.accepted_pairs > 0 && (
+                      <span className="inline-flex items-center rounded-full border border-[#00C8DC]/30 bg-[#00C8DC]/5 px-3 py-1 text-xs font-medium text-[#00C8DC]">
+                        Pairs: {signupsData.pairCounts.accepted_pairs}
+                      </span>
+                    )}
+                    {signupsData.pairCounts.pending_invites > 0 && (
+                      <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-300">
+                        Pending invites: {signupsData.pairCounts.pending_invites}
+                      </span>
+                    )}
+                    {signupsData.pairCounts.solo_looking > 0 && (
+                      <span
+                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${LOOKING_FOR_PARTNER_BADGE_CLASS}`}
+                      >
+                        Looking for a partner: {signupsData.pairCounts.solo_looking}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {isPairedEvent && (signupsData.pendingInvites?.length ?? 0) > 0 && (
+                  <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-300">
+                      Pending Partner Invites
+                    </h3>
+                    <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+                      {signupsData.pendingInvites!.map((invite) => (
+                        <div
+                          key={invite.pair_id}
+                          className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                        >
+                          <p className="text-[11px] text-slate-400">
+                            <span className="font-bold text-slate-200">
+                              {invite.initiator?.nickname ??
+                                invite.initiator?.name ??
+                                "Someone"}
+                            </span>{" "}
+                            invited{" "}
+                            <span className="font-bold text-slate-200">
+                              {invite.invitee?.nickname ??
+                                invite.invitee?.name ??
+                                "someone"}
+                            </span>
+                          </p>
+                          <button
+                            type="button"
+                            disabled={pairBusy}
+                            onClick={() => handleCancelPair(invite.pair_id)}
+                            className="text-[11px] font-medium text-slate-400 hover:text-rose-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                          >
+                            Cancel invite
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {signupStatusError && (
                   <div className="rounded-md border border-rose-800/40 bg-rose-900/20 px-3 py-2 text-sm text-rose-300">
                     {signupStatusError}
@@ -816,66 +1103,121 @@ export default function EventDetailPage() {
                   <p className="text-sm text-slate-500">No signups yet.</p>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {signupsData.signups.map((s) => (
-                      <div
-                        key={s.id}
-                        className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
-                      >
-                        <PlayerCard
-                          player={{
-                            player_id: s.player_id ?? 0,
-                            name: s.name ?? "Unknown",
-                            nickname: s.nickname ?? "",
-                            image_link: s.image_link,
-                            latest_rating: s.latest_rating,
-                          }}
-                          size="sm"
-                          showLatestRating
-                        />
-                        <div className="flex items-center gap-2 border-t border-slate-800 pt-2">
-                          <select
-                            value={s.status}
-                            disabled={updatingSignupId === s.id}
-                            onChange={(e) =>
-                              void handleChangeSignupStatus(
-                                s.id,
-                                e.target.value as EventSignupStatus,
-                              )
-                            }
-                            className={`flex-1 min-w-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-medium focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:opacity-50 cursor-pointer ${signupStatusBadgeClass(s.status)}`}
-                          >
-                            {(
-                              [
-                                "applied",
-                                "pending_payment",
-                                "accepted",
-                                "waitlisted",
-                                "cancelled",
-                              ] as const
-                            ).map((statusOption) => (
-                              <option
-                                key={statusOption}
-                                value={statusOption}
-                                className="bg-slate-800 text-slate-100"
-                              >
-                                {signupStatusLabel(statusOption)}
-                              </option>
-                            ))}
-                          </select>
-                          {event.requires_payment && s.status === "accepted" && (
-                            <span
-                              className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                                s.paid
-                                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                                  : "bg-slate-800 border-slate-700 text-slate-400"
-                              }`}
+                    {groupedSignups.map((entry) => {
+                      const isPair = entry.pairId !== null && entry.rows.length > 1;
+                      const paidCount = entry.rows.filter((r) => r.paid).length;
+                      const showPaidSplit =
+                        isPair &&
+                        event.requires_payment &&
+                        paidCount > 0 &&
+                        paidCount < entry.rows.length;
+
+                      return (
+                        <div
+                          key={entry.pairId ?? entry.rows[0].id}
+                          className={
+                            isPair
+                              ? "sm:col-span-2 flex flex-col gap-2 rounded-lg border border-[#00C8DC]/25 bg-[#00C8DC]/5 px-3 py-2"
+                              : "flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                          }
+                        >
+                          {isPair && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-[#00C8DC]">
+                                Pair
+                              </span>
+                              {showPaidSplit && (
+                                <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                                  {paidCount} / {entry.rows.length} paid
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-500">
+                                Changing one half changes both
+                              </span>
+                            </div>
+                          )}
+
+                          {entry.rows.map((s) => (
+                            <div key={s.id} className="flex flex-col gap-2">
+                              <PlayerCard
+                                player={{
+                                  player_id: s.player_id ?? 0,
+                                  name: s.name ?? "Unknown",
+                                  nickname: s.nickname ?? "",
+                                  image_link: s.image_link,
+                                  latest_rating: s.latest_rating,
+                                }}
+                                size="sm"
+                                showLatestRating
+                              />
+                              <div className="flex items-center gap-2 border-t border-slate-800 pt-2">
+                                <select
+                                  value={s.status}
+                                  disabled={updatingSignupId === s.id}
+                                  onChange={(e) =>
+                                    void handleChangeSignupStatus(
+                                      s.id,
+                                      e.target.value as EventSignupStatus,
+                                    )
+                                  }
+                                  className={`flex-1 min-w-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-medium focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:opacity-50 cursor-pointer ${signupStatusBadgeClass(s.status)}`}
+                                >
+                                  {(
+                                    [
+                                      "applied",
+                                      "pending_payment",
+                                      "accepted",
+                                      "waitlisted",
+                                      "cancelled",
+                                    ] as const
+                                  ).map((statusOption) => (
+                                    <option
+                                      key={statusOption}
+                                      value={statusOption}
+                                      className="bg-slate-800 text-slate-100"
+                                    >
+                                      {signupStatusLabel(statusOption)}
+                                    </option>
+                                  ))}
+                                </select>
+                                {isPairedEvent &&
+                                  !isPair &&
+                                  s.looking_for_partner &&
+                                  s.status !== "cancelled" && (
+                                    <span
+                                      className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${LOOKING_FOR_PARTNER_BADGE_CLASS}`}
+                                    >
+                                      Looking
+                                    </span>
+                                  )}
+                                {event.requires_payment && s.status === "accepted" && (
+                                  <span
+                                    className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                                      s.paid
+                                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                        : "bg-slate-800 border-slate-700 text-slate-400"
+                                    }`}
+                                  >
+                                    {s.paid ? "Paid" : "Unpaid"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+
+                          {isPair && entry.pairId && (
+                            <button
+                              type="button"
+                              disabled={pairBusy}
+                              onClick={() => handleCancelPair(entry.pairId!)}
+                              className="self-start text-[11px] font-medium text-slate-400 hover:text-rose-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
                             >
-                              {s.paid ? "Paid" : "Unpaid"}
-                            </span>
+                              Break up pair
+                            </button>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -885,9 +1227,34 @@ export default function EventDetailPage() {
                   Accepted Players ({signupsData.roster.length})
                 </h2>
                 <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-                  {signupsData.roster.map((p, i) => (
+                  {/* Teams first, so a paired roster reads as pairs rather than a list. */}
+                  {groupedRoster.pairs.map((teamRows, teamIndex) => (
+                    <div
+                      key={teamRows[0].pair_id ?? `team-${teamIndex}`}
+                      className="sm:col-span-2 space-y-2 rounded-lg border border-[#00C8DC]/25 bg-[#00C8DC]/5 px-3 py-2"
+                    >
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#00C8DC]">
+                        Team
+                      </span>
+                      {teamRows.map((p, i) => (
+                        <PlayerCard
+                          key={p.player_id ?? i}
+                          player={{
+                            player_id: p.player_id ?? 0,
+                            name: p.name ?? "Unknown",
+                            nickname: p.nickname ?? "",
+                            image_link: p.image_link,
+                            latest_rating: p.latest_rating,
+                          }}
+                          size="sm"
+                          showLatestRating
+                        />
+                      ))}
+                    </div>
+                  ))}
+                  {groupedRoster.solos.map((p, i) => (
                     <PlayerCard
-                      key={p.player_id ?? i}
+                      key={p.player_id ?? `solo-${i}`}
                       player={{
                         player_id: p.player_id ?? 0,
                         name: p.name ?? "Unknown",
@@ -902,45 +1269,6 @@ export default function EventDetailPage() {
                 </div>
               </div>
             ) : null}
-
-            {/* Payment required — same pay-online / pay-direct options as the dashboard */}
-            {viewerSignupStatus === "pending_payment" && viewerSignupId && (
-              <PendingPaymentPanel
-                signupId={viewerSignupId}
-                eventLabel={event.name ?? `Event #${event.event_id}`}
-                registrationFee={event.registration_fee}
-                paymentInstructions={event.payment_instructions}
-              />
-            )}
-
-            {/* Sign up CTA */}
-            {event.registration_status === "open" && !isDraft && !showOwnStatusInPlayers && (
-              <div className="pt-2">
-                {viewerSignupStatus === "pending_payment" ? null : viewerSignupStatus &&
-                  !canSignUpAgain ? (
-                  <span
-                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${signupStatusBadgeClass(viewerSignupStatus)}`}
-                  >
-                    {signupStatusLabel(viewerSignupStatus)}
-                  </span>
-                ) : isVerifiedPlayer ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowSignupModal(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors cursor-pointer"
-                  >
-                    Sign Up!
-                  </button>
-                ) : (
-                  <Link
-                    href={`/register?eventId=${event.event_id}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors"
-                  >
-                    Sign Up!
-                  </Link>
-                )}
-              </div>
-            )}
 
             {/* Edit form modal */}
             {editing && editForm && (
@@ -1268,6 +1596,44 @@ export default function EventDetailPage() {
           error={signupError}
           onConfirm={() => void handleSignupConfirm()}
           onCancel={() => setShowSignupModal(false)}
+        />
+      )}
+
+      {showPairModal && event && (
+        <EventPairSignupModal
+          eventName={event.name ?? `Event #${event.event_id}`}
+          registrationFee={event.registration_fee}
+          requiresPayment={event.requires_payment}
+          restrictions={event.restrictions}
+          viewerRating={player?.latest_rating ?? null}
+          excludePlayerIds={excludedPartnerIds}
+          alreadySignedUp={Boolean(
+            viewerSignup && viewerSignup.status !== "cancelled",
+          )}
+          loading={signupSubmitting || pairBusy}
+          error={pairError ?? signupError}
+          onConfirmPartner={(id) => void handleSignupWithPartner(id)}
+          onConfirmSolo={() => void handleSignupSolo()}
+          onCancel={() => {
+            setShowPairModal(false);
+            setPairError(null);
+          }}
+        />
+      )}
+
+      {event && ctaState && (
+        <EventSignupStickyBar
+          state={ctaState}
+          signupMode={signupMode}
+          incomingInvitePairId={viewerIncomingInvite?.pair_id ?? null}
+          busy={pairBusy || signupSubmitting}
+          onSignupSolo={() => void handleSignupSolo()}
+          onOpenPartnerPicker={() => {
+            setPairError(null);
+            setShowPairModal(true);
+          }}
+          onAcceptInvite={handleAcceptInvite}
+          onScrollToCard={scrollToCta}
         />
       )}
 

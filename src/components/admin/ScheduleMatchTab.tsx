@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useAdminDataContext } from "@/components/admin/AdminDataContext";
-import PlayerSearchBox from "@/components/PlayerSearchBox";
-import PlayerCard from "@/components/PlayerCard";
+import PlayerSlotPicker from "@/components/PlayerSlotPicker";
 import Toggle from "@/components/Toggle";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { supabase } from "@/lib/supabase";
@@ -27,64 +26,6 @@ const labelCls =
   "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
 const inputCls =
   "block w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40";
-
-type PlayerSlotPickerProps = {
-  label: string;
-  suggestions: Player[];
-  selectedPlayer: Player | null;
-  search: string;
-  onSearchChange: (v: string) => void;
-  onSelect: (player: Player) => void;
-  onClear: () => void;
-};
-
-function PlayerSlotPicker({
-  label,
-  suggestions,
-  selectedPlayer,
-  search,
-  onSearchChange,
-  onSelect,
-  onClear,
-}: PlayerSlotPickerProps) {
-  return (
-    <div className="space-y-1.5">
-      <span className={labelCls}>{label}</span>
-      {selectedPlayer ? (
-        <div className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-2.5 py-2">
-          <div className="flex-1 min-w-0">
-            <PlayerCard
-              player={selectedPlayer}
-              size="sm"
-              disableLink
-              showLatestRating={false}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={onClear}
-            className="shrink-0 text-[11px] font-medium text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors px-1.5 py-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20"
-          >
-            Change
-          </button>
-        </div>
-      ) : (
-        <PlayerSearchBox
-          value={search}
-          suggestions={suggestions}
-          onValueChange={onSearchChange}
-          onSelectPlayer={(p) => {
-            onSelect(p);
-            onSearchChange("");
-          }}
-          onClear={() => onSearchChange("")}
-          placeholder="Search by name or nickname..."
-          maxSuggestions={6}
-        />
-      )}
-    </div>
-  );
-}
 
 export function ScheduleMatchTab() {
   const {

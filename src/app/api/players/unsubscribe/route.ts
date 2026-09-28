@@ -4,7 +4,7 @@ import { verifyUnsubscribeToken } from "@/lib/email/unsubscribeToken";
 import { setPlayerPref } from "@/lib/notificationPreferences";
 import { SITE_URL } from "@/lib/siteConfig";
 
-const VALID_TYPES = ["all", "match_results", "match_scheduled", "recruit_invitation", "signup_status", "ladder_match_assigned"] as const;
+const VALID_TYPES = ["all", "match_results", "match_scheduled", "recruit_invitation", "signup_status", "ladder_match_assigned", "partner_invite"] as const;
 type UnsubscribeType = (typeof VALID_TYPES)[number];
 
 const TYPE_LABELS: Record<UnsubscribeType, string> = {
@@ -14,6 +14,7 @@ const TYPE_LABELS: Record<UnsubscribeType, string> = {
   recruit_invitation: "recruit assessment invitation emails",
   signup_status: "event signup status emails",
   ladder_match_assigned: "ladder roulette match emails",
+  partner_invite: "event partner invite emails",
 };
 
 const DASHBOARD_URL = `${SITE_URL}/dashboard`;

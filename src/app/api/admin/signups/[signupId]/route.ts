@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import {
-  getAuthorizedAdminClient,
-} from "@/app/api/admin/_lib/auth";
-import { notifySignupPaymentRequired } from "@/lib/email/notifications/signupPaymentRequired";
-import { notifySignupAccepted } from "@/lib/email/notifications/signupAccepted";
+import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
+import { applySignupStatus } from "@/app/api/events/_lib/signupStatus";
+import type { EventSignupStatus } from "@/lib/eventSignupStatus";
 
-type SignupStatus = "applied" | "pending_payment" | "accepted" | "waitlisted" | "cancelled";
-
-const ALLOWED_SIGNUP_STATUSES: SignupStatus[] = [
+const ALLOWED_SIGNUP_STATUSES: EventSignupStatus[] = [
   "applied",
   "pending_payment",
   "accepted",
@@ -16,7 +12,10 @@ const ALLOWED_SIGNUP_STATUSES: SignupStatus[] = [
 ];
 
 /** PATCH /api/admin/signups/:signupId — update signup status
- *  Body: { status }
+ *  Body: { status, apply_to_partner? }
+ *
+ *  Mirrors PATCH /api/events/[id]/signups/[signupId]: on a confirmed pair the status
+ *  carries to both halves unless apply_to_partner is false.
  */
 export async function PATCH(
   request: Request,
@@ -29,10 +28,7 @@ export async function PATCH(
   const signupId = rawSignupId.trim();
 
   if (!signupId) {
-    return NextResponse.json(
-      { error: "signupId is required." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "signupId is required." }, { status: 400 });
   }
 
   let body: Record<string, unknown>;
@@ -44,8 +40,9 @@ export async function PATCH(
 
   const statusRaw = body.status;
   const status =
-    typeof statusRaw === "string" && ALLOWED_SIGNUP_STATUSES.includes(statusRaw as SignupStatus)
-      ? (statusRaw as SignupStatus)
+    typeof statusRaw === "string" &&
+    ALLOWED_SIGNUP_STATUSES.includes(statusRaw as EventSignupStatus)
+      ? (statusRaw as EventSignupStatus)
       : null;
 
   if (!status) {
@@ -60,58 +57,48 @@ export async function PATCH(
 
   const { supabase } = authResult;
 
-  const { data: previousSignup } = await supabase
+  // This route is keyed on the signup alone, so resolve its event first.
+  const { data: signupRow } = await supabase
     .from("signups_events")
-    .select("status, player_id, event_id")
+    .select("id, event_id")
     .eq("id", signupId)
     .maybeSingle();
 
-  const { data, error } = await supabase
-    .from("signups_events")
-    .update({ status })
-    .eq("id", signupId)
-    .select("*")
-    .maybeSingle();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  if (!data) {
+  if (!signupRow) {
     return NextResponse.json({ error: "Signup not found." }, { status: 404 });
   }
 
-  if (
-    previousSignup &&
-    previousSignup.status !== status &&
-    data.player_id &&
-    (status === "pending_payment" || status === "accepted")
-  ) {
-    const [{ data: player }, { data: eventRecord }] = await Promise.all([
-      supabase.from("players").select("name, nickname, email").eq("player_id", data.player_id).maybeSingle(),
-      supabase.from("events").select("name").eq("event_id", data.event_id).maybeSingle(),
-    ]);
+  const eventId = Number(signupRow.event_id);
+  const { data: eventRecord } = await supabase
+    .from("events")
+    .select("name")
+    .eq("event_id", eventId)
+    .maybeSingle();
 
-    if (player?.email) {
-      const notifyData = {
-        playerId: data.player_id,
-        playerEmail: player.email,
-        playerName: player.name ?? null,
-        playerNickname: player.nickname ?? null,
-        eventId: data.event_id,
-        eventName: eventRecord?.name ?? null,
-      };
-      if (status === "pending_payment") {
-        await notifySignupPaymentRequired(notifyData).catch((err) =>
-          console.error("[email] notifySignupPaymentRequired failed:", err),
-        );
-      } else {
-        await notifySignupAccepted(notifyData).catch((err) =>
-          console.error("[email] notifySignupAccepted failed:", err),
-        );
-      }
-    }
+  let result;
+  try {
+    result = await applySignupStatus({
+      client: supabase,
+      eventId,
+      eventName: eventRecord?.name ?? null,
+      signupId,
+      status,
+      applyToPartner: body.apply_to_partner !== false,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to update signup." },
+      { status: 500 },
+    );
   }
 
-  return NextResponse.json({ signup: data });
+  if ("notFound" in result) {
+    return NextResponse.json({ error: "Signup not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    signup: result.primary,
+    signups: result.signups,
+    warning: result.warning,
+  });
 }

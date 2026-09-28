@@ -37,6 +37,9 @@ export default function EventsPage() {
   const [showProposeModal, setShowProposeModal] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [acceptedEventIds, setAcceptedEventIds] = useState<Set<number>>(new Set());
+  const [pendingInviteEventIds, setPendingInviteEventIds] = useState<Set<number>>(
+    new Set(),
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +69,10 @@ export default function EventsPage() {
         };
 
         const signupsJson = mySignupsRes
-          ? ((await mySignupsRes.json()) as { acceptedEventIds?: number[] })
+          ? ((await mySignupsRes.json()) as {
+              acceptedEventIds?: number[];
+              pendingInviteEventIds?: number[];
+            })
           : null;
 
         if (!cancelled) {
@@ -83,6 +89,9 @@ export default function EventsPage() {
           }
           if (signupsJson?.acceptedEventIds) {
             setAcceptedEventIds(new Set(signupsJson.acceptedEventIds));
+          }
+          if (signupsJson?.pendingInviteEventIds) {
+            setPendingInviteEventIds(new Set(signupsJson.pendingInviteEventIds));
           }
           setLoading(false);
         }
@@ -166,6 +175,7 @@ export default function EventsPage() {
                       key={event.event_id}
                       event={event}
                       isAccepted={acceptedEventIds.has(event.event_id)}
+                      hasPendingInvite={pendingInviteEventIds.has(event.event_id)}
                       currentPlayerRating={player?.latest_rating ?? undefined}
                     />
                   ))}

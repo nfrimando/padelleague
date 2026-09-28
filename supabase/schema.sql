@@ -133,6 +133,7 @@ CREATE TABLE public.events (
   signup_list_visible boolean NOT NULL DEFAULT true,
   is_rated boolean NOT NULL DEFAULT true,
   rating_details text,
+  signup_mode text NOT NULL DEFAULT 'individual'::text CHECK (signup_mode = ANY (ARRAY['individual'::text, 'paired'::text])),
   CONSTRAINT events_pkey PRIMARY KEY (event_id),
   CONSTRAINT events_created_by_player_id_fkey FOREIGN KEY (created_by_player_id) REFERENCES public.players(player_id)
 );
@@ -152,15 +153,20 @@ CREATE TABLE public.signups_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id bigint,
   event_id bigint NOT NULL,
-  status text NOT NULL DEFAULT 'registered'::text CHECK (status = ANY (ARRAY['applied'::text, 'pending_payment'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
+  status text NOT NULL DEFAULT 'applied'::text CHECK (status = ANY (ARRAY['applied'::text, 'pending_payment'::text, 'accepted'::text, 'waitlisted'::text, 'cancelled'::text])),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   applicant_name text,
   applicant_contact text,
   applicant_email text,
+  pair_id uuid,
+  looking_for_partner boolean NOT NULL DEFAULT false,
   CONSTRAINT signups_events_pkey PRIMARY KEY (id),
+  -- UNIQUE INDEX signups_events_event_player_uniq (event_id, player_id) WHERE player_id IS NOT NULL
+  CONSTRAINT signups_events_pair_xor_looking CHECK (pair_id IS NULL OR looking_for_partner = false),
   CONSTRAINT signups_events_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(event_id),
-  CONSTRAINT signups_events_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
+  CONSTRAINT signups_events_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id),
+  CONSTRAINT signups_events_pair_id_fkey FOREIGN KEY (pair_id) REFERENCES public.event_signup_pairs(id)
 );
 CREATE TABLE public.signups_players (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -252,6 +258,23 @@ CREATE TABLE public.player_schedule_preferences (
   start_hour smallint NOT NULL CHECK (start_hour >= 0 AND start_hour <= 23),
   CONSTRAINT player_schedule_preferences_pkey PRIMARY KEY (player_id, day_of_week, start_hour),
   CONSTRAINT player_schedule_preferences_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id)
+);
+CREATE TABLE public.event_signup_pairs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  event_id bigint NOT NULL,
+  initiator_player_id bigint NOT NULL,
+  invitee_player_id bigint NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text, 'cancelled'::text])),
+  invited_by_player_id bigint,
+  responded_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT event_signup_pairs_pkey PRIMARY KEY (id),
+  CONSTRAINT event_signup_pairs_distinct_players CHECK (initiator_player_id <> invitee_player_id),
+  CONSTRAINT event_signup_pairs_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(event_id),
+  CONSTRAINT event_signup_pairs_initiator_player_id_fkey FOREIGN KEY (initiator_player_id) REFERENCES public.players(player_id),
+  CONSTRAINT event_signup_pairs_invitee_player_id_fkey FOREIGN KEY (invitee_player_id) REFERENCES public.players(player_id),
+  CONSTRAINT event_signup_pairs_invited_by_player_id_fkey FOREIGN KEY (invited_by_player_id) REFERENCES public.players(player_id)
 );
 CREATE TABLE public.signups_players_referrers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

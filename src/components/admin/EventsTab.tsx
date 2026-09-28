@@ -26,6 +26,7 @@ type AdminEventRow = {
   notes?: string | null;
   registration_fee?: number | null;
   payment_instructions?: string | null;
+  signup_mode?: "individual" | "paired" | null;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -38,6 +39,8 @@ type AdminSignupRow = {
   event_id: number;
   player_id: number | null;
   status: SignupStatus;
+  pair_id?: string | null;
+  looking_for_partner?: boolean | null;
   applicant_name?: string | null;
   applicant_contact?: string | null;
   applicant_email?: string | null;
@@ -67,6 +70,7 @@ type EventEditForm = {
   notes: string;
   registration_fee: string;
   payment_instructions: string;
+  signup_mode: "individual" | "paired";
 };
 
 type PayForm = {
@@ -96,6 +100,7 @@ function makeEditDraft(e: AdminEventRow): EventEditForm {
     notes: e.notes ?? "",
     registration_fee: e.registration_fee != null ? String(e.registration_fee) : "",
     payment_instructions: e.payment_instructions ?? "",
+    signup_mode: e.signup_mode === "paired" ? "paired" : "individual",
   };
 }
 
@@ -219,7 +224,12 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   const selectedEvent = selectedEventId !== null
     ? (events.find(e => e.event_id === selectedEventId) ?? null)
     : null;
-  const eventSignups = selectedEventId !== null ? (signupsByEvent[selectedEventId] ?? []) : [];
+  // Memoized so the `[]` fallback isn't a fresh array on every render, which would
+  // invalidate every useMemo below it.
+  const eventSignups = useMemo(
+    () => (selectedEventId !== null ? (signupsByEvent[selectedEventId] ?? []) : []),
+    [selectedEventId, signupsByEvent],
+  );
 
   const editDraftDirty = useMemo(() => {
     if (!editDraft || !selectedEvent) return false;
@@ -236,9 +246,12 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   const sortedFilteredSignups = useMemo(() => {
     const getName = (s: AdminSignupRow) =>
       s.player?.name || s.player?.nickname || s.applicant_name || "";
-    const sorted = [...eventSignups].sort((a, b) =>
-      getName(a).localeCompare(getName(b))
-    );
+    // Pair first, then name, so partners always sit next to each other.
+    const sorted = [...eventSignups].sort((a, b) => {
+      const pairCompare = (a.pair_id ?? "").localeCompare(b.pair_id ?? "");
+      if (pairCompare !== 0) return pairCompare;
+      return getName(a).localeCompare(getName(b));
+    });
     const q = signupSearch.toLowerCase().trim();
     if (!q) return sorted;
     return sorted.filter(s =>
@@ -246,6 +259,18 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
       (s.player?.email || s.applicant_email || s.applicant_contact || "").toLowerCase().includes(q)
     );
   }, [eventSignups, signupSearch]);
+
+  /** partner's display name, resolved from the other row sharing the same pair_id */
+  const partnerNameByPairId = useMemo(() => {
+    const byPair = new Map<string, AdminSignupRow[]>();
+    for (const row of eventSignups) {
+      if (!row.pair_id) continue;
+      const list = byPair.get(row.pair_id) ?? [];
+      list.push(row);
+      byPair.set(row.pair_id, list);
+    }
+    return byPair;
+  }, [eventSignups]);
 
   const alreadySignedUpPlayerIds = useMemo(
     () => new Set(eventSignups.map(s => s.player_id).filter((id): id is number => id !== null)),
@@ -349,6 +374,7 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
         notes: editDraft.notes || null,
         registration_fee: editDraft.registration_fee ? Number(editDraft.registration_fee) : null,
         payment_instructions: editDraft.payment_instructions || null,
+        signup_mode: editDraft.signup_mode,
       }),
     });
     const json = (await res.json()) as { error?: string; event?: AdminEventRow };
@@ -869,6 +895,14 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                       onChange={ev => handleEditDraftChange("event_type", ev.target.value)} />
                   </div>
                   <div>
+                    <label className={labelCls}>Signup Mode</label>
+                    <select className={`${inputCls} cursor-pointer`} value={editDraft.signup_mode}
+                      onChange={ev => handleEditDraftChange("signup_mode", ev.target.value as "individual" | "paired")}>
+                      <option value="individual">Individual signups</option>
+                      <option value="paired">Paired — sign up with a partner</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className={labelCls}>Start Date</label>
                     <input type="date" className={inputCls} value={editDraft.start_date}
                       onChange={ev => handleEditDraftChange("start_date", ev.target.value)} />
@@ -1172,10 +1206,35 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                                   />
                                 </td>
                                 <td className="px-3 py-2 align-middle text-slate-900 dark:text-slate-100">
-                                  {signup.player?.name ||
-                                    signup.player?.nickname ||
-                                    signup.applicant_name ||
-                                    (signup.player_id != null ? `Player ${signup.player_id}` : "Guest")}
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span>
+                                      {signup.player?.name ||
+                                        signup.player?.nickname ||
+                                        signup.applicant_name ||
+                                        (signup.player_id != null ? `Player ${signup.player_id}` : "Guest")}
+                                    </span>
+                                    {signup.pair_id && (
+                                      <span className="inline-flex items-center rounded-full border border-[#00C8DC]/40 bg-[#00C8DC]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#00C8DC]">
+                                        {(() => {
+                                          const partner = (partnerNameByPairId.get(signup.pair_id) ?? []).find(
+                                            r => r.id !== signup.id,
+                                          );
+                                          const label =
+                                            partner?.player?.nickname ||
+                                            partner?.player?.name ||
+                                            partner?.applicant_name;
+                                          return label ? `Pair w/ ${label}` : "Pair";
+                                        })()}
+                                      </span>
+                                    )}
+                                    {!signup.pair_id &&
+                                      signup.looking_for_partner &&
+                                      signup.status !== "cancelled" && (
+                                        <span className="inline-flex items-center rounded-full border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-bold text-violet-300">
+                                          Solo — looking
+                                        </span>
+                                      )}
+                                  </div>
                                 </td>
                                 <td className="px-3 py-2 align-middle text-slate-600 dark:text-slate-300">
                                   {signup.player?.email || signup.applicant_email || signup.applicant_contact || "—"}

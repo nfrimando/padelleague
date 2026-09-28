@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { resolveCallerPlayerId, isAdminUser } from "@/app/api/events/_lib/auth";
+import {
+  parseSignupMode,
+  reconcileSignupModeChange,
+} from "@/app/api/events/_lib/signupMode";
 import { EventRestrictions } from "@/lib/types";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -82,7 +86,7 @@ export async function PATCH(
   const serviceClient = getServerServiceClient();
   const { data: event, error: fetchError } = await serviceClient
     .from("events")
-    .select("event_id, visibility, created_by_player_id")
+    .select("event_id, visibility, created_by_player_id, signup_mode")
     .eq("event_id", eventId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -127,6 +131,9 @@ export async function PATCH(
     update.registration_status = body.registration_status;
   }
 
+  const nextSignupMode = parseSignupMode(body.signup_mode);
+  if (nextSignupMode) update.signup_mode = nextSignupMode;
+
   if (Object.prototype.hasOwnProperty.call(body, "min_rating") || Object.prototype.hasOwnProperty.call(body, "max_rating")) {
     const restrictions: EventRestrictions = {};
     const minR = typeof body.min_rating === "number" ? body.min_rating : null;
@@ -138,6 +145,20 @@ export async function PATCH(
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "No fields to update." }, { status: 400 });
+  }
+
+  // Reconcile existing signups before the mode actually changes.
+  if (nextSignupMode) {
+    const currentMode = parseSignupMode(event.signup_mode) ?? "individual";
+    const reconciled = await reconcileSignupModeChange(
+      serviceClient,
+      eventId,
+      currentMode,
+      nextSignupMode,
+    );
+    if (!reconciled.ok) {
+      return NextResponse.json({ error: reconciled.error }, { status: 409 });
+    }
   }
 
   const { data: updated, error: updateError } = await serviceClient

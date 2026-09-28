@@ -19,6 +19,7 @@ type EventSignupRow = {
   id: string;
   event_id: number;
   status: string;
+  looking_for_partner?: boolean | null;
   event: {
     event_id: number;
     name?: string | null;
@@ -27,6 +28,7 @@ type EventSignupRow = {
     status: "upcoming" | "ongoing" | "completed";
     registration_fee?: number | null;
     payment_instructions?: string | null;
+    signup_mode?: "individual" | "paired" | null;
   } | null;
 };
 
@@ -524,6 +526,16 @@ export default function HeroSection({
                       ) : (
                         <StatusBadge status={s.status} />
                       )}
+                      {s.event?.signup_mode === "paired" &&
+                        s.looking_for_partner &&
+                        s.status !== "cancelled" && (
+                          <Link
+                            href={`/events/${s.event_id}`}
+                            className="text-violet-300 text-[9px] font-black uppercase tracking-widest whitespace-nowrap hover:text-violet-200 transition-colors"
+                          >
+                            Needs partner
+                          </Link>
+                        )}
                     </div>
                   );
                 })}
@@ -556,6 +568,15 @@ export default function HeroSection({
                       <span className="text-amber-400/70 text-[9px] font-black uppercase whitespace-nowrap">
                         Verify first
                       </span>
+                    ) : event.signup_mode === "paired" ? (
+                      // Paired events need a partner chosen, which happens on the
+                      // event page — one-click join would skip that decision.
+                      <Link
+                        href={`/events/${event.event_id}`}
+                        className="flex items-center gap-0.5 bg-[#00C8DC] hover:bg-white text-[#0E1523] font-black text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-full transition-all shrink-0"
+                      >
+                        Pair Up <ChevronRight size={10} />
+                      </Link>
                     ) : (
                       <button
                         onClick={() => void onRegister(event.event_id)}

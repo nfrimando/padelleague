@@ -12,6 +12,8 @@ type Props = {
   event: Event;
   isAccepted?: boolean;
   currentPlayerRating?: number;
+  /** the viewer has an unanswered partner invite for this event */
+  hasPendingInvite?: boolean;
 };
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -83,7 +85,7 @@ function getEligibilityHint(event: Event, rating?: number): string | null {
   return null;
 }
 
-export default function EventCard({ event, isAccepted = false, currentPlayerRating }: Props) {
+export default function EventCard({ event, isAccepted = false, currentPlayerRating, hasPendingInvite = false }: Props) {
   const statusStyle = STATUS_STYLES[event.status];
   const isOpen = event.registration_status === "open";
   const dateRange = formatDateRange(event.start_date, event.end_date);
@@ -125,8 +127,20 @@ export default function EventCard({ event, isAccepted = false, currentPlayerRati
       {/* Body */}
       <div className="flex flex-col flex-1 p-5 gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">
-            {event.event_type.replace(/_/g, " ")}
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              {event.event_type.replace(/_/g, " ")}
+            </span>
+            {event.signup_mode === "paired" && (
+              <span className="inline-flex items-center rounded-full border border-[#00C8DC]/40 bg-[#00C8DC]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#00C8DC]">
+                Paired
+              </span>
+            )}
+            {hasPendingInvite && (
+              <span className="inline-flex items-center rounded-full border border-[#00C8DC]/40 bg-[#00C8DC]/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#00C8DC]">
+                Invite pending
+              </span>
+            )}
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 leading-tight">
             {event.name ?? `Event #${event.event_id}`}

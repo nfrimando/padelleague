@@ -12,8 +12,14 @@ type RegisterResponse = {
   error?: string;
 };
 
+/** Paired events either name a partner or ask to be matched with one. */
+export type SignupOptions = {
+  partnerPlayerId?: number;
+  lookingForPartner?: boolean;
+};
+
 export function useEventSignup(): {
-  handleSignup: (eventId: number) => Promise<SignupResult>;
+  handleSignup: (eventId: number, options?: SignupOptions) => Promise<SignupResult>;
   loading: boolean;
   error: string | null;
   result: SignupResult;
@@ -22,7 +28,7 @@ export function useEventSignup(): {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SignupResult>(null);
 
-  const handleSignup = useCallback(async (eventId: number) => {
+  const handleSignup = useCallback(async (eventId: number, options: SignupOptions = {}) => {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -43,7 +49,13 @@ export function useEventSignup(): {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ event_id: eventId }),
+        body: JSON.stringify({
+          event_id: eventId,
+          ...(options.partnerPlayerId != null
+            ? { partner_player_id: options.partnerPlayerId }
+            : {}),
+          ...(options.lookingForPartner ? { looking_for_partner: true } : {}),
+        }),
       });
 
       const registerJson = (await registerRes.json()) as RegisterResponse;

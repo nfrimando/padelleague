@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedAdminClient } from "@/app/api/admin/_lib/auth";
 import { EventRestrictions } from "@/lib/types";
+import {
+  parseSignupMode,
+  reconcileSignupModeChange,
+} from "@/app/api/events/_lib/signupMode";
 
 function parseRestrictions(value: unknown): EventRestrictions | null {
   if (!value || typeof value !== "object") return null;
@@ -85,6 +89,7 @@ export async function POST(request: Request) {
     player_limit: typeof body.player_limit === "number" && body.player_limit > 0 ? body.player_limit : null,
     notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
     restrictions: parseRestrictions(body.restrictions),
+    signup_mode: parseSignupMode(body.signup_mode) ?? "individual",
     visibility: "published",
   };
 
@@ -162,12 +167,33 @@ export async function PATCH(request: Request) {
   if (typeof body.visibility === "string" && (body.visibility === "draft" || body.visibility === "published")) {
     update.visibility = body.visibility;
   }
+  const nextSignupMode = parseSignupMode(body.signup_mode);
+  if (nextSignupMode) update.signup_mode = nextSignupMode;
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "No fields to update." }, { status: 400 });
   }
 
   const { supabase } = authResult;
+
+  // Reconcile existing signups before the mode actually changes.
+  if (nextSignupMode) {
+    const { data: current } = await supabase
+      .from("events")
+      .select("signup_mode")
+      .eq("event_id", eventId)
+      .maybeSingle();
+
+    const reconciled = await reconcileSignupModeChange(
+      supabase,
+      eventId,
+      parseSignupMode(current?.signup_mode) ?? "individual",
+      nextSignupMode,
+    );
+    if (!reconciled.ok) {
+      return NextResponse.json({ error: reconciled.error }, { status: 409 });
+    }
+  }
 
   const { data, error } = await supabase
     .from("events")

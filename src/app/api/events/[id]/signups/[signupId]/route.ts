@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { resolveCallerPlayerId, isAdminUser } from "@/app/api/events/_lib/auth";
-import { notifySignupPaymentRequired } from "@/lib/email/notifications/signupPaymentRequired";
-import { notifySignupAccepted } from "@/lib/email/notifications/signupAccepted";
+import { applySignupStatus } from "@/app/api/events/_lib/signupStatus";
+import type { EventSignupStatus } from "@/lib/eventSignupStatus";
 
-type SignupStatus =
-  | "applied"
-  | "pending_payment"
-  | "accepted"
-  | "waitlisted"
-  | "cancelled";
-
-const ALLOWED_SIGNUP_STATUSES: SignupStatus[] = [
+const ALLOWED_SIGNUP_STATUSES: EventSignupStatus[] = [
   "applied",
   "pending_payment",
   "accepted",
@@ -20,7 +13,10 @@ const ALLOWED_SIGNUP_STATUSES: SignupStatus[] = [
 ];
 
 /** PATCH /api/events/[id]/signups/[signupId] — creator or admin updates a signup's status
- *  Body: { status }
+ *  Body: { status, apply_to_partner? }
+ *
+ *  On a confirmed pair the status carries to both halves by default, so a host can't
+ *  accidentally accept one player and leave their partner behind.
  */
 export async function PATCH(
   request: Request,
@@ -70,8 +66,9 @@ export async function PATCH(
 
   const statusRaw = body.status;
   const status =
-    typeof statusRaw === "string" && ALLOWED_SIGNUP_STATUSES.includes(statusRaw as SignupStatus)
-      ? (statusRaw as SignupStatus)
+    typeof statusRaw === "string" &&
+    ALLOWED_SIGNUP_STATUSES.includes(statusRaw as EventSignupStatus)
+      ? (statusRaw as EventSignupStatus)
       : null;
 
   if (!status) {
@@ -84,56 +81,33 @@ export async function PATCH(
     );
   }
 
-  const { data: previousSignup } = await serviceClient
-    .from("signups_events")
-    .select("status, player_id")
-    .eq("id", signupId)
-    .eq("event_id", eventId)
-    .maybeSingle();
+  const applyToPartner = body.apply_to_partner !== false;
 
-  const { data, error } = await serviceClient
-    .from("signups_events")
-    .update({ status })
-    .eq("id", signupId)
-    .eq("event_id", eventId)
-    .select("*")
-    .maybeSingle();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data) return NextResponse.json({ error: "Signup not found." }, { status: 404 });
-
-  if (
-    previousSignup &&
-    previousSignup.status !== status &&
-    data.player_id &&
-    (status === "pending_payment" || status === "accepted")
-  ) {
-    const { data: player } = await serviceClient
-      .from("players")
-      .select("name, nickname, email")
-      .eq("player_id", data.player_id)
-      .maybeSingle();
-
-    if (player?.email) {
-      const notifyData = {
-        playerId: data.player_id,
-        playerEmail: player.email,
-        playerName: player.name ?? null,
-        playerNickname: player.nickname ?? null,
-        eventId,
-        eventName: event.name ?? null,
-      };
-      if (status === "pending_payment") {
-        await notifySignupPaymentRequired(notifyData).catch((err) =>
-          console.error("[email] notifySignupPaymentRequired failed:", err),
-        );
-      } else {
-        await notifySignupAccepted(notifyData).catch((err) =>
-          console.error("[email] notifySignupAccepted failed:", err),
-        );
-      }
-    }
+  let result;
+  try {
+    result = await applySignupStatus({
+      client: serviceClient,
+      eventId,
+      eventName: event.name ?? null,
+      signupId,
+      status,
+      applyToPartner,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to update signup." },
+      { status: 500 },
+    );
   }
 
-  return NextResponse.json({ signup: data });
+  if ("notFound" in result) {
+    return NextResponse.json({ error: "Signup not found." }, { status: 404 });
+  }
+
+  // `signup` is kept for existing callers doing optimistic single-row updates.
+  return NextResponse.json({
+    signup: result.primary,
+    signups: result.signups,
+    warning: result.warning,
+  });
 }

@@ -87,7 +87,7 @@ export default function RegisterPage() {
           supabase
             .from("events")
             .select(
-              "event_id, name, event_type, start_date, end_date, registration_status, status, created_at, updated_at",
+              "event_id, name, event_type, start_date, end_date, registration_status, status, signup_mode, created_at, updated_at",
             )
             .eq("registration_status", "open")
             .eq("visibility", "published")
@@ -198,6 +198,8 @@ export default function RegisterPage() {
           .select("status")
           .eq("player_id", pid)
           .eq("event_id", selectedEventId)
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         if (!active) return;
@@ -757,6 +759,22 @@ export default function RegisterPage() {
                   </div>
                 )}
 
+                {/* This page can't pick a partner — send paired signups to the
+                    event page, which has the partner flow. */}
+                {selectedEvent?.signup_mode === "paired" && (
+                  <div className="rounded-xl border border-[#00C8DC]/25 bg-[#00C8DC]/10 px-4 py-3 text-sm space-y-2">
+                    <p className="text-slate-200">
+                      This event needs a partner.
+                    </p>
+                    <Link
+                      href={`/events/${selectedEvent.event_id}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#00C8DC] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#0E1523] transition-colors hover:bg-white"
+                    >
+                      Sign up on the event page →
+                    </Link>
+                  </div>
+                )}
+
                 {error && (
                   <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
                     {error}
@@ -765,7 +783,7 @@ export default function RegisterPage() {
 
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || selectedEvent?.signup_mode === "paired"}
                   className="w-full bg-[#00C8DC] hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-[#0E1523] font-black py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   {submitting ? (

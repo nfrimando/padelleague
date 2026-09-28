@@ -32,6 +32,7 @@ import WinProbabilityCalculator, {
 import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
 import DashboardBanner from "./DashboardBanner";
+import PartnerInvitePrompt, { type PartnerInvite } from "./PartnerInvitePrompt";
 import PredictionsTab from "./PredictionsTab";
 import { useUnviewedPredictionResults } from "@/lib/useUnviewedPredictionResults";
 import type { User } from "@supabase/supabase-js";
@@ -42,6 +43,7 @@ type SignupRow = {
   event_id: number;
   status: string;
   created_at: string;
+  looking_for_partner?: boolean | null;
   event: {
     event_id: number;
     name?: string | null;
@@ -51,6 +53,7 @@ type SignupRow = {
     registration_fee?: number | null;
     payment_instructions?: string | null;
     visibility?: "draft" | "published" | null;
+    signup_mode?: "individual" | "paired" | null;
   } | null;
 };
 
@@ -85,6 +88,8 @@ function DashboardPageContent() {
   const [player, setPlayer] = useState<Player | null>(null);
   const [signups, setSignups] = useState<SignupRow[]>([]);
   const [openEvents, setOpenEvents] = useState<Event[]>([]);
+  const [partnerInvites, setPartnerInvites] = useState<PartnerInvite[]>([]);
+  const [inviteBusyPairId, setInviteBusyPairId] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [payingSignupId, setPayingSignupId] = useState<string | null>(null);
   const [paymentJustCompleted, setPaymentJustCompleted] = useState(false);
@@ -218,7 +223,7 @@ function DashboardPageContent() {
       supabase
         .from("events")
         .select(
-          "event_id, name, event_type, start_date, end_date, registration_status, status, created_at, updated_at",
+          "event_id, name, event_type, start_date, end_date, registration_status, status, signup_mode, created_at, updated_at",
         )
         .eq("registration_status", "open")
         .eq("visibility", "published")
@@ -235,15 +240,32 @@ function DashboardPageContent() {
 
     if (!p) {
       setSignups([]);
+      setPartnerInvites([]);
       setOpenEvents((openEventRows ?? []) as Event[]);
       setDataLoading(false);
       return;
     }
 
+    // Unanswered partner invites — served separately from the signups query, which
+    // only knows about signups the player already has.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (token) {
+      const inviteRes = await fetch("/api/events/invites", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (inviteRes.ok) {
+        const json = (await inviteRes.json()) as { invites?: PartnerInvite[] };
+        setPartnerInvites(json.invites ?? []);
+      }
+    } else {
+      setPartnerInvites([]);
+    }
+
     const supsResult = await supabase
       .from("signups_events")
       .select(
-        "id, event_id, status, created_at, event:events(event_id, name, start_date, end_date, registration_status, status, registration_fee, payment_instructions, visibility)",
+        "id, event_id, status, created_at, looking_for_partner, event:events(event_id, name, start_date, end_date, registration_status, status, registration_fee, payment_instructions, visibility, signup_mode)",
       )
       .eq("player_id", p.player_id)
       .order("created_at", { ascending: false });
@@ -266,6 +288,33 @@ function DashboardPageContent() {
 
     setDataLoading(false);
   }, [user]);
+
+  /** Accept or decline a partner invite, then refresh the dashboard. */
+  const respondToInvite = useCallback(
+    async (invite: PartnerInvite, action: "accept" | "decline") => {
+      setInviteBusyPairId(invite.pair_id);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setInviteBusyPairId(null);
+        return;
+      }
+
+      const res = await fetch(
+        `/api/events/${invite.event_id}/pairs/${invite.pair_id}/${action}`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (!res.ok) {
+        console.error(`Failed to ${action} partner invite`, await res.text());
+      }
+      // Drop it from the list either way — a stale invite shouldn't linger.
+      setPartnerInvites((prev) => prev.filter((i) => i.pair_id !== invite.pair_id));
+      setInviteBusyPairId(null);
+      await load();
+    },
+    [load],
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -397,6 +446,16 @@ function DashboardPageContent() {
                 onDismiss={() => setPaymentJustCompleted(false)}
               />
             )}
+            {/* An unanswered partner invite is the most time-sensitive item here. */}
+            {partnerInvites.map((invite) => (
+              <PartnerInvitePrompt
+                key={invite.pair_id}
+                invite={invite}
+                busy={inviteBusyPairId === invite.pair_id}
+                onAccept={(i) => void respondToInvite(i, "accept")}
+                onDecline={(i) => void respondToInvite(i, "decline")}
+              />
+            ))}
             {pendingPaymentSignup && (
               <DashboardBanner
                 type="pending_payment"

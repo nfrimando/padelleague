@@ -3,6 +3,10 @@ import {
   getAuthorizedAdminClient,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
+import {
+  insertOrReviveSignup,
+  loadLatestSignup,
+} from "@/app/api/events/_lib/pairs";
 
 type SignupStatus = "applied" | "pending_payment" | "accepted" | "waitlisted" | "cancelled";
 
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("signups_events")
     .select(
-      "id,player_id,event_id,status,applicant_name,applicant_contact,applicant_email,created_at,updated_at,player:player_id(player_id,name,email,nickname,image_link)",
+      "id,player_id,event_id,status,pair_id,looking_for_partner,applicant_name,applicant_contact,applicant_email,created_at,updated_at,player:player_id(player_id,name,email,nickname,image_link)",
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });
@@ -90,7 +94,7 @@ export async function POST(request: Request) {
 
   const { data: eventRow, error: eventError } = await supabase
     .from("events")
-    .select("event_id")
+    .select("event_id, signup_mode")
     .eq("event_id", eventId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -117,32 +121,46 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Player not found." }, { status: 404 });
   }
 
-  const { data: existingSignup, error: existingError } = await supabase
-    .from("signups_events")
-    .select("id")
-    .eq("event_id", eventId)
-    .eq("player_id", playerId)
-    .maybeSingle();
-
-  if (existingError) {
-    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  let existingSignup;
+  try {
+    existingSignup = await loadLatestSignup(supabase, eventId, playerId);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Lookup failed." },
+      { status: 500 },
+    );
   }
 
-  if (existingSignup) {
+  // A cancelled or waitlisted row is revived rather than duplicated; anything live
+  // is a genuine conflict.
+  if (
+    existingSignup &&
+    existingSignup.status !== "cancelled" &&
+    existingSignup.status !== "waitlisted"
+  ) {
     return NextResponse.json(
       { error: "Signup already exists for this player and event." },
       { status: 409 },
     );
   }
 
+  let created;
+  try {
+    created = await insertOrReviveSignup(supabase, eventId, playerId, {
+      status,
+      lookingForPartner: eventRow.signup_mode === "paired",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to create signup." },
+      { status: 500 },
+    );
+  }
+
   const { data, error } = await supabase
     .from("signups_events")
-    .insert({
-      event_id: eventId,
-      player_id: playerId,
-      status,
-    })
     .select("*")
+    .eq("id", created.id)
     .maybeSingle();
 
   if (error || !data) {
