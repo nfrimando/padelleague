@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getLastNameKey } from "@/lib/utils";
 
 export type LadderTier = {
   id: number;
@@ -51,12 +52,44 @@ export type LadderPendingMatch = {
   venue: string | null;
 };
 
+// One frozen end-of-cycle record, from ladder_cycle_results. tierName/tierRank are the snapshot's
+// own denormalized copies, not a live ladder_tiers join, so a later tier reseed can't rewrite them.
+export type LadderCycleResult = {
+  player_id: string;
+  name: string;
+  nickname: string;
+  image_link: string | null;
+  tierId: number;
+  tierName: string;
+  tierRank: number;
+  stars: number;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  // null for players below the badge threshold — recorded, but unranked and unbadged.
+  overallRank: number | null;
+  tierPosition: number | null;
+  badgeEligible: boolean;
+};
+
+export type LadderCompletedCycle = {
+  id: number;
+  label: string;
+  startsAt: string | null;
+  endsAt: string | null;
+};
+
 export type LadderPageData = {
   hasActiveCycle: boolean;
   activeCycle: { id: number; label: string } | null;
+  // Status of the cycle `activeCycle` resolved to. fetchActiveCycle falls back to the latest cycle
+  // whatever its status, so after a close this is 'completed' and the standings are final, not live.
+  activeCycleStatus: string | null;
   tiers: LadderTier[];
   groupedPlayers: Record<number, LadderPlayer[]>;
   pendingMatchesByTier: Record<number, LadderPendingMatch[]>;
+  completedCycles: LadderCompletedCycle[];
+  resultsByCycle: Record<number, LadderCycleResult[]>;
 };
 
 type TierRow = { id: number; name: string; rank: number; elo_floor: number | string };
@@ -91,34 +124,39 @@ function makeServerClient() {
 
 type ServerClient = ReturnType<typeof makeServerClient>;
 
-function getLastNameKey(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return "";
-  const parts = trimmed.split(/\s+/);
-  return parts[parts.length - 1].toLowerCase();
-}
-
 export async function fetchActiveCycle(
   db: SupabaseClient,
-): Promise<{ id: number; label: string } | null> {
+): Promise<{ id: number; label: string; status: string } | null> {
   const { data: active } = await db
     .from("ladder_cycles")
-    .select("id, label")
+    .select("id, label, status")
     .eq("status", "active")
     .order("id", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (active?.id) return { id: active.id as number, label: active.label as string };
+  if (active?.id) {
+    return {
+      id: active.id as number,
+      label: active.label as string,
+      status: (active.status as string) ?? "active",
+    };
+  }
 
   const { data: latest } = await db
     .from("ladder_cycles")
-    .select("id, label")
+    .select("id, label, status")
     .order("id", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  return latest?.id ? { id: latest.id as number, label: latest.label as string } : null;
+  return latest?.id
+    ? {
+        id: latest.id as number,
+        label: latest.label as string,
+        status: (latest.status as string) ?? "unknown",
+      }
+    : null;
 }
 
 function toStandingEvent(row: StandingRow): LadderStandingEvent {
@@ -152,16 +190,26 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
     elo_floor: Number(t.elo_floor),
   }));
 
-  const activeCycle = await fetchActiveCycle(db);
+  // Completed-cycle results are independent of the live standings, so they load in parallel and
+  // are returned even when there is no cycle to show standings for.
+  const [activeCycle, cycleResults] = await Promise.all([
+    fetchActiveCycle(db),
+    fetchCompletedCycleResults(db),
+  ]);
+
   if (activeCycle == null) {
     return {
       hasActiveCycle: false,
       activeCycle: null,
+      activeCycleStatus: null,
       tiers,
       groupedPlayers: {},
       pendingMatchesByTier: {},
+      ...cycleResults,
     };
   }
+
+  const activeCycleStatus = activeCycle.status;
 
   const { data: standingsData, error: standingsError } = await db
     .from("ladder_standing_events")
@@ -216,9 +264,11 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
     return {
       hasActiveCycle: true,
       activeCycle,
+      activeCycleStatus,
       tiers,
       groupedPlayers: {},
       pendingMatchesByTier: {},
+      ...cycleResults,
     };
   }
 
@@ -275,7 +325,130 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
 
   const pendingMatchesByTier = await fetchPendingLadderMatches(db, activeCycle.id, latestByPlayer);
 
-  return { hasActiveCycle: true, activeCycle, tiers, groupedPlayers, pendingMatchesByTier };
+  return {
+    hasActiveCycle: true,
+    activeCycle,
+    activeCycleStatus,
+    tiers,
+    groupedPlayers,
+    pendingMatchesByTier,
+    ...cycleResults,
+  };
+}
+
+type CycleResultRow = {
+  cycle_id: number;
+  player_id: number | string;
+  tier_id: number;
+  tier_name: string;
+  tier_rank: number;
+  stars: number;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  overall_rank: number | null;
+  tier_position: number | null;
+  badge_eligible: boolean;
+};
+
+// The frozen results of every completed cycle, newest cycle first, for the /ladder Results tab.
+// Written only by the admin cycle-close action (src/lib/ladder/ladderCycleClose.ts).
+async function fetchCompletedCycleResults(db: ServerClient): Promise<{
+  completedCycles: LadderCompletedCycle[];
+  resultsByCycle: Record<number, LadderCycleResult[]>;
+}> {
+  const empty = { completedCycles: [], resultsByCycle: {} };
+
+  const { data: cyclesData, error: cyclesError } = await db
+    .from("ladder_cycles")
+    .select("id, label, starts_at, ends_at")
+    .eq("status", "completed")
+    .order("id", { ascending: false });
+
+  if (cyclesError || !cyclesData || cyclesData.length === 0) return empty;
+
+  const completedCycles: LadderCompletedCycle[] = (
+    cyclesData as Array<{
+      id: number;
+      label: string | null;
+      starts_at: string | null;
+      ends_at: string | null;
+    }>
+  ).map((c) => ({
+    id: c.id,
+    label: c.label ?? `Cycle ${c.id}`,
+    startsAt: c.starts_at,
+    endsAt: c.ends_at,
+  }));
+
+  const { data: resultsData, error: resultsError } = await db
+    .from("ladder_cycle_results")
+    .select(
+      "cycle_id, player_id, tier_id, tier_name, tier_rank, stars, matches_played, wins, losses, overall_rank, tier_position, badge_eligible",
+    )
+    .in(
+      "cycle_id",
+      completedCycles.map((c) => c.id),
+    );
+
+  if (resultsError || !resultsData || resultsData.length === 0) {
+    return { completedCycles, resultsByCycle: {} };
+  }
+
+  const rows = resultsData as CycleResultRow[];
+
+  // Player display fields live on `players`, not the snapshot — a rename should show through.
+  const playerIds = Array.from(new Set(rows.map((r) => Number(r.player_id))));
+  const { data: playersData } = await db
+    .from("players")
+    .select("player_id, name, nickname, image_link")
+    .in("player_id", playerIds);
+
+  const playerInfo = new Map<string, PlayerRow>();
+  for (const p of (playersData ?? []) as PlayerRow[]) {
+    playerInfo.set(String(p.player_id), p);
+  }
+
+  const resultsByCycle: Record<number, LadderCycleResult[]> = {};
+  for (const row of rows) {
+    const pid = String(row.player_id);
+    const info = playerInfo.get(pid);
+
+    const entry: LadderCycleResult = {
+      player_id: pid,
+      name: info?.name ?? "Unknown",
+      nickname: info?.nickname ?? "",
+      image_link: info?.image_link ?? null,
+      tierId: row.tier_id,
+      tierName: row.tier_name,
+      tierRank: row.tier_rank,
+      stars: row.stars,
+      matchesPlayed: row.matches_played,
+      wins: row.wins,
+      losses: row.losses,
+      overallRank: row.overall_rank,
+      tierPosition: row.tier_position,
+      badgeEligible: row.badge_eligible === true,
+    };
+
+    if (!resultsByCycle[row.cycle_id]) resultsByCycle[row.cycle_id] = [];
+    resultsByCycle[row.cycle_id].push(entry);
+  }
+
+  // Ranked players in finishing order first, then the unranked (sub-threshold) players by tier and
+  // stars so the collapsed "not badged" list still reads sensibly.
+  for (const cycleId of Object.keys(resultsByCycle)) {
+    resultsByCycle[Number(cycleId)].sort((a, b) => {
+      if (a.overallRank !== null && b.overallRank !== null) return a.overallRank - b.overallRank;
+      if (a.overallRank !== null) return -1;
+      if (b.overallRank !== null) return 1;
+      if (b.tierRank !== a.tierRank) return b.tierRank - a.tierRank;
+      if (b.stars !== a.stars) return b.stars - a.stars;
+      return getLastNameKey(a.name).localeCompare(getLastNameKey(b.name));
+    });
+  }
+
+  return { completedCycles, resultsByCycle };
 }
 
 type PendingMatchTeamRow = {
@@ -396,10 +569,12 @@ async function fetchPendingLadderMatches(
   return pendingMatchesByTier;
 }
 
+export const LADDER_PAGE_CACHE_TAG = "ladder-page-data";
+
 const getCachedLadderPageData = unstable_cache(
   fetchLadderPageDataUncached,
-  ["ladder-page-data"],
-  { revalidate: 120 },
+  [LADDER_PAGE_CACHE_TAG],
+  { revalidate: 120, tags: [LADDER_PAGE_CACHE_TAG] },
 );
 
 export async function fetchLadderPageData(): Promise<LadderPageData> {

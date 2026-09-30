@@ -395,3 +395,33 @@ CREATE TABLE public.ladder_standing_events (
   CONSTRAINT ladder_standing_events_tier_before_id_fkey FOREIGN KEY (tier_before_id) REFERENCES public.ladder_tiers(id),
   CONSTRAINT ladder_standing_events_tier_after_id_fkey FOREIGN KEY (tier_after_id) REFERENCES public.ladder_tiers(id)
 );
+
+-- Frozen end-of-cycle record, written by the admin cycle-close action
+-- (src/lib/ladder/ladderCycleClose.ts). tier_name/tier_rank are denormalized so a future
+-- ladder_tiers reseed cannot rewrite a past cycle's badges. See .claude/ladder.md.
+CREATE TABLE public.ladder_cycle_results (
+  id              uuid NOT NULL DEFAULT gen_random_uuid(),
+  cycle_id        bigint NOT NULL,
+  player_id       bigint NOT NULL,
+  tier_id         bigint NOT NULL,
+  tier_name       text NOT NULL,
+  tier_rank       integer NOT NULL,
+  stars           smallint NOT NULL CHECK (stars >= 0 AND stars <= 2),
+  matches_played  integer NOT NULL DEFAULT 0,
+  wins            integer NOT NULL DEFAULT 0,
+  losses          integer NOT NULL DEFAULT 0,
+  overall_rank    integer CHECK (overall_rank IS NULL OR overall_rank > 0),
+  tier_position   integer CHECK (tier_position IS NULL OR tier_position > 0),
+  badge_eligible  boolean NOT NULL DEFAULT false,
+  final_rating    numeric,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ladder_cycle_results_pkey PRIMARY KEY (id),
+  CONSTRAINT ladder_cycle_results_cycle_id_fkey  FOREIGN KEY (cycle_id)  REFERENCES public.ladder_cycles(id),
+  CONSTRAINT ladder_cycle_results_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(player_id),
+  CONSTRAINT ladder_cycle_results_tier_id_fkey   FOREIGN KEY (tier_id)   REFERENCES public.ladder_tiers(id),
+  CONSTRAINT ladder_cycle_results_uniq UNIQUE (cycle_id, player_id),
+  CONSTRAINT ladder_cycle_results_rank_consistent CHECK (
+    (badge_eligible AND overall_rank IS NOT NULL AND tier_position IS NOT NULL) OR
+    (NOT badge_eligible AND overall_rank IS NULL AND tier_position IS NULL)
+  )
+);

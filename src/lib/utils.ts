@@ -100,3 +100,13 @@ export const formatMatchTime = (timeString: string | null) => {
   hour = hour % 12 || 12;
   return `${hour}:${minute} ${ampm}`;
 };
+
+// Sort key for "alphabetical by surname". Used as the final, deterministic tiebreak for ladder
+// ordering — both the live /ladder standings (src/lib/ladderData.ts) and the frozen end-of-cycle
+// ranks (src/lib/ladder/ladderCycleClose.ts), so recorded ranks match what players were shown.
+export function getLastNameKey(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split(/\s+/);
+  return parts[parts.length - 1].toLowerCase();
+}

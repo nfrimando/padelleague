@@ -5,11 +5,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import LadderOptInBanner from "@/components/LadderOptInBanner";
+import LadderResultsPanel from "@/components/LadderResultsPanel";
 import { tierIconSrc, StarBadge, CushionBadge } from "@/components/LadderTierBadge";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { supabase } from "@/lib/supabase";
 import { describeLadderEvent } from "@/lib/ladderEventDisplay";
-import type { LadderPendingMatch, LadderPlayer, LadderTier } from "@/lib/ladderData";
+import type {
+  LadderCompletedCycle,
+  LadderCycleResult,
+  LadderPendingMatch,
+  LadderPlayer,
+  LadderTier,
+} from "@/lib/ladderData";
 
 function OptedInDot() {
   return (
@@ -75,19 +82,27 @@ function LadderMatchScrollCard({
   );
 }
 
-function LadderViewContent({
-  hasActiveCycle,
-  activeCycle,
-  tiers,
-  groupedPlayers,
-  pendingMatchesByTier,
-}: {
+type LadderViewProps = {
   hasActiveCycle: boolean;
   activeCycle: { id: number; label: string } | null;
+  activeCycleStatus: string | null;
   tiers: LadderTier[];
   groupedPlayers: Record<number, LadderPlayer[]>;
   pendingMatchesByTier: Record<number, LadderPendingMatch[]>;
-}) {
+  completedCycles: LadderCompletedCycle[];
+  resultsByCycle: Record<number, LadderCycleResult[]>;
+};
+
+function LadderViewContent({
+  hasActiveCycle,
+  activeCycle,
+  activeCycleStatus,
+  tiers,
+  groupedPlayers,
+  pendingMatchesByTier,
+  completedCycles,
+  resultsByCycle,
+}: LadderViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { player: currentPlayer, isLinked } = useCurrentPlayer();
@@ -175,6 +190,21 @@ function LadderViewContent({
     return () => observer.disconnect();
   }, [allPendingMatches.length]);
 
+  type LadderPanel = "standings" | "results";
+  const rawView = searchParams.get("view");
+  const view: LadderPanel = rawView === "results" ? "results" : "standings";
+
+  const selectView = (next: LadderPanel) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "standings") params.delete("view");
+    else params.set("view", next);
+    router.push(`/ladder?${params.toString()}`);
+  };
+
+  // fetchActiveCycle falls back to the latest cycle whatever its status, so a closed cycle still
+  // renders here — label it final rather than implying the climb is still live.
+  const isCycleClosed = activeCycleStatus === "completed";
+
   type LadderFilter = "optedIn" | "played" | "either" | "all";
   const rawFilter = searchParams.get("filter");
   const filter: LadderFilter =
@@ -251,17 +281,57 @@ function LadderViewContent({
               Tier Ladder
             </h1>
             <p className="mt-2 text-[#687FA3]">
-              Standings for the current cycle, grouped by tier. Anyone can play
-              ladder matches; the roulette draw is opt-in.
+              {view === "results"
+                ? "Final tiers and stars from every cycle that has finished. Badges need at least 3 ladder matches."
+                : isCycleClosed
+                  ? "This cycle has finished — these are its final standings, grouped by tier."
+                  : "Standings for the current cycle, grouped by tier. Anyone can play ladder matches; the roulette draw is opt-in."}
             </p>
           </div>
           {activeCycle && (
             <span className="shrink-0 text-[10px] text-[#687FA3]/50 whitespace-nowrap pt-1">
               {activeCycle.label} · #{activeCycle.id}
+              {isCycleClosed ? " · Completed" : ""}
             </span>
           )}
         </div>
 
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 mb-6">
+          <div className="inline-flex items-center gap-1 rounded-full border border-[#687FA3]/20 bg-[#687FA3]/5 p-1">
+            <button
+              type="button"
+              onClick={() => selectView("standings")}
+              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                view === "standings"
+                  ? "bg-[#1a2540] text-white"
+                  : "text-[#687FA3] hover:text-white"
+              }`}
+            >
+              Standings
+            </button>
+            <button
+              type="button"
+              onClick={() => selectView("results")}
+              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                view === "results"
+                  ? "bg-[#1a2540] text-white"
+                  : "text-[#687FA3] hover:text-white"
+              }`}
+            >
+              Results
+            </button>
+          </div>
+        </div>
+
+        {view === "results" ? (
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <LadderResultsPanel
+              completedCycles={completedCycles}
+              resultsByCycle={resultsByCycle}
+            />
+          </div>
+        ) : (
+          <>
         <LadderOptInBanner
           isLinked={isLinked}
           optIn={optIn}
@@ -434,18 +504,14 @@ function LadderViewContent({
             </div>
           </>
         )}
+          </>
+        )}
       </main>
     </div>
   );
 }
 
-export default function LadderView(props: {
-  hasActiveCycle: boolean;
-  activeCycle: { id: number; label: string } | null;
-  tiers: LadderTier[];
-  groupedPlayers: Record<number, LadderPlayer[]>;
-  pendingMatchesByTier: Record<number, LadderPendingMatch[]>;
-}) {
+export default function LadderView(props: LadderViewProps) {
   return (
     <Suspense fallback={null}>
       <LadderViewContent {...props} />
