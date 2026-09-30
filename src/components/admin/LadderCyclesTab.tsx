@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { LadderStartCyclePanel } from "@/components/admin/LadderStartCyclePanel";
 
 const buttonCls =
   "rounded px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 disabled:cursor-not-allowed disabled:opacity-50";
@@ -259,9 +260,16 @@ export function LadderCyclesTab({ enabled }: { enabled: boolean }) {
       {!activeCycle && cycles.length > 0 && (
         <p className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           No cycle is currently active, so the roulette and new ladder matches will fail until the
-          next cycle is created. Creating a new cycle is not yet available here.
+          next cycle is started below.
         </p>
       )}
+
+      <LadderStartCyclePanel
+        enabled={enabled}
+        hasActiveCycle={activeCycle !== null}
+        nextCycleNumber={(cycles[0]?.id ?? 0) + 1}
+        onStarted={loadCycles}
+      />
     </div>
   );
 }

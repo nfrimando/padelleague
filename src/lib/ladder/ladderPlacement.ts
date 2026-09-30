@@ -1,26 +1,59 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchLatestLadderStandings } from "@/lib/ladder/ladderStandingLedger";
+import { fetchTiersForCycle } from "@/lib/ladder/ladderCycleTiers";
 import { fetchActiveCycle } from "@/lib/ladderData";
 import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 import type { LadderStanding } from "@/lib/ladder/ladderStandingTransition";
 
 export type TierBucketRow = { id: number; name: string; rank: number; elo_floor: number };
 
-// Same bucketing as supabase/migrations/20260718000006_seed_ladder_cycle_1.sql:
-// LEAST(2, FLOOR((rating - elo_floor) / 0.5)), placed into the highest tier whose floor the
-// rating clears.
+// Fallback star band for degenerate tier sets (a single tier, or a zero-width one). Matches the
+// 0.5 the ladder ran on while every tier was 1.5 wide.
+const FALLBACK_STAR_BAND = 0.5;
+
+// Width of a tier's rating range: up to the next tier's floor. The top tier is open-ended, so it
+// borrows the width of the tier directly below it — predictable, and derived from the same floors
+// the admin entered.
+function tierWidth(sorted: TierBucketRow[], index: number): number {
+  const next = sorted[index + 1];
+  if (next) return next.elo_floor - sorted[index].elo_floor;
+
+  const below = sorted[index - 1];
+  if (below) return sorted[index].elo_floor - below.elo_floor;
+
+  return FALLBACK_STAR_BAND * 3;
+}
+
+// Places a rating into the highest tier whose floor it clears, then splits that tier into equal
+// thirds for 0★ / 1★ / 2★. Deriving the band from the tier's own width (rather than a hardcoded
+// 0.5) means admin-entered thresholds of any width still divide cleanly when a cycle starts.
+//
+// With the 1.5-wide tiers the ladder has run on since
+// 20260718000005_fix_ladder_tier_thresholds.sql, thirds are 0.5 — identical to the original
+// LEAST(2, FLOOR((rating - elo_floor) / 0.5)) in the seed/backfill migrations.
 export function placeByRating(
   rating: number,
   tiers: TierBucketRow[],
 ): { tierId: number; stars: number } | null {
   const sorted = [...tiers].sort((a, b) => a.rank - b.rank);
-  let chosen: TierBucketRow | null = null;
-  for (const tier of sorted) {
-    if (rating >= tier.elo_floor) chosen = tier;
-  }
-  if (!chosen) return null;
 
-  const stars = Math.min(2, Math.max(0, Math.floor((rating - chosen.elo_floor) / 0.5)));
+  let chosenIndex = -1;
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (rating >= sorted[i].elo_floor) chosenIndex = i;
+  }
+  if (chosenIndex === -1) return null;
+
+  const chosen = sorted[chosenIndex];
+  const width = tierWidth(sorted, chosenIndex);
+  const band = width > 0 ? width / 3 : FALLBACK_STAR_BAND;
+
+  // Both the band and the offset are floating-point subtractions of admin-entered decimals, so a
+  // rating sitting exactly on a band edge can land a hair under it (3.4 against a 3.0-3.6 tier
+  // divides to 1.9999999999999991). Nudge by an epsilon before flooring so an exact boundary
+  // counts as reaching the star.
+  const bandsCleared = Math.floor((rating - chosen.elo_floor) / band + 1e-9);
+
+  const stars = Math.min(2, Math.max(0, bandsCleared));
   return { tierId: chosen.id, stars };
 }
 
@@ -53,16 +86,15 @@ export async function ensureLadderPlacement(
     return { standingsByPlayer, warnings };
   }
 
-  const { data: tiersData, error: tiersError } = await supabase
-    .from("ladder_tiers")
-    .select("id, name, rank, elo_floor");
+  // Cycle-scoped floors: a player joining mid-cycle is bucketed by the cutoffs that cycle was
+  // started with, not by whatever the global ladder_tiers rows say today.
+  const { tiers, error: tiersError } = await fetchTiersForCycle(supabase, cycleId);
 
-  if (tiersError || !tiersData || tiersData.length === 0) {
-    warnings.push(tiersError?.message || "No ladder tiers configured.");
+  if (tiersError || tiers.length === 0) {
+    warnings.push(tiersError || "No ladder tiers configured.");
     return { standingsByPlayer, warnings };
   }
 
-  const tiers = tiersData as TierBucketRow[];
   const ratingsByPlayer = await fetchLatestRatingsByPlayerIds(supabase, missingPlayerIds);
 
   for (const playerId of missingPlayerIds) {

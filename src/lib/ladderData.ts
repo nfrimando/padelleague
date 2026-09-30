@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { fetchTiersForCycle } from "@/lib/ladder/ladderCycleTiers";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getLastNameKey } from "@/lib/utils";
 
@@ -82,8 +83,8 @@ export type LadderCompletedCycle = {
 export type LadderPageData = {
   hasActiveCycle: boolean;
   activeCycle: { id: number; label: string } | null;
-  // Status of the cycle `activeCycle` resolved to. fetchActiveCycle falls back to the latest cycle
-  // whatever its status, so after a close this is 'completed' and the standings are final, not live.
+  // Status of the cycle `activeCycle` resolved to. fetchActiveCycle falls back to the latest
+  // closed cycle, so after a close this is 'completed' and the standings are final, not live.
   activeCycleStatus: string | null;
   tiers: LadderTier[];
   groupedPlayers: Record<number, LadderPlayer[]>;
@@ -143,9 +144,14 @@ export async function fetchActiveCycle(
     };
   }
 
+  // Fall back to the most recent COMPLETED cycle so a closed cycle's final standings still
+  // render. Deliberately excludes 'upcoming': startLadderCycle creates the next cycle as
+  // upcoming and only flips it to active once every placement row has landed, so an upcoming
+  // cycle is a half-built one that nothing should read.
   const { data: latest } = await db
     .from("ladder_cycles")
     .select("id, label, status")
+    .eq("status", "completed")
     .order("id", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -177,19 +183,6 @@ function toStandingEvent(row: StandingRow): LadderStandingEvent {
 async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
   const db = makeServerClient();
 
-  const { data: tiersData, error: tiersError } = await db
-    .from("ladder_tiers")
-    .select("id, name, rank, elo_floor")
-    .order("rank", { ascending: true });
-
-  if (tiersError) throw new Error(tiersError.message);
-  const tiers = ((tiersData ?? []) as TierRow[]).map((t) => ({
-    id: t.id,
-    name: t.name,
-    rank: t.rank,
-    elo_floor: Number(t.elo_floor),
-  }));
-
   // Completed-cycle results are independent of the live standings, so they load in parallel and
   // are returned even when there is no cycle to show standings for.
   const [activeCycle, cycleResults] = await Promise.all([
@@ -198,16 +191,34 @@ async function fetchLadderPageDataUncached(): Promise<LadderPageData> {
   ]);
 
   if (activeCycle == null) {
+    // No cycle at all: fall back to the global tier definitions just to render the tier tabs.
+    const { data: tiersData, error: tiersError } = await db
+      .from("ladder_tiers")
+      .select("id, name, rank, elo_floor")
+      .order("rank", { ascending: true });
+
+    if (tiersError) throw new Error(tiersError.message);
+
     return {
       hasActiveCycle: false,
       activeCycle: null,
       activeCycleStatus: null,
-      tiers,
+      tiers: ((tiersData ?? []) as TierRow[]).map((t) => ({
+        id: t.id,
+        name: t.name,
+        rank: t.rank,
+        elo_floor: Number(t.elo_floor),
+      })),
       groupedPlayers: {},
       pendingMatchesByTier: {},
       ...cycleResults,
     };
   }
+
+  // Show the cutoffs the resolved cycle actually runs under, not whatever the global
+  // ladder_tiers rows say after a later cycle moved them.
+  const { tiers, error: tiersError } = await fetchTiersForCycle(db, activeCycle.id);
+  if (tiersError) throw new Error(tiersError);
 
   const activeCycleStatus = activeCycle.status;
 
