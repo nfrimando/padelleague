@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import PlayerSlotPicker from "@/components/PlayerSlotPicker";
 import { usePlayers } from "@/lib/usePlayers";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
+import { usePlayerMatchCounts } from "@/lib/usePlayerMatchCounts";
 import type { EventRestrictions, Player } from "@/lib/types";
 
 type Props = {
@@ -47,7 +48,7 @@ export default function EventPairSignupModal({
 
   const { players } = usePlayers({
     orderByName: true,
-    select: "player_id, name, nickname, image_link, latest_rating",
+    select: "player_id, name, nickname, image_link",
   });
 
   // Filter before searching so excluded players never surface as suggestions.
@@ -61,6 +62,11 @@ export default function EventPairSignupModal({
   );
   const suggestions = usePlayerSearch(selectable, search);
 
+  // `players` has no rating column — the partner's current rating comes from the ledger.
+  const partnerIds = useMemo(() => (partner ? [partner.player_id] : []), [partner]);
+  const { latestRatings } = usePlayerMatchCounts(partnerIds);
+  const partnerRating = partner ? (latestRatings[String(partner.player_id)] ?? null) : null;
+
   const feeLabel =
     requiresPayment && registrationFee != null && registrationFee > 0
       ? `₱${Number(registrationFee).toLocaleString()}`
@@ -68,7 +74,6 @@ export default function EventPairSignupModal({
 
   // Advisory only — rating restrictions never block a signup anywhere in the app.
   const ratingNote = useMemo(() => {
-    const partnerRating = partner?.latest_rating;
     if (viewerRating == null || partnerRating == null) return null;
     const min = restrictions?.min_rating;
     const max = restrictions?.max_rating;
@@ -81,7 +86,7 @@ export default function EventPairSignupModal({
       return `Your pair averages ${avg.toFixed(2)}, above this event's suggested ${max}. You can still sign up — the host decides.`;
     }
     return null;
-  }, [partner, viewerRating, restrictions]);
+  }, [partnerRating, viewerRating, restrictions]);
 
   const tabCls = (active: boolean) =>
     `flex-1 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide transition-colors cursor-pointer ${
