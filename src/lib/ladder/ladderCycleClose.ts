@@ -17,6 +17,9 @@ export type LadderCycleFinalStanding = {
   playerId: number;
   tierId: number;
   stars: number;
+  // From the player's cycle_start row; null/absent when they have none.
+  startTierId?: number | null;
+  startStars?: number | null;
 };
 
 export type LadderCycleResultDraft = {
@@ -32,6 +35,10 @@ export type LadderCycleResultDraft = {
   tier_position: number | null;
   badge_eligible: boolean;
   final_rating: number | null;
+  start_tier_id: number | null;
+  start_tier_name: string | null;
+  start_tier_rank: number | null;
+  start_stars: number | null;
 };
 
 export type ComputeCycleResultsInput = {
@@ -69,6 +76,8 @@ export function computeCycleResults(
     const tally = talliesByPlayer.get(key);
     const matchesPlayed = tally?.matchesPlayed ?? 0;
     const rating = ratingsByPlayer.get(key);
+    const startTier =
+      standing.startTierId == null ? undefined : tierById.get(standing.startTierId);
 
     drafts.push({
       player_id: standing.playerId,
@@ -83,6 +92,10 @@ export function computeCycleResults(
       tier_position: null,
       badge_eligible: matchesPlayed >= LADDER_BADGE_MIN_MATCHES,
       final_rating: rating === undefined || rating === null ? null : rating,
+      start_tier_id: startTier?.id ?? null,
+      start_tier_name: startTier?.name ?? null,
+      start_tier_rank: startTier?.rank ?? null,
+      start_stars: startTier ? (standing.startStars ?? null) : null,
     });
   }
 
@@ -158,12 +171,15 @@ export async function closeLadderCycle(
 
   const { data: cycleData, error: cycleError } = await supabase
     .from("ladder_cycles")
-    .select("id, label, status")
+    .select("id, label, status, ends_at")
     .eq("id", cycleId)
     .maybeSingle();
 
   if (cycleError) return { ok: false, error: `Failed to load cycle: ${cycleError.message}` };
   if (!cycleData) return { ok: false, error: `Ladder cycle ${cycleId} not found.` };
+
+  // Kept so a recompute doesn't move a completed cycle's end date to "now".
+  const priorEndsAt = (cycleData.ends_at as string | null) ?? null;
 
   const cycle = {
     id: cycleData.id as number,
@@ -220,9 +236,15 @@ export async function closeLadderCycle(
   const standings: LadderCycleFinalStanding[] = [];
   const seen = new Set<string>();
   const talliesByPlayer = new Map<string, LadderCycleTally>();
+  const startByPlayer = new Map<string, { tierId: number; stars: number }>();
 
   for (const row of standingRows) {
     const key = String(row.player_id);
+
+    // uniq_lse_cycle_start guarantees at most one per player per cycle.
+    if (row.event_type === "cycle_start") {
+      startByPlayer.set(key, { tierId: row.tier_after_id, stars: row.stars_after });
+    }
 
     // Only completed/revised matches ever write source_type='match' rows, and uniq_lse_match
     // guarantees one per player per match — so these counts are exact.
@@ -243,6 +265,12 @@ export async function closeLadderCycle(
     });
   }
 
+  for (const standing of standings) {
+    const start = startByPlayer.get(String(standing.playerId));
+    standing.startTierId = start?.tierId ?? null;
+    standing.startStars = start?.stars ?? null;
+  }
+
   const playerIds = standings.map((s) => s.playerId);
 
   const { data: playersData, error: playersError } = await supabase
@@ -258,6 +286,28 @@ export async function closeLadderCycle(
   }
 
   const ratingsByPlayer = await fetchLatestRatingsByPlayerIds(supabase, playerIds);
+
+  // final_rating is "the rating at close". On a recompute of a completed cycle, the ledger has moved
+  // on (next-cycle matches), so keep the rating recorded at the original close where there is one.
+  if (cycle.status === "completed") {
+    const { data: priorData, error: priorError } = await supabase
+      .from("ladder_cycle_results")
+      .select("player_id, final_rating")
+      .eq("cycle_id", cycleId);
+
+    if (priorError) {
+      return { ok: false, error: `Failed to load prior results: ${priorError.message}` };
+    }
+
+    for (const row of (priorData ?? []) as Array<{
+      player_id: number | string;
+      final_rating: number | string | null;
+    }>) {
+      if (row.final_rating == null) continue;
+      const rating = Number(row.final_rating);
+      if (Number.isFinite(rating)) ratingsByPlayer.set(String(row.player_id), rating);
+    }
+  }
 
   const results = computeCycleResults({
     standings,
@@ -307,7 +357,8 @@ export async function closeLadderCycle(
     .from("ladder_cycles")
     .update({
       status: "completed",
-      ends_at: new Date().toISOString(),
+      ends_at:
+        cycle.status === "completed" && priorEndsAt ? priorEndsAt : new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("id", cycleId);

@@ -38,6 +38,37 @@ function formatCycleDates(cycle: LadderCompletedCycle): string | null {
   return end ? `Ended ${end}` : start ? `Started ${start}` : null;
 }
 
+// Start → finish within the cycle, by tier. null when the snapshot has no starting tier.
+function ClimbLabel({ result }: { result: LadderCycleResult }) {
+  if (result.startTierName === null || result.startTierRank === null) return null;
+
+  const climbed = result.tierRank - result.startTierRank;
+  const change =
+    climbed > 0 ? (
+      <span className="text-emerald-400/80">▲{climbed}</span>
+    ) : climbed < 0 ? (
+      <span className="text-rose-400/80">▼{-climbed}</span>
+    ) : (
+      <span>held</span>
+    );
+
+  return (
+    <p className="pl-1 mt-0.5 flex items-center gap-1 text-[10px] text-[#687FA3]/60">
+      <span>Started</span>
+      <img
+        src={tierIconSrc(result.startTierName)}
+        alt=""
+        className="w-3.5 h-3.5 object-contain"
+      />
+      <span>{result.startTierName}</span>
+      <span aria-hidden>→</span>
+      <span>{result.tierName}</span>
+      <span>·</span>
+      {change}
+    </p>
+  );
+}
+
 function ResultRow({ result }: { result: LadderCycleResult }) {
   const record =
     result.matchesPlayed > 0
@@ -74,6 +105,7 @@ function ResultRow({ result }: { result: LadderCycleResult }) {
           {result.tierName}
           {result.tierPosition !== null ? ` #${result.tierPosition}` : ""} · {record}
         </p>
+        <ClimbLabel result={result} />
       </div>
 
       <StarBadge stars={result.stars} />

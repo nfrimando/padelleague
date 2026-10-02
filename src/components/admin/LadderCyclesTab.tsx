@@ -27,6 +27,7 @@ type ResultDraft = {
   tier_position: number | null;
   badge_eligible: boolean;
   final_rating: number | null;
+  start_tier_name: string | null;
 };
 
 type CloseResponse = {
@@ -324,6 +325,9 @@ function PreviewPanel({
                 {names[String(r.player_id)] || `Player ${r.player_id}`}
               </span>
               <span className="shrink-0 text-slate-300">
+                {r.start_tier_name && r.start_tier_name !== r.tier_name
+                  ? `${r.start_tier_name} → `
+                  : ""}
                 {r.tier_name} #{r.tier_position} · {r.stars}★
               </span>
               <span className="shrink-0 tabular-nums text-slate-400">

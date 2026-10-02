@@ -71,6 +71,10 @@ export type LadderCycleResult = {
   overallRank: number | null;
   tierPosition: number | null;
   badgeEligible: boolean;
+  // Where the player started the cycle. null for snapshots written before this was recorded.
+  startTierName: string | null;
+  startTierRank: number | null;
+  startStars: number | null;
 };
 
 export type LadderCompletedCycle = {
@@ -360,6 +364,9 @@ type CycleResultRow = {
   overall_rank: number | null;
   tier_position: number | null;
   badge_eligible: boolean;
+  start_tier_name: string | null;
+  start_tier_rank: number | null;
+  start_stars: number | null;
 };
 
 // The frozen results of every completed cycle, newest cycle first, for the /ladder Results tab.
@@ -395,7 +402,7 @@ async function fetchCompletedCycleResults(db: ServerClient): Promise<{
   const { data: resultsData, error: resultsError } = await db
     .from("ladder_cycle_results")
     .select(
-      "cycle_id, player_id, tier_id, tier_name, tier_rank, stars, matches_played, wins, losses, overall_rank, tier_position, badge_eligible",
+      "cycle_id, player_id, tier_id, tier_name, tier_rank, stars, matches_played, wins, losses, overall_rank, tier_position, badge_eligible, start_tier_name, start_tier_rank, start_stars",
     )
     .in(
       "cycle_id",
@@ -440,6 +447,9 @@ async function fetchCompletedCycleResults(db: ServerClient): Promise<{
       overallRank: row.overall_rank,
       tierPosition: row.tier_position,
       badgeEligible: row.badge_eligible === true,
+      startTierName: row.start_tier_name ?? null,
+      startTierRank: row.start_tier_rank ?? null,
+      startStars: row.start_stars ?? null,
     };
 
     if (!resultsByCycle[row.cycle_id]) resultsByCycle[row.cycle_id] = [];
