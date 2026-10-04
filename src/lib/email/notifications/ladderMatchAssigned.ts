@@ -3,6 +3,7 @@ import { buildUnsubscribeUrl } from "../unsubscribeToken";
 import { fetchPlayerPrefsMap } from "@/lib/notificationPreferences";
 import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { SITE_URL } from "@/lib/siteConfig";
+import { formatPlayBy } from "@/lib/ladder/ladderQueueShared";
 
 type PlayerInfo = {
   player_id: number;
@@ -25,6 +26,10 @@ type LadderMatchAssignedData = {
   standings: Record<string, PlayerStanding>;
   team1Players: [PlayerInfo, PlayerInfo];
   team2Players: [PlayerInfo, PlayerInfo];
+  // "queue" = the player's tier queue filled up; "roulette" = admin-run draw. Defaults to roulette.
+  source?: "roulette" | "queue";
+  // Queue matches only: cancelled automatically if not played by then.
+  playByAt?: string | null;
 };
 
 export type NotifyResult = {
@@ -48,6 +53,8 @@ function buildAssignedEmailHtml({
   dashboardUrl,
   unsubscribeLadderUrl,
   unsubscribeAllUrl,
+  source,
+  playByAt,
 }: {
   recipient: PlayerInfo;
   recipientTeam: 1 | 2;
@@ -60,6 +67,8 @@ function buildAssignedEmailHtml({
   dashboardUrl: string;
   unsubscribeLadderUrl: string;
   unsubscribeAllUrl: string;
+  source: "roulette" | "queue";
+  playByAt: string | null;
 }): string {
   const t1Name = `${displayName(team1Players[0])} & ${displayName(team1Players[1])}`;
   const t2Name = `${displayName(team2Players[0])} & ${displayName(team2Players[1])}`;
@@ -91,7 +100,11 @@ function buildAssignedEmailHtml({
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
       <h2 style="margin-bottom: 4px;">Ladder Match Assigned</h2>
-      <p style="color: #555; margin-top: 0;">Hi ${recipientDisplayName}, the ${tierName} tier roulette has assigned you a match.</p>
+      <p style="color: #555; margin-top: 0;">Hi ${recipientDisplayName}, ${
+        source === "queue"
+          ? `four players are in the ${tierName} queue &mdash; you've been matched.`
+          : `the ${tierName} tier roulette has assigned you a match.`
+      }</p>
 
       <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
         <tr>
@@ -105,12 +118,24 @@ function buildAssignedEmailHtml({
         <tr>
           <td style="padding: 8px 0; color: #555;">Tier</td>
           <td style="padding: 8px 0; font-weight: 600;">${tierName}</td>
-        </tr>
+        </tr>${
+          playByAt
+            ? `
+        <tr>
+          <td style="padding: 8px 0; color: #555;">Play by</td>
+          <td style="padding: 8px 0; font-weight: 600;">${formatPlayBy(playByAt)}</td>
+        </tr>`
+            : ""
+        }
       </table>
 
       <div style="border: 1px solid #fbbf24; background: #fffbeb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
         <p style="margin: 0 0 6px 0; color: #92400e; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Next step</p>
-        <p style="margin: 0; font-size: 14px; color: #92400e;">Coordinate a time and court with your opponents: ${opponentTeam}.</p>
+        <p style="margin: 0; font-size: 14px; color: #92400e;">Coordinate a time and court with your opponents: ${opponentTeam}.${
+          playByAt
+            ? ` If it isn't played by ${formatPlayBy(playByAt)} it may be cancelled by an admin. Can't make it? You can back out from the ladder page &mdash; note that backing out is subject to penalties.`
+            : ""
+        }</p>
       </div>
 
       ${promotionHtml}
@@ -156,7 +181,7 @@ export async function notifyLadderMatchAssigned(data: LadderMatchAssignedData): 
   const t1n2 = displayName(team1Players[1]);
   const t2n1 = displayName(team2Players[0]);
   const t2n2 = displayName(team2Players[1]);
-  const subject = `Padel League PH Ladder Match Assigned - ${t1n1} & ${t1n2} vs ${t2n1} & ${t2n2}`;
+  const subject = `Padel League PH Ladder Match Assigned - ${t1n1} & ${t1n2} vs ${t2n1} & ${t2n2} (#${data.matchId})`;
 
   const allPlayers: Array<{ player: PlayerInfo; team: 1 | 2 }> = [
     { player: team1Players[0], team: 1 },
@@ -201,6 +226,8 @@ export async function notifyLadderMatchAssigned(data: LadderMatchAssignedData): 
       dashboardUrl,
       unsubscribeLadderUrl,
       unsubscribeAllUrl,
+      source: data.source ?? "roulette",
+      playByAt: data.playByAt ?? null,
     });
 
     const result = await sendEmail({ to: player.email, subject, html });

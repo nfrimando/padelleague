@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import LadderOptInBanner from "@/components/LadderOptInBanner";
+import LadderQueuePanel from "@/components/LadderQueuePanel";
 import LadderResultsPanel from "@/components/LadderResultsPanel";
 import { tierIconSrc, StarBadge, CushionBadge } from "@/components/LadderTierBadge";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
@@ -340,6 +341,8 @@ function LadderViewContent({
           tierName={myStanding?.tierName ?? null}
           stars={myStanding?.stars ?? null}
         />
+
+        {isLinked && hasActiveCycle && !isCycleClosed && <LadderQueuePanel />}
 
         {!hasActiveCycle ? (
           <p className="max-w-4xl mx-auto px-4 sm:px-6 text-sm text-[#687FA3]">

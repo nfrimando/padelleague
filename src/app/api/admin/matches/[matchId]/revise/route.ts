@@ -270,6 +270,43 @@ export async function PATCH(
     }
   }
 
+  // Ladder guard: syncLadderStandingsForMatch re-derives this match's ladder rows from each
+  // player's latest standing, which is only correct while this match's row IS their latest ladder
+  // event. An admin star adjustment (or any other non-match event) recorded after it breaks that.
+  const { data: ladderMatchRow } = await supabase
+    .from("ladder_matches")
+    .select("cycle_id")
+    .eq("match_id", matchId)
+    .maybeSingle();
+  if (ladderMatchRow) {
+    const { data: ladderEvents, error: ladderEventsError } = await supabase
+      .from("ladder_standing_events")
+      .select("player_id, source_type, source_id")
+      .eq("cycle_id", ladderMatchRow.cycle_id)
+      .in("player_id", playerIds)
+      .order("occurred_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+    if (ladderEventsError) {
+      return NextResponse.json(
+        { error: ladderEventsError.message || "Failed to load ladder standings." },
+        { status: 500 },
+      );
+    }
+    for (const playerId of playerIds) {
+      const latest = (ladderEvents ?? []).find((e) => e.player_id === playerId);
+      const isThisMatch =
+        latest?.source_type === "match" && latest?.source_id === String(matchId);
+      if (latest && !isThisMatch && latest.source_type !== "match") {
+        return NextResponse.json(
+          {
+            error: `Player ${playerId} has a ladder adjustment recorded after this match. Revising it would overwrite that adjustment's effect.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
   // Validate sets produce a clear winner
   let team1SetsWon = 0;
   let team2SetsWon = 0;

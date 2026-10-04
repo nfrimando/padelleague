@@ -253,7 +253,7 @@ export type LadderHistory = {
 // Ordered by the played date when there is one, falling back to when the ladder_matches
 // row was inserted: a manual match logged today for a game played last week must not
 // outrank a newer roulette assignment.
-async function fetchLadderHistory(
+export async function fetchLadderHistory(
   supabase: AdminSupabaseClient,
   cycleId: number,
   playerIds: number[],
@@ -566,17 +566,6 @@ export async function confirmLadderRouletteProposal(
 
   const cycleId = proposal.cycleId;
 
-  const { data: allTiersData } = await supabase
-    .from("ladder_tiers")
-    .select("id, name, rank")
-    .order("rank", { ascending: true });
-  const allTiers = (allTiersData ?? []) as TierRow[];
-  const adjacentTierName = (tierId: number, direction: 1 | -1): string | null => {
-    const current = allTiers.find((t) => t.id === tierId);
-    if (!current) return null;
-    return allTiers.find((t) => t.rank === current.rank + direction)?.name ?? null;
-  };
-
   const tierResults: TierConfirmResult[] = [];
 
   for (const tierProposal of proposal.tiers) {
@@ -642,34 +631,15 @@ export async function confirmLadderRouletteProposal(
 
       matchesCreated.push(matchId);
 
-      const { data: playerDetails } = await supabase
-        .from("players")
-        .select("player_id,name,nickname,email,is_notifications_subscribed")
-        .in("player_id", groupPlayers.map((p) => p.playerId));
-
-      if (playerDetails && playerDetails.length === 4) {
-        const findPlayer = toPlayerInfoFinder(playerDetails as PlayerInfo[]);
-        const standingsByPlayer = await fetchLatestLadderStandings(
-          supabase,
-          cycleId,
-          groupPlayers.map((p) => p.playerId),
-        );
-        const standings: Record<string, { stars: number; cushionAvailable: boolean }> = {};
-        for (const p of groupPlayers) {
-          const s = standingsByPlayer.get(String(p.playerId));
-          if (s) standings[String(p.playerId)] = { stars: s.stars, cushionAvailable: s.cushionAvailable };
-        }
-
-        await notifyLadderMatchAssigned({
-          matchId,
-          tierName: tierProposal.tierName,
-          nextTierName: adjacentTierName(tierProposal.tierId, 1),
-          prevTierName: adjacentTierName(tierProposal.tierId, -1),
-          standings,
-          team1Players: [findPlayer(t1p1), findPlayer(t1p2)],
-          team2Players: [findPlayer(t2p1), findPlayer(t2p2)],
-        }).catch((err) => console.error("[email] notifyLadderMatchAssigned failed:", err));
-      }
+      await sendLadderMatchAssignedEmails(supabase, {
+        cycleId,
+        matchId,
+        tierId: tierProposal.tierId,
+        team1: [t1p1, t1p2],
+        team2: [t2p1, t2p2],
+        source: "roulette",
+        playByAt: null,
+      });
     }
 
     tierResults.push({
@@ -681,4 +651,62 @@ export async function confirmLadderRouletteProposal(
   }
 
   return { ok: true, cycleId, tiers: tierResults };
+}
+
+// Emails all 4 players of a freshly created ladder match (roulette or queue), with each player's
+// current standing so the email can flag promotion / demotion stakes. Never throws.
+export async function sendLadderMatchAssignedEmails(
+  supabase: AdminSupabaseClient,
+  params: {
+    cycleId: number;
+    matchId: number;
+    tierId: number;
+    team1: [number, number];
+    team2: [number, number];
+    source: "roulette" | "queue";
+    playByAt: string | null;
+  },
+): Promise<void> {
+  const { cycleId, matchId, tierId, team1, team2 } = params;
+  const playerIds = [...team1, ...team2];
+
+  try {
+    const { data: allTiersData } = await supabase
+      .from("ladder_tiers")
+      .select("id, name, rank")
+      .order("rank", { ascending: true });
+    const allTiers = (allTiersData ?? []) as TierRow[];
+    const tier = allTiers.find((t) => t.id === tierId);
+    const adjacentTierName = (direction: 1 | -1): string | null =>
+      tier ? (allTiers.find((t) => t.rank === tier.rank + direction)?.name ?? null) : null;
+
+    const { data: playerDetails } = await supabase
+      .from("players")
+      .select("player_id,name,nickname,email,is_notifications_subscribed")
+      .in("player_id", playerIds);
+
+    if (!playerDetails || playerDetails.length !== 4) return;
+
+    const findPlayer = toPlayerInfoFinder(playerDetails as PlayerInfo[]);
+    const standingsByPlayer = await fetchLatestLadderStandings(supabase, cycleId, playerIds);
+    const standings: Record<string, { stars: number; cushionAvailable: boolean }> = {};
+    for (const id of playerIds) {
+      const s = standingsByPlayer.get(String(id));
+      if (s) standings[String(id)] = { stars: s.stars, cushionAvailable: s.cushionAvailable };
+    }
+
+    await notifyLadderMatchAssigned({
+      matchId,
+      tierName: tier?.name ?? "Ladder",
+      nextTierName: adjacentTierName(1),
+      prevTierName: adjacentTierName(-1),
+      standings,
+      team1Players: [findPlayer(team1[0]), findPlayer(team1[1])],
+      team2Players: [findPlayer(team2[0]), findPlayer(team2[1])],
+      source: params.source,
+      playByAt: params.playByAt,
+    }).catch((err) => console.error("[email] notifyLadderMatchAssigned failed:", err));
+  } catch (err) {
+    console.error("[email] sendLadderMatchAssignedEmails failed:", err);
+  }
 }

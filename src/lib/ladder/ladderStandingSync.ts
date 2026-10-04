@@ -1,5 +1,6 @@
 import type { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { ensureLadderPlacement, type TierBucketRow } from "@/lib/ladder/ladderPlacement";
+import { syncWaitingEntriesToStanding } from "@/lib/ladder/ladderQueue";
 import {
   computeNextLadderStanding,
   type LadderStanding,
@@ -158,6 +159,13 @@ export async function syncLadderStandingsForMatch(
       starsAfter: next.starsAfter,
     });
   }
+
+  // A promotion/demotion moves any waiting queue ticket to the new tier (and may complete a foursome
+  // there). Never throws.
+  const movedPlayerIds = events
+    .filter((e) => e.tierBeforeId !== e.tierAfterId)
+    .map((e) => e.playerId);
+  await syncWaitingEntriesToStanding(supabase, cycleId, movedPlayerIds);
 
   return {
     synced: true,

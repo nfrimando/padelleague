@@ -40,6 +40,14 @@ export function describeLadderEvent(
       return `Promoted to ${tierName(event.tierAfterId, tiers)}${suffix}`;
     case "demotion":
       return `Demoted to ${tierName(event.tierAfterId, tiers)}${suffix}`;
+    case "admin_adjustment": {
+      const delta = event.metadata?.delta === 1 ? "+1★" : event.metadata?.delta === -1 ? "−1★" : "";
+      const move =
+        event.tierBeforeId != null && event.tierBeforeId !== event.tierAfterId
+          ? `moved to ${tierName(event.tierAfterId, tiers)}`
+          : `${event.starsBefore ?? 0}★ → ${event.starsAfter}★`;
+      return `Admin adjustment${delta ? ` ${delta}` : ""} · ${move}${suffix}`;
+    }
     case "cycle_reset":
       return `Cycle reset · dropped to ${tierName(event.tierAfterId, tiers)}${suffix}`;
     default:

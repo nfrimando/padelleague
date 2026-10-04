@@ -3,7 +3,7 @@ import { SITE_URL } from "@/lib/siteConfig";
 
 const BASE_URL = SITE_URL;
 
-type UnsubscribeType = "all" | "match_results" | "match_scheduled" | "predictions" | "signup_status" | "ladder_match_assigned" | "partner_invite";
+type UnsubscribeType = "all" | "match_results" | "match_scheduled" | "predictions" | "signup_status" | "ladder_match_assigned" | "ladder_queue_updates" | "partner_invite";
 
 function getSecret(): string {
   const secret = process.env.UNSUBSCRIBE_SECRET;

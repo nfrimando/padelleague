@@ -371,6 +371,18 @@ export async function closeLadderCycle(
     };
   }
 
+  // The queue is per cycle: nobody stays waiting into the next one. Open queue matches are left
+  // alone (they can still be played and logged); their requeue path skips inactive cycles.
+  const closedAt = new Date().toISOString();
+  const { error: queueError } = await supabase
+    .from("ladder_queue_entries")
+    .update({ status: "removed", status_reason: "cycle_closed", closed_at: closedAt, updated_at: closedAt })
+    .eq("cycle_id", cycleId)
+    .eq("status", "waiting");
+  if (queueError) {
+    warnings.push(`Cycle closed, but clearing the ladder queue failed: ${queueError.message}`);
+  }
+
   return {
     ok: true,
     cycle: { ...cycle, status: "completed" },

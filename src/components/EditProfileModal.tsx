@@ -31,6 +31,7 @@ type FormState = {
   notif_recruit_invitation: boolean;
   notif_signup_status: boolean;
   notif_ladder_match_assigned: boolean;
+  notif_ladder_queue_updates: boolean;
   notif_partner_invite: boolean;
   preferred_side: "left" | "right" | "both" | "";
   shirt_size: string;
@@ -61,6 +62,7 @@ export default function EditProfileModal({
     notif_recruit_invitation: true,
     notif_signup_status: true,
     notif_ladder_match_assigned: true,
+    notif_ladder_queue_updates: true,
     notif_partner_invite: true,
     preferred_side: player.preferred_side ?? "",
     shirt_size: player.shirt_size ?? "",
@@ -110,6 +112,7 @@ export default function EditProfileModal({
             recruit_invitation?: boolean;
             signup_status?: boolean;
             ladder_match_assigned?: boolean;
+            ladder_queue_updates?: boolean;
             partner_invite?: boolean;
           };
         };
@@ -121,6 +124,7 @@ export default function EditProfileModal({
           notif_recruit_invitation: prefs.recruit_invitation ?? true,
           notif_signup_status: prefs.signup_status ?? true,
           notif_ladder_match_assigned: prefs.ladder_match_assigned ?? true,
+          notif_ladder_queue_updates: prefs.ladder_queue_updates ?? true,
           notif_partner_invite: prefs.partner_invite ?? true,
         }));
       } catch {
@@ -183,6 +187,7 @@ export default function EditProfileModal({
             recruit_invitation: form.notif_recruit_invitation,
             signup_status: form.notif_signup_status,
             ladder_match_assigned: form.notif_ladder_match_assigned,
+            ladder_queue_updates: form.notif_ladder_queue_updates,
             partner_invite: form.notif_partner_invite,
           },
         }),
@@ -403,7 +408,7 @@ export default function EditProfileModal({
             />
             <div
               className={`overflow-hidden transition-all duration-200 ${
-                form.is_notifications_subscribed ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                form.is_notifications_subscribed ? "max-h-[40rem] opacity-100" : "max-h-0 opacity-0"
               }`}
             >
               <div className="pl-4 border-l border-[#687FA3]/20 space-y-3 pt-1">
@@ -434,8 +439,14 @@ export default function EditProfileModal({
                 <Toggle
                   checked={form.notif_ladder_match_assigned}
                   onChange={(v) => setForm((f) => ({ ...f, notif_ladder_match_assigned: v }))}
-                  label="Ladder Roulette Matches"
-                  description="When the ladder roulette assigns you a match, and if it expires unplayed."
+                  label="Ladder Match Assignments"
+                  description="When the ladder queue or roulette assigns you a match."
+                />
+                <Toggle
+                  checked={form.notif_ladder_queue_updates}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_ladder_queue_updates: v }))}
+                  label="Ladder Queue Updates"
+                  description="Deadline reminders, and when a queue match is cancelled and you're put back in the queue."
                 />
                 <Toggle
                   checked={form.notif_partner_invite}

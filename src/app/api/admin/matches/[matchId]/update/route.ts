@@ -15,6 +15,7 @@ import {
   syncLadderStandingsForMatch,
   type SyncLadderStandingsResult,
 } from "@/lib/ladder/ladderStandingSync";
+import { cancelQueueMatchIfOpen } from "@/lib/ladder/ladderQueue";
 import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
 import { notifyMatchUpdated } from "@/lib/email/notifications/matchUpdated";
 import { resolveMatchPredictions } from "@/lib/predictions/resolveMatchPredictions";
@@ -903,13 +904,26 @@ export async function PATCH(
     );
   }
 
+  // Cancelling a queue match puts all 4 players back in the queue at their original spot.
+  let queueRequeued: number[] = [];
+  let queueWarning: string | null = null;
+  if (validation.value.status === "cancelled") {
+    const result = await cancelQueueMatchIfOpen(supabase, matchId);
+    queueRequeued = result.requeuedPlayerIds;
+    queueWarning = result.warning;
+  }
+
   const genericEmailResult = await buildAndSendUpdatedEmail(supabase, matchId, matchRow, team1, team2, validation.value);
 
   return NextResponse.json(
     {
       matchId,
-      message: "Match updated successfully.",
+      message:
+        queueRequeued.length > 0
+          ? `Match updated successfully. ${queueRequeued.length} player(s) returned to the ladder queue.`
+          : "Match updated successfully.",
       emails: genericEmailResult,
+      queueWarning,
     },
     { status: 200 },
   );
