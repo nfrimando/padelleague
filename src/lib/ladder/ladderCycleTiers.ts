@@ -1,18 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TierBucketRow } from "@/lib/ladder/ladderPlacement";
+import { isMissingTableError } from "@/lib/ladder/ladderSchema";
 
 type TierRow = { id: number; name: string; rank: number; elo_floor: number | string };
 type CycleTierRow = { tier_id: number | string; elo_floor: number | string };
-
-// Postgres 42P01 (undefined_table), or PostgREST's PGRST205 when the table is absent from its
-// schema cache.
-function isMissingTableError(error: { code?: string; message?: string }): boolean {
-  return (
-    error.code === "42P01" ||
-    error.code === "PGRST205" ||
-    /Could not find the table/i.test(error.message ?? "")
-  );
-}
 
 // The tier definitions as a given cycle runs them: tier identity (id / name / rank) always comes
 // from ladder_tiers, but elo_floor is overridden by that cycle's ladder_cycle_tiers snapshot when
@@ -21,9 +12,13 @@ function isMissingTableError(error: { code?: string; message?: string }): boolea
 // Use this anywhere elo_floor is actually consumed (i.e. placeByRating) so a player joining
 // mid-cycle is bucketed by the same cutoffs everyone else in that cycle was placed by. Call sites
 // that only need id / name / rank can keep selecting ladder_tiers directly.
+//
+// mode "duo" reads the duo ladder's floors (ladder_cycle_duo_tiers) instead — same tiers, different
+// cutoffs, since a duo is placed by the average of its two players' ratings.
 export async function fetchTiersForCycle(
   client: SupabaseClient,
   cycleId: number,
+  mode: "solo" | "duo" = "solo",
 ): Promise<{ tiers: TierBucketRow[]; error: string | null }> {
   const { data: tiersData, error: tiersError } = await client
     .from("ladder_tiers")
@@ -36,7 +31,7 @@ export async function fetchTiersForCycle(
   }
 
   const { data: overrideData, error: overrideError } = await client
-    .from("ladder_cycle_tiers")
+    .from(mode === "duo" ? "ladder_cycle_duo_tiers" : "ladder_cycle_tiers")
     .select("tier_id, elo_floor")
     .eq("cycle_id", cycleId);
 

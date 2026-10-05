@@ -7,6 +7,7 @@ import {
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
 import { notifyMatchScheduled } from "@/lib/email/notifications/matchScheduled";
+import { recordManualDuoLadderMatch } from "@/lib/ladder/ladderDuoManualMatch";
 
 type TeamInput = {
   player1Id: number;
@@ -19,7 +20,11 @@ type CreateMatchRequest = {
   timeLocal?: string | null;
   venue?: string | null;
   type?: string | null;
-  isLadderMatch: boolean;
+  // Which ladder the match counts toward, if any. `isLadderMatch` is the legacy boolean (true = solo)
+  // still accepted from older clients.
+  ladderMode: "solo" | "duo" | null;
+  // Duo mode: form any team that isn't an active duo yet, instead of skipping the ladder.
+  createMissingDuos: boolean;
   team1: TeamInput;
   team2: TeamInput;
 };
@@ -102,6 +107,17 @@ function validatePayload(payload: unknown): ValidationResult {
     }
   }
 
+  let ladderMode: CreateMatchRequest["ladderMode"] = null;
+  if (payload.ladderMode === undefined) {
+    ladderMode = payload.isLadderMatch !== false ? "solo" : null;
+  } else if (payload.ladderMode === null || payload.ladderMode === "none") {
+    ladderMode = null;
+  } else if (payload.ladderMode === "solo" || payload.ladderMode === "duo") {
+    ladderMode = payload.ladderMode;
+  } else {
+    errors.push("ladderMode must be solo, duo or none.");
+  }
+
   if (errors.length > 0 || !team1 || !team2) {
     return { valid: false, errors };
   }
@@ -114,7 +130,8 @@ function validatePayload(payload: unknown): ValidationResult {
       timeLocal: normalizeOptionalString(payload.timeLocal),
       venue,
       type,
-      isLadderMatch: payload.isLadderMatch !== false,
+      ladderMode,
+      createMissingDuos: payload.createMissingDuos === true,
       team1,
       team2,
     },
@@ -227,7 +244,18 @@ export async function POST(request: Request) {
   }
 
   let ladderWarning: string | null = null;
-  if (validation.value.isLadderMatch) {
+  if (validation.value.ladderMode === "duo") {
+    ladderWarning = await recordManualDuoLadderMatch(supabase, {
+      matchId: createdMatch.match_id,
+      team1: [validation.value.team1.player1Id, validation.value.team1.player2Id],
+      team2: [validation.value.team2.player1Id, validation.value.team2.player2Id],
+      createMissingDuos: validation.value.createMissingDuos,
+      adminUserId: authResult.userId,
+    }).catch((err) => {
+      console.error("[ladder] Failed to record duo ladder match:", err);
+      return "Match created, but failed to record it as a duo ladder match.";
+    });
+  } else if (validation.value.ladderMode === "solo") {
     const { data: activeCycle, error: activeCycleError } = await supabase
       .from("ladder_cycles")
       .select("id")

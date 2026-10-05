@@ -8,7 +8,7 @@ import type { NotifType, PlayerNotificationPreferences } from "@/lib/types";
 import { fetchPlayerPrefs, setPlayerPref } from "@/lib/notificationPreferences";
 import { placePlayerInActiveCycle } from "@/lib/ladder/ladderPlacement";
 
-const VALID_NOTIF_TYPES: NotifType[] = ["match_results", "match_scheduled", "signup_status", "ladder_match_assigned", "ladder_queue_updates", "partner_invite"];
+const VALID_NOTIF_TYPES: NotifType[] = ["match_results", "match_scheduled", "signup_status", "ladder_match_assigned", "ladder_queue_updates", "partner_invite", "ladder_duo_updates"];
 
 type ProfileUpdateBody = {
   nickname?: string;

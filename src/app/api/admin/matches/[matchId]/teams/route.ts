@@ -7,6 +7,8 @@ import {
 } from "@/app/api/admin/_lib/auth";
 import { voidMatchPredictions } from "@/lib/predictions/voidMatchPredictions";
 import { notifyPredictionsVoided } from "@/lib/email/notifications/predictionVoided";
+import { isMissingTableError } from "@/lib/ladder/ladderSchema";
+import { teamMatchesDuo } from "@/lib/ladder/ladderDuoShared";
 
 type TeamUpdate = {
   player1Id: number;
@@ -168,6 +170,47 @@ export async function PATCH(
 
   if (!matchRow) {
     return NextResponse.json({ error: "Match not found." }, { status: 404 });
+  }
+
+  // A Duo Ladder match's teams ARE its two duos: team N must stay duo N. Score-only edits pass.
+  const { data: duoMatch, error: duoMatchError } = await supabase
+    .from("ladder_duo_matches")
+    .select("team1_duo_id, team2_duo_id")
+    .eq("match_id", matchId)
+    .maybeSingle();
+  if (duoMatchError && !isMissingTableError(duoMatchError)) {
+    return NextResponse.json(
+      { error: duoMatchError.message || "Failed to check duo ladder match." },
+      { status: 500 },
+    );
+  }
+  if (duoMatch) {
+    const { data: duoRows } = await supabase
+      .from("ladder_duos")
+      .select("id, player_low_id, player_high_id")
+      .in("id", [duoMatch.team1_duo_id, duoMatch.team2_duo_id]);
+    const duo1 = (duoRows ?? []).find((d) => d.id === duoMatch.team1_duo_id) ?? null;
+    const duo2 = (duoRows ?? []).find((d) => d.id === duoMatch.team2_duo_id) ?? null;
+    const sameTeams =
+      !!duo1 &&
+      !!duo2 &&
+      teamMatchesDuo(
+        { player_1_id: validation.value.team1.player1Id, player_2_id: validation.value.team1.player2Id },
+        duo1,
+      ) &&
+      teamMatchesDuo(
+        { player_1_id: validation.value.team2.player1Id, player_2_id: validation.value.team2.player2Id },
+        duo2,
+      );
+    if (!sameTeams) {
+      return NextResponse.json(
+        {
+          error:
+            "This is a Duo Ladder match — its teams are fixed by the two duos. Cancel it and create a new match to change who plays.",
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const playerIds = [

@@ -30,6 +30,10 @@ type LadderMatchAssignedData = {
   source?: "roulette" | "queue";
   // Queue matches only: cancelled automatically if not played by then.
   playByAt?: string | null;
+  // "duo" = a Duo Ladder match: standings are each player's DUO standing, and teams are labelled by
+  // duo name. Defaults to solo.
+  mode?: "solo" | "duo";
+  duoNames?: [string, string];
 };
 
 export type NotifyResult = {
@@ -55,6 +59,8 @@ function buildAssignedEmailHtml({
   unsubscribeAllUrl,
   source,
   playByAt,
+  mode,
+  duoNames,
 }: {
   recipient: PlayerInfo;
   recipientTeam: 1 | 2;
@@ -69,9 +75,15 @@ function buildAssignedEmailHtml({
   unsubscribeAllUrl: string;
   source: "roulette" | "queue";
   playByAt: string | null;
+  mode: "solo" | "duo";
+  duoNames: [string, string] | null;
 }): string {
-  const t1Name = `${displayName(team1Players[0])} & ${displayName(team1Players[1])}`;
-  const t2Name = `${displayName(team2Players[0])} & ${displayName(team2Players[1])}`;
+  const isDuo = mode === "duo";
+  const t1Pair = `${displayName(team1Players[0])} & ${displayName(team1Players[1])}`;
+  const t2Pair = `${displayName(team2Players[0])} & ${displayName(team2Players[1])}`;
+  const t1Name = isDuo && duoNames && duoNames[0] !== t1Pair ? `${duoNames[0]} (${t1Pair})` : t1Pair;
+  const t2Name = isDuo && duoNames && duoNames[1] !== t2Pair ? `${duoNames[1]} (${t2Pair})` : t2Pair;
+  const youAre = isDuo ? "Your duo is" : "You're";
   const recipientDisplayName = displayName(recipient);
   const opponentTeam = recipientTeam === 1 ? t2Name : t1Name;
 
@@ -83,7 +95,7 @@ function buildAssignedEmailHtml({
     ? `
       <div style="border: 1px solid #16a34a; background: #f0fdf4; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
         <p style="margin: 0 0 6px 0; color: #15803d; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Promotion match</p>
-        <p style="margin: 0; font-size: 14px; color: #166534;">You're at 2&#9733; in ${tierName} &mdash; win this match and you're promoted straight to <strong>${nextTierName}</strong>.</p>
+        <p style="margin: 0; font-size: 14px; color: #166534;">${youAre} at 2&#9733; in ${tierName} &mdash; win this match and ${isDuo ? "your duo is" : "you're"} promoted straight to <strong>${nextTierName}</strong>.</p>
       </div>
     `
     : "";
@@ -92,18 +104,22 @@ function buildAssignedEmailHtml({
     ? `
       <div style="border: 1px solid #dc2626; background: #fef2f2; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
         <p style="margin: 0 0 6px 0; color: #b91c1c; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Demotion risk</p>
-        <p style="margin: 0; font-size: 14px; color: #991b1b;">You're at 0&#9733; in ${tierName} with no cushion left &mdash; lose this match and you'll drop to <strong>${prevTierName}</strong>.</p>
+        <p style="margin: 0; font-size: 14px; color: #991b1b;">${youAre} at 0&#9733; in ${tierName} with no cushion left &mdash; lose this match and ${isDuo ? "your duo will" : "you'll"} drop to <strong>${prevTierName}</strong>.</p>
       </div>
     `
     : "";
 
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
-      <h2 style="margin-bottom: 4px;">Ladder Match Assigned</h2>
+      <h2 style="margin-bottom: 4px;">${isDuo ? "Duo Ladder Match Assigned" : "Ladder Match Assigned"}</h2>
       <p style="color: #555; margin-top: 0;">Hi ${recipientDisplayName}, ${
-        source === "queue"
-          ? `four players are in the ${tierName} queue &mdash; you've been matched.`
-          : `the ${tierName} tier roulette has assigned you a match.`
+        isDuo
+          ? source === "queue"
+            ? `two duos are in the ${tierName} duo queue &mdash; your duo has been matched.`
+            : `your duo has been set a ${tierName} Duo Ladder match.`
+          : source === "queue"
+            ? `four players are in the ${tierName} queue &mdash; you've been matched.`
+            : `the ${tierName} tier roulette has assigned you a match.`
       }</p>
 
       <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
@@ -175,13 +191,16 @@ function buildAssignedEmailHtml({
 
 export async function notifyLadderMatchAssigned(data: LadderMatchAssignedData): Promise<NotifyResult> {
   const { team1Players, team2Players } = data;
-  const dashboardUrl = `${SITE_URL}/ladder`;
+  const isDuo = data.mode === "duo";
+  const dashboardUrl = isDuo ? `${SITE_URL}/ladder?mode=duo` : `${SITE_URL}/ladder`;
 
   const t1n1 = displayName(team1Players[0]);
   const t1n2 = displayName(team1Players[1]);
   const t2n1 = displayName(team2Players[0]);
   const t2n2 = displayName(team2Players[1]);
-  const subject = `Padel League PH Ladder Match Assigned - ${t1n1} & ${t1n2} vs ${t2n1} & ${t2n2} (#${data.matchId})`;
+  const subject = isDuo
+    ? `Padel League PH Duo Ladder Match Assigned - ${data.duoNames?.[0] ?? `${t1n1} & ${t1n2}`} vs ${data.duoNames?.[1] ?? `${t2n1} & ${t2n2}`} (#${data.matchId})`
+    : `Padel League PH Ladder Match Assigned - ${t1n1} & ${t1n2} vs ${t2n1} & ${t2n2} (#${data.matchId})`;
 
   const allPlayers: Array<{ player: PlayerInfo; team: 1 | 2 }> = [
     { player: team1Players[0], team: 1 },
@@ -228,6 +247,8 @@ export async function notifyLadderMatchAssigned(data: LadderMatchAssignedData): 
       unsubscribeAllUrl,
       source: data.source ?? "roulette",
       playByAt: data.playByAt ?? null,
+      mode: data.mode ?? "solo",
+      duoNames: data.duoNames ?? null,
     });
 
     const result = await sendEmail({ to: player.email, subject, html });

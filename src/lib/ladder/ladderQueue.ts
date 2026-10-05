@@ -12,6 +12,7 @@ import {
   notifyLadderQueueRequeued,
 } from "@/lib/email/notifications/ladderQueueUpdates";
 import { QUEUE_GROUP_SIZE, computePlayByAt } from "@/lib/ladder/ladderQueueShared";
+import { cancelDuoQueueMatchIfOpen } from "@/lib/ladder/ladderDuoQueue";
 
 // The self-serve ladder queue. See .claude/ladder.md → "Auto-queue" for the mechanic and
 // supabase/migrations/20261004000000..2 for the schema. The two writes that must be atomic
@@ -327,7 +328,9 @@ export async function expireQueueMatch(
 }
 
 // For admin paths that cancel or delete a match without knowing whether it's a queue match: if it
-// is an open one, cancel it as 'admin_cancelled' (requeueing all 4). No-op otherwise.
+// is an open one, cancel it as 'admin_cancelled' (requeueing all 4). No-op otherwise. A match with no
+// solo ladder row may be a DUO queue match — that's handed to cancelDuoQueueMatchIfOpen, which
+// requeues both duos (their 4 players are returned here).
 export async function cancelQueueMatchIfOpen(
   supabase: SupabaseClient,
   matchId: number,
@@ -337,7 +340,19 @@ export async function cancelQueueMatchIfOpen(
     .select("source, cancelled_at")
     .eq("match_id", matchId)
     .maybeSingle();
-  if (!lm || lm.source !== "queue" || lm.cancelled_at) {
+  if (!lm) {
+    const duo = await cancelDuoQueueMatchIfOpen(supabase, matchId);
+    if (duo.requeuedDuoIds.length === 0) return { requeuedPlayerIds: [], warning: duo.warning };
+    const { data: members } = await supabase
+      .from("ladder_duos")
+      .select("player_low_id, player_high_id")
+      .in("id", duo.requeuedDuoIds);
+    return {
+      requeuedPlayerIds: (members ?? []).flatMap((m) => [m.player_low_id as number, m.player_high_id as number]),
+      warning: duo.warning,
+    };
+  }
+  if (lm.source !== "queue" || lm.cancelled_at) {
     return { requeuedPlayerIds: [], warning: null };
   }
 

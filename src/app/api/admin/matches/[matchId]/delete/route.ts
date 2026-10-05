@@ -4,6 +4,7 @@ import {
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
 import { reanchorPlayerChainsAfter } from "@/lib/ratings/reanchorChain";
+import { isMissingTableError } from "@/lib/ladder/ladderSchema";
 
 export async function DELETE(
   request: Request,
@@ -115,6 +116,24 @@ export async function DELETE(
         error:
           deleteLadderEventsError.message ||
           "Failed to delete ladder standing events.",
+      },
+      { status: 500 },
+    );
+  }
+
+  // Same for the duo ladder ledger (ladder_duo_matches itself cascades with the match). A missing
+  // table just means the duo ladder isn't enabled yet.
+  const { error: deleteDuoLadderEventsError } = await supabase
+    .from("ladder_duo_standing_events")
+    .delete()
+    .eq("source_type", "match")
+    .eq("source_id", String(matchId));
+  if (deleteDuoLadderEventsError && !isMissingTableError(deleteDuoLadderEventsError)) {
+    return NextResponse.json(
+      {
+        error:
+          deleteDuoLadderEventsError.message ||
+          "Failed to delete duo ladder standing events.",
       },
       { status: 500 },
     );

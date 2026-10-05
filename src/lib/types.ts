@@ -2,7 +2,7 @@ import type { SurveyState } from "@/lib/recalibration/survey";
 
 // ─── Notification preferences ─────────────────────────────────────────────────
 
-export type NotifType = "match_results" | "match_scheduled" | "predictions" | "recruit_invitation" | "signup_status" | "ladder_match_assigned" | "ladder_queue_updates" | "partner_invite";
+export type NotifType = "match_results" | "match_scheduled" | "predictions" | "recruit_invitation" | "signup_status" | "ladder_match_assigned" | "ladder_queue_updates" | "partner_invite" | "ladder_duo_updates";
 
 // Map of notif_type → subscribed. Missing key means subscribed (default true).
 export type PlayerNotificationPreferences = Partial<Record<NotifType, boolean>>;

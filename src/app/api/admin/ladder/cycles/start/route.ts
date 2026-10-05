@@ -12,7 +12,8 @@ import {
 import { LADDER_PAGE_CACHE_TAG } from "@/lib/ladderData";
 
 // POST /api/admin/ladder/cycles/start
-// Body: { label: string, startsAt?: string, thresholds: [{ tierId, eloFloor }], dryRun?: boolean }
+// Body: { label: string, startsAt?: string, thresholds: [{ tierId, eloFloor }],
+//         duoThresholds?: [{ tierId, eloFloor }], dryRun?: boolean }
 //
 // Starts the next ladder cycle with admin-entered rating floors and allocates every rated player
 // into a tier + stars. dryRun returns the full allocation without writing, so the admin reviews
@@ -51,29 +52,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const thresholds: LadderCycleThresholdInput[] = [];
-  for (const entry of payload.thresholds) {
-    if (!isRecord(entry)) {
-      return NextResponse.json({ error: "Each threshold must be an object." }, { status: 400 });
-    }
+  const parsed = parseThresholds(payload.thresholds);
+  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const thresholds = parsed.thresholds;
 
-    const tierId = normalizeRequiredPositiveInteger(entry.tierId);
-    if (tierId === null) {
-      return NextResponse.json(
-        { error: "Each threshold needs a positive integer tierId." },
-        { status: 400 },
-      );
+  let duoThresholds: LadderCycleThresholdInput[] | undefined;
+  if (payload.duoThresholds !== undefined && payload.duoThresholds !== null) {
+    if (!Array.isArray(payload.duoThresholds)) {
+      return NextResponse.json({ error: "duoThresholds must be an array of { tierId, eloFloor }." }, { status: 400 });
     }
-
-    const eloFloor = typeof entry.eloFloor === "string" ? Number(entry.eloFloor) : entry.eloFloor;
-    if (typeof eloFloor !== "number" || !Number.isFinite(eloFloor) || eloFloor < 0) {
-      return NextResponse.json(
-        { error: `Threshold for tier ${tierId} must be a number of 0 or more.` },
-        { status: 400 },
-      );
-    }
-
-    thresholds.push({ tierId, eloFloor });
+    const parsedDuo = parseThresholds(payload.duoThresholds);
+    if ("error" in parsedDuo) return NextResponse.json({ error: `Duo floors: ${parsedDuo.error}` }, { status: 400 });
+    duoThresholds = parsedDuo.thresholds;
   }
 
   const dryRun = payload.dryRun === true;
@@ -87,6 +77,7 @@ export async function POST(request: Request) {
     label,
     startsAt,
     thresholds,
+    duoThresholds,
     dryRun,
   });
 
@@ -109,8 +100,32 @@ export async function POST(request: Request) {
       distribution: result.distribution,
       previousCycle: result.previousCycle,
       placed: result.placements.length,
+      duoAvailable: result.duoAvailable,
+      duoPlacements: result.duoPlacements,
+      duoLabels: result.duoLabels,
+      duoDistribution: result.duoDistribution,
       warnings: result.warnings,
     },
     { status: 200 },
   );
+}
+
+function parseThresholds(
+  raw: unknown[],
+): { thresholds: LadderCycleThresholdInput[] } | { error: string } {
+  const thresholds: LadderCycleThresholdInput[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) return { error: "Each threshold must be an object." };
+
+    const tierId = normalizeRequiredPositiveInteger(entry.tierId);
+    if (tierId === null) return { error: "Each threshold needs a positive integer tierId." };
+
+    const eloFloor = typeof entry.eloFloor === "string" ? Number(entry.eloFloor) : entry.eloFloor;
+    if (typeof eloFloor !== "number" || !Number.isFinite(eloFloor) || eloFloor < 0) {
+      return { error: `Threshold for tier ${tierId} must be a number of 0 or more.` };
+    }
+
+    thresholds.push({ tierId, eloFloor });
+  }
+  return { thresholds };
 }

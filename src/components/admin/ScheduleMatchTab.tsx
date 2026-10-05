@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAdminDataContext } from "@/components/admin/AdminDataContext";
 import PlayerSlotPicker from "@/components/PlayerSlotPicker";
-import Toggle from "@/components/Toggle";
 import { usePlayerSearch } from "@/lib/usePlayerSearch";
 import { supabase } from "@/lib/supabase";
 import { Player } from "@/lib/types";
+import type { AdminDuoList } from "@/app/api/admin/ladder/duos/route";
 import {
   SCHEDULE_MATCH_TYPE_OPTIONS,
   SCHEDULE_MATCH_VENUE_OPTIONS,
@@ -21,6 +21,21 @@ const EMPTY_SLOTS: Record<SlotKey, SlotState> = {
   t2p1: { search: "", player: null },
   t2p2: { search: "", player: null },
 };
+
+type LadderMode = "none" | "solo" | "duo";
+
+const LADDER_MODE_OPTIONS: Array<{ value: LadderMode; label: string; description: string }> = [
+  { value: "none", label: "Not ladder", description: "A regular match — no ladder stars move." },
+  { value: "solo", label: "Solo ladder", description: "Each player's own tier stars move (own-tier match)." },
+  { value: "duo", label: "Duo ladder", description: "Each team must be a duo; only the duos' stars move." },
+];
+
+// What Schedule Match knows about a team in duo mode: its active duo, or that it has none yet.
+type TeamDuoStatus =
+  | { state: "loading" }
+  | { state: "active"; label: string; tierName: string | null; stars: number | null }
+  | { state: "none"; detail: string }
+  | { state: "error"; detail: string };
 
 const labelCls =
   "block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
@@ -43,7 +58,12 @@ export function ScheduleMatchTab() {
   const [timeLocal, setTimeLocal] = useState("");
   const [venue, setVenue] = useState("");
   const [matchType, setMatchType] = useState("");
-  const [isLadderMatch, setIsLadderMatch] = useState(true);
+  const [ladderMode, setLadderMode] = useState<LadderMode>("solo");
+  const [createMissingDuos, setCreateMissingDuos] = useState(false);
+  const [teamDuos, setTeamDuos] = useState<{ 1: TeamDuoStatus | null; 2: TeamDuoStatus | null }>({
+    1: null,
+    2: null,
+  });
   const [slots, setSlots] = useState<Record<SlotKey, SlotState>>(EMPTY_SLOTS);
   type EmailNotifResult = {
     sent: Array<{ player_id: number; displayName: string }>;
@@ -73,6 +93,50 @@ export function ScheduleMatchTab() {
 
   const updateSlot = (key: SlotKey, patch: Partial<SlotState>) =>
     setSlots((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+
+  // Duo mode: look up whether each team is already an active duo, for the chips under the selector.
+  const team1Ids = [slots.t1p1.player?.player_id, slots.t1p2.player?.player_id];
+  const team2Ids = [slots.t2p1.player?.player_id, slots.t2p2.player?.player_id];
+  const team1Key = team1Ids.every(Boolean) ? team1Ids.join(",") : null;
+  const team2Key = team2Ids.every(Boolean) ? team2Ids.join(",") : null;
+  useEffect(() => {
+    if (ladderMode !== "duo") return;
+    let cancelled = false;
+
+    async function lookup(pair: string | null): Promise<TeamDuoStatus | null> {
+      if (!pair) return null;
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const res = await fetch(`/api/admin/ladder/duos?pair=${pair}`, {
+          headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+        });
+        const json = (await res.json()) as AdminDuoList & { error?: string };
+        if (!res.ok) return { state: "error", detail: json.error ?? "Lookup failed." };
+        if (!json.available) return { state: "error", detail: "The duo ladder isn't enabled yet." };
+        const duo = json.duos[0];
+        if (!duo) return { state: "none", detail: "Not a duo yet." };
+        if (duo.status !== "active") return { state: "none", detail: `Duo is ${duo.status}.` };
+        return {
+          state: "active",
+          label: duo.label,
+          tierName: json.tiers.find((t) => t.id === duo.tierId)?.name ?? null,
+          stars: duo.stars,
+        };
+      } catch {
+        return { state: "error", detail: "Lookup failed." };
+      }
+    }
+
+    setTeamDuos({ 1: team1Key ? { state: "loading" } : null, 2: team2Key ? { state: "loading" } : null });
+    void Promise.all([lookup(team1Key), lookup(team2Key)]).then(([t1, t2]) => {
+      if (!cancelled) setTeamDuos({ 1: t1, 2: t2 });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ladderMode, team1Key, team2Key]);
 
   const excludeFor = (key: SlotKey): Set<string> => {
     const own = slots[key].player
@@ -135,7 +199,8 @@ export function ScheduleMatchTab() {
           timeLocal: timeLocal || null,
           venue: venue.trim() || null,
           type: matchType.trim() || null,
-          isLadderMatch,
+          ladderMode,
+          createMissingDuos: ladderMode === "duo" && createMissingDuos,
           team1: {
             player1Id: String(slots.t1p1.player!.player_id),
             player2Id: String(slots.t1p2.player!.player_id),
@@ -171,7 +236,8 @@ export function ScheduleMatchTab() {
       setVenue("");
       setMatchType("");
       setEventId("");
-      setIsLadderMatch(true);
+      setLadderMode("solo");
+      setCreateMissingDuos(false);
       setSuccess(
         result.message ||
           `Match #${result.match?.match_id ?? ""} created successfully.`,
@@ -297,12 +363,63 @@ export function ScheduleMatchTab() {
           </div>
         </div>
 
-        <Toggle
-          checked={isLadderMatch}
-          onChange={setIsLadderMatch}
-          label="Ladder match"
-          description="Counts toward the tier ladder (own-tier match)."
-        />
+        <div>
+          <span className={labelCls}>Ladder</span>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {LADDER_MODE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setLadderMode(opt.value)}
+                aria-pressed={ladderMode === opt.value}
+                className={`flex-1 rounded border px-3 py-2 text-left text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40 ${
+                  ladderMode === opt.value
+                    ? "border-[#00C8DC]/60 bg-[#00C8DC]/10 text-slate-100"
+                    : "border-slate-700 text-slate-400 hover:border-slate-500"
+                }`}
+              >
+                <span className="block font-medium">{opt.label}</span>
+                <span className="block text-xs text-slate-500">{opt.description}</span>
+              </button>
+            ))}
+          </div>
+
+          {ladderMode === "duo" && (
+            <div className="mt-3 space-y-1.5 text-sm">
+              {([1, 2] as const).map((team) => {
+                const status = teamDuos[team];
+                return (
+                  <p key={team} className="text-slate-400 break-words">
+                    <span className="text-slate-500">Team {team}: </span>
+                    {!status ? (
+                      "pick both players"
+                    ) : status.state === "loading" ? (
+                      "checking…"
+                    ) : status.state === "active" ? (
+                      <span className="text-emerald-300">
+                        Active duo: {status.label}
+                        {status.tierName ? ` (${status.tierName} ${status.stars ?? 0}★)` : " (not placed yet)"}
+                      </span>
+                    ) : (
+                      <span className={status.state === "error" ? "text-rose-300" : "text-amber-300"}>
+                        {status.detail}
+                      </span>
+                    )}
+                  </p>
+                );
+              })}
+              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createMissingDuos}
+                  onChange={(e) => setCreateMissingDuos(e.target.checked)}
+                  className="cursor-pointer"
+                />
+                Create the duo on save for any team that isn&apos;t one yet
+              </label>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Team Assignment */}

@@ -30,11 +30,26 @@ type ResultDraft = {
   start_tier_name: string | null;
 };
 
+type DuoResultDraft = {
+  duo_id: number;
+  tier_name: string;
+  stars: number;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  overall_rank: number | null;
+  tier_position: number | null;
+  badge_eligible: boolean;
+  start_tier_name: string | null;
+};
+
 type CloseResponse = {
   cycle?: { id: number; label: string; status: string };
   written?: boolean;
   results?: ResultDraft[];
   namesByPlayer?: Record<string, string>;
+  duoResults?: DuoResultDraft[];
+  duoLabels?: Record<string, string>;
   recorded?: number;
   badgeEligible?: number;
   warnings?: string[];
@@ -362,6 +377,10 @@ function PreviewPanel({
         </details>
       )}
 
+      {(preview.duoResults ?? []).length > 0 && (
+        <DuoResultsPreview results={preview.duoResults ?? []} labels={preview.duoLabels ?? {}} />
+      )}
+
       {confirming ? (
         <div className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2">
           <p className="text-xs text-amber-200">
@@ -407,5 +426,56 @@ function PreviewPanel({
         </div>
       )}
     </div>
+  );
+}
+
+// The Duo Ladder closes with the cycle; its snapshot is written alongside the solo one.
+function DuoResultsPreview({
+  results,
+  labels,
+}: {
+  results: DuoResultDraft[];
+  labels: Record<string, string>;
+}) {
+  const eligible = results
+    .filter((r) => r.badge_eligible)
+    .sort((a, b) => (a.overall_rank ?? 0) - (b.overall_rank ?? 0));
+  const ineligible = results.filter((r) => !r.badge_eligible);
+
+  return (
+    <details className="text-xs text-slate-400" open>
+      <summary className="cursor-pointer hover:text-slate-200">
+        Duo ladder · {results.length} duo{results.length === 1 ? "" : "s"} recorded ·{" "}
+        <span className="text-slate-200">{eligible.length} badge-eligible</span> · {ineligible.length} under 3
+        matches
+      </summary>
+      <div className="mt-1 flex flex-col gap-1">
+        {eligible.map((r) => (
+          <div
+            key={r.duo_id}
+            className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded border border-slate-700/40 bg-slate-900/60 px-2.5 py-1.5"
+          >
+            <span className="w-6 shrink-0 text-right font-bold tabular-nums text-slate-200">{r.overall_rank}</span>
+            <span className="min-w-0 flex-1 truncate text-slate-100">{labels[String(r.duo_id)] || `Duo ${r.duo_id}`}</span>
+            <span className="shrink-0 text-slate-300">
+              {r.start_tier_name && r.start_tier_name !== r.tier_name ? `${r.start_tier_name} → ` : ""}
+              {r.tier_name} #{r.tier_position} · {r.stars}★
+            </span>
+            <span className="shrink-0 tabular-nums text-slate-400">
+              {r.matches_played}M · {r.wins}W-{r.losses}L
+            </span>
+          </div>
+        ))}
+        {ineligible.map((r) => (
+          <div key={r.duo_id} className="flex flex-wrap items-center gap-x-3 rounded border border-slate-700/30 px-2.5 py-1">
+            <span className="min-w-0 flex-1 truncate">{labels[String(r.duo_id)] || `Duo ${r.duo_id}`}</span>
+            <span className="shrink-0">
+              {r.tier_name} · {r.stars}★
+            </span>
+            <span className="shrink-0 tabular-nums">{r.matches_played}M</span>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }

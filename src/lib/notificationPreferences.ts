@@ -1,7 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import type { NotifType, PlayerNotificationPreferences } from "./types";
 
-const ALL_TYPES: NotifType[] = ["match_results", "match_scheduled", "predictions", "recruit_invitation", "signup_status", "ladder_match_assigned", "ladder_queue_updates", "partner_invite"];
+const ALL_TYPES: NotifType[] = ["match_results", "match_scheduled", "predictions", "recruit_invitation", "signup_status", "ladder_match_assigned", "ladder_queue_updates", "partner_invite", "ladder_duo_updates"];
 
 /**
  * Fetch all notification preferences for a single player.

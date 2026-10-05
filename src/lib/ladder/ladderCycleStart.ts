@@ -1,6 +1,12 @@
 import type { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 import { placeByRating, type TierBucketRow } from "@/lib/ladder/ladderPlacement";
+import { isDuoLadderAvailable } from "@/lib/ladder/ladderSchema";
+import {
+  computeDuoCyclePlacements,
+  writeDuoCyclePlacements,
+  type DuoPlacementDraft,
+} from "@/lib/ladder/ladderDuoCycle";
 
 export type LadderCycleThresholdInput = { tierId: number; eloFloor: number };
 
@@ -31,6 +37,9 @@ export type StartLadderCycleOptions = {
   label: string;
   startsAt?: string;
   thresholds: LadderCycleThresholdInput[];
+  // Duo ladder floors. Same validation as `thresholds`. When omitted (and the duo ladder is
+  // enabled) the solo floors are used.
+  duoThresholds?: LadderCycleThresholdInput[];
   dryRun?: boolean;
 };
 
@@ -42,6 +51,12 @@ export type StartLadderCycleResult =
       namesByPlayer: Record<string, string>;
       distribution: LadderTierDistribution[];
       previousCycle: { id: number; label: string } | null;
+      // Duo ladder allocation. duoAvailable is false until the duo migrations are applied, in which
+      // case the duo fields are empty and nothing duo-related is written.
+      duoAvailable: boolean;
+      duoPlacements: DuoPlacementDraft[];
+      duoLabels: Record<string, string>;
+      duoDistribution: LadderTierDistribution[];
       written: boolean;
       warnings: string[];
     }
@@ -50,7 +65,7 @@ export type StartLadderCycleResult =
 // Mirrors tierWidth in ladderPlacement.ts so the admin preview can show the star band each
 // threshold produces. Kept here rather than exported from there to avoid widening that module's
 // surface for a display-only concern.
-function starBandForIndex(sorted: TierBucketRow[], index: number): number {
+export function starBandForIndex(sorted: TierBucketRow[], index: number): number {
   const next = sorted[index + 1];
   if (next) return (next.elo_floor - sorted[index].elo_floor) / 3;
   const below = sorted[index - 1];
@@ -58,10 +73,10 @@ function starBandForIndex(sorted: TierBucketRow[], index: number): number {
   return 0.5;
 }
 
-type TierIdentityRow = { id: number; name: string; rank: number };
+export type TierIdentityRow = { id: number; name: string; rank: number };
 
 // Validates the submitted floors against the real tier set and returns tiers carrying them.
-function applyThresholds(
+export function applyThresholds(
   tierRows: TierIdentityRow[],
   thresholds: LadderCycleThresholdInput[],
 ): { tiers: TierBucketRow[] } | { error: string } {
@@ -178,6 +193,19 @@ export async function startLadderCycle(
   const applied = applyThresholds((tiersData ?? []) as TierIdentityRow[], thresholds);
   if ("error" in applied) return { ok: false, error: applied.error };
   const { tiers } = applied;
+
+  const duoAvailable = await isDuoLadderAvailable(supabase);
+  let duoTiers: TierBucketRow[] = [];
+  if (duoAvailable) {
+    if (options.duoThresholds && options.duoThresholds.length > 0) {
+      const duoApplied = applyThresholds((tiersData ?? []) as TierIdentityRow[], options.duoThresholds);
+      if ("error" in duoApplied) return { ok: false, error: `Duo floors: ${duoApplied.error}` };
+      duoTiers = duoApplied.tiers;
+    } else {
+      duoTiers = tiers;
+      warnings.push("No duo floors were given, so the duo ladder uses the solo floors this cycle.");
+    }
+  }
 
   // ---- Previous cycle, for the before -> after column -----------------------------------------
   const { data: previousCycleRow, error: previousCycleError } = await supabase
@@ -303,6 +331,29 @@ export async function startLadderCycle(
     count: countByTier.get(tier.id) ?? 0,
   }));
 
+  // ---- Duo allocation ------------------------------------------------------------------------
+  let duoPlacements: DuoPlacementDraft[] = [];
+  let duoLabels: Record<string, string> = {};
+  let duoDistribution: LadderTierDistribution[] = [];
+  if (duoAvailable) {
+    const duoResult = await computeDuoCyclePlacements(supabase, duoTiers, previousCycle?.id ?? null);
+    if (!duoResult.ok) return { ok: false, error: duoResult.error };
+    duoPlacements = duoResult.placements;
+    duoLabels = duoResult.labels;
+    warnings.push(...duoResult.warnings);
+
+    const duoCountByTier = new Map<number, number>();
+    for (const p of duoPlacements) duoCountByTier.set(p.tier_id, (duoCountByTier.get(p.tier_id) ?? 0) + 1);
+    duoDistribution = duoTiers.map((tier, index) => ({
+      tier_id: tier.id,
+      tier_name: tier.name,
+      tier_rank: tier.rank,
+      elo_floor: tier.elo_floor,
+      star_band: starBandForIndex(duoTiers, index),
+      count: duoCountByTier.get(tier.id) ?? 0,
+    }));
+  }
+
   if (dryRun) {
     return {
       ok: true,
@@ -311,6 +362,10 @@ export async function startLadderCycle(
       namesByPlayer: Object.fromEntries(namesByPlayer),
       distribution,
       previousCycle,
+      duoAvailable,
+      duoPlacements,
+      duoLabels,
+      duoDistribution,
       written: false,
       warnings,
     };
@@ -336,6 +391,15 @@ export async function startLadderCycle(
 
   if (thresholdError) {
     return { ok: false, error: `Failed to save the thresholds: ${thresholdError.message} ${halfBuilt}` };
+  }
+
+  if (duoAvailable) {
+    const { error: duoThresholdError } = await supabase.from("ladder_cycle_duo_tiers").insert(
+      duoTiers.map((tier) => ({ cycle_id: cycleId, tier_id: tier.id, elo_floor: tier.elo_floor })),
+    );
+    if (duoThresholdError) {
+      return { ok: false, error: `Failed to save the duo floors: ${duoThresholdError.message} ${halfBuilt}` };
+    }
   }
 
   const CHUNK_SIZE = 500;
@@ -369,6 +433,18 @@ export async function startLadderCycle(
     }
   }
 
+  if (duoAvailable && duoPlacements.length > 0) {
+    const duoWriteError = await writeDuoCyclePlacements(supabase, {
+      cycleId,
+      placements: duoPlacements,
+      startsAt,
+      previousCycleId: previousCycle?.id ?? null,
+    });
+    if (duoWriteError) {
+      return { ok: false, error: `Failed to place duos: ${duoWriteError} ${halfBuilt}` };
+    }
+  }
+
   const { error: activateError } = await supabase
     .from("ladder_cycles")
     .update({ status: "active", updated_at: new Date().toISOString() })
@@ -388,6 +464,10 @@ export async function startLadderCycle(
     namesByPlayer: Object.fromEntries(namesByPlayer),
     distribution,
     previousCycle,
+    duoAvailable,
+    duoPlacements,
+    duoLabels,
+    duoDistribution,
     written: true,
     warnings,
   };

@@ -19,6 +19,8 @@ type LadderProgressionEvent = {
   tierAfterId: number;
   starsBefore: number | null;
   starsAfter: number;
+  // Set when this was a Duo Ladder match: the progression is the recipient's duo's.
+  duoId?: number;
 };
 
 type MatchCompletedData = {
@@ -172,7 +174,7 @@ export function buildEmailHtml({
 
     ladderSectionHtml = `
       <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-        <p style="margin: 0 0 10px 0; color: #555; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Ladder Progress</p>
+        <p style="margin: 0 0 10px 0; color: #555; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">${event.duoId != null ? "Duo Ladder Progress" : "Ladder Progress"}</p>
         <table style="width: 100%; border-collapse: collapse;">
           <tr>
             <td style="width: 90px; vertical-align: middle;">${iconsCell}</td>

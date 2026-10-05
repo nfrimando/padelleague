@@ -3,7 +3,9 @@ import {
   getAuthorizedAdminClient,
   isRecord,
   normalizeRequiredPositiveInteger,
+  type AdminSupabaseClient,
 } from "@/app/api/admin/_lib/auth";
+import { isMissingTableError } from "@/lib/ladder/ladderSchema";
 import { readLedgerEventsForMatch } from "@/app/api/admin/_lib/ledger";
 import { calculateRatings } from "@/lib/ratingCalculator";
 import { reanchorPlayerChainsAfter } from "@/lib/ratings/reanchorChain";
@@ -305,6 +307,10 @@ export async function PATCH(
         );
       }
     }
+  } else {
+    // Same guard for a Duo Ladder match, against each duo's latest ladder_duo_standing_events row.
+    const duoGuard = await checkDuoLadderReviseGuard(supabase, matchId);
+    if (duoGuard) return NextResponse.json({ error: duoGuard.error }, { status: duoGuard.status });
   }
 
   // Validate sets produce a clear winner
@@ -704,4 +710,47 @@ export async function PATCH(
     },
     { status: 200 },
   );
+}
+
+// Returns an error when this is a duo ladder match and either duo has a non-match ladder event (an
+// admin adjustment) recorded after it. Null when it's fine, or not a duo match, or the duo tables
+// don't exist yet.
+async function checkDuoLadderReviseGuard(
+  supabase: AdminSupabaseClient,
+  matchId: number,
+): Promise<{ status: number; error: string } | null> {
+  const { data: duoMatch, error } = await supabase
+    .from("ladder_duo_matches")
+    .select("cycle_id, team1_duo_id, team2_duo_id")
+    .eq("match_id", matchId)
+    .maybeSingle();
+  if (error) {
+    return isMissingTableError(error)
+      ? null
+      : { status: 500, error: error.message || "Failed to load duo ladder match." };
+  }
+  if (!duoMatch) return null;
+
+  const duoIds = [duoMatch.team1_duo_id as number, duoMatch.team2_duo_id as number];
+  const { data: events, error: eventsError } = await supabase
+    .from("ladder_duo_standing_events")
+    .select("duo_id, source_type, source_id")
+    .eq("cycle_id", duoMatch.cycle_id)
+    .in("duo_id", duoIds)
+    .order("occurred_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+  if (eventsError) {
+    return { status: 500, error: eventsError.message || "Failed to load duo ladder standings." };
+  }
+
+  for (const duoId of duoIds) {
+    const latest = (events ?? []).find((e) => e.duo_id === duoId);
+    if (latest && latest.source_type !== "match") {
+      return {
+        status: 409,
+        error: `Duo ${duoId} has a ladder adjustment recorded after this match. Revising it would overwrite that adjustment's effect.`,
+      };
+    }
+  }
+  return null;
 }

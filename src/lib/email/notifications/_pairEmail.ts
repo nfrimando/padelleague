@@ -10,9 +10,13 @@ import { SITE_URL } from "@/lib/siteConfig";
  *
  * All four are gated on the `partner_invite` notification type, so a player can mute
  * pairing mail without losing signup-status mail.
+ *
+ * The duo ladder's invite/accept/decline/dissolve mail reuses the same shell with
+ * `notifType: "ladder_duo_updates"` and a `ctaUrl` pointing at /ladder.
  */
 
-const NOTIF_TYPE = "partner_invite" as const;
+type PairNotifType = "partner_invite" | "ladder_duo_updates";
+const DEFAULT_NOTIF_TYPE: PairNotifType = "partner_invite";
 
 export function displayName(
   name: string | null,
@@ -27,14 +31,14 @@ function buildEmailHtml({
   recipientName,
   bodyHtml,
   ctaLabel,
-  eventUrl,
+  ctaUrl,
   unsubscribeUrl,
 }: {
   heading: string;
   recipientName: string;
   bodyHtml: string;
   ctaLabel: string;
-  eventUrl: string;
+  ctaUrl: string;
   unsubscribeUrl: string;
 }): string {
   return `
@@ -44,7 +48,7 @@ function buildEmailHtml({
       ${bodyHtml}
 
       <a
-        href="${eventUrl}"
+        href="${ctaUrl}"
         style="
           display: inline-block;
           background: #16a34a;
@@ -69,8 +73,8 @@ function buildEmailHtml({
   `;
 }
 
-/** Returns false when the recipient has opted out of partner-invite mail. */
-async function isSubscribed(playerId: number): Promise<boolean> {
+/** Returns false when the recipient has opted out of this category of pairing mail. */
+async function isSubscribed(playerId: number, notifType: PairNotifType): Promise<boolean> {
   const supabase = getServerServiceClient();
 
   const { data: player } = await supabase
@@ -85,7 +89,7 @@ async function isSubscribed(playerId: number): Promise<boolean> {
     .from("player_notification_preferences")
     .select("subscribed")
     .eq("player_id", playerId)
-    .eq("notif_type", NOTIF_TYPE)
+    .eq("notif_type", notifType)
     .maybeSingle();
 
   return prefRow?.subscribed !== false;
@@ -101,6 +105,8 @@ export async function sendPairEmail({
   bodyHtml,
   ctaLabel,
   eventId,
+  ctaUrl,
+  notifType = DEFAULT_NOTIF_TYPE,
 }: {
   notifierName: string;
   playerId: number;
@@ -110,17 +116,21 @@ export async function sendPairEmail({
   heading: string;
   bodyHtml: string;
   ctaLabel: string;
-  eventId: number;
+  /** Event the CTA links to. Ignored when `ctaUrl` is given. */
+  eventId?: number;
+  /** Absolute CTA link; defaults to the event page. */
+  ctaUrl?: string;
+  notifType?: PairNotifType;
 }): Promise<void> {
-  if (!(await isSubscribed(playerId))) return;
+  if (!(await isSubscribed(playerId, notifType))) return;
 
   const html = buildEmailHtml({
     heading,
     recipientName,
     bodyHtml,
     ctaLabel,
-    eventUrl: `${SITE_URL}/events/${eventId}`,
-    unsubscribeUrl: buildUnsubscribeUrl(playerId, NOTIF_TYPE),
+    ctaUrl: ctaUrl ?? (eventId != null ? `${SITE_URL}/events/${eventId}` : SITE_URL),
+    unsubscribeUrl: buildUnsubscribeUrl(playerId, notifType),
   });
 
   const result = await sendEmail({ to: playerEmail, subject, html });

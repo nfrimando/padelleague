@@ -1,6 +1,7 @@
 import type { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { ensureLadderPlacement, type TierBucketRow } from "@/lib/ladder/ladderPlacement";
 import { syncWaitingEntriesToStanding } from "@/lib/ladder/ladderQueue";
+import { syncDuoLadderStandingsForMatch } from "@/lib/ladder/ladderDuoStandingSync";
 import {
   computeNextLadderStanding,
   type LadderStanding,
@@ -22,10 +23,14 @@ export type LadderMatchProgressionEvent = {
   tierAfterId: number;
   starsBefore: number | null;
   starsAfter: number;
+  // Set for duo ladder matches: the transition is the player's DUO's, shared with their partner.
+  duoId?: number;
 };
 
 export type SyncLadderStandingsResult = {
   synced: boolean;
+  // Which ladder the match belonged to; absent when it wasn't a ladder match.
+  mode?: "solo" | "duo";
   warning: string | null;
   tiers: Array<{ id: number; name: string }>;
   events: LadderMatchProgressionEvent[];
@@ -61,7 +66,9 @@ export async function syncLadderStandingsForMatch(
     };
   }
   if (!ladderMatch) {
-    return { synced: false, warning: null, tiers: [], events: [] };
+    // Not a solo ladder match — it may be a duo ladder match (ladder_duo_matches). That sync is a
+    // no-op for ordinary matches and when the duo tables don't exist yet.
+    return syncDuoLadderStandingsForMatch(supabase, { matchId, teamByPlayerId, winnerTeam, occurredAt });
   }
   if (ladderMatch.match_kind !== "own_tier") {
     return {
@@ -169,6 +176,7 @@ export async function syncLadderStandingsForMatch(
 
   return {
     synced: true,
+    mode: "solo",
     warning: warnings.length > 0 ? warnings.join(" ") : null,
     tiers: tiers.map((t) => ({ id: t.id, name: t.name })),
     events,

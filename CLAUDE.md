@@ -87,6 +87,9 @@ Events:
 - `src/lib/useEventMap.ts` — shared event id→label lookup (cached in memory, avoid duplicate fetches)
 - `src/lib/useMatchEvents.ts` — event options derived from matches (for filter dropdowns)
 
+Ladder (see `.claude/ladder.md`):
+- Solo ladder: `src/lib/ladder/*` (standings ledger `ladder_standing_events`, queue, cycles). Duo ladder: separate `ladder_duo_*` tables and `src/lib/ladder/ladderDuo*.ts` — never add duo rows to the solo tables.
+
 Admin:
 - `src/lib/useLoadedMatchDetails.ts` — loads full match details including pre-ratings for admin tools
 - `src/lib/useMatchRatingPreview.ts` — previews rating impact from set scores before completing a match

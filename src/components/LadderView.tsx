@@ -7,6 +7,7 @@ import PlayerCard from "@/components/PlayerCard";
 import LadderOptInBanner from "@/components/LadderOptInBanner";
 import LadderQueuePanel from "@/components/LadderQueuePanel";
 import LadderResultsPanel from "@/components/LadderResultsPanel";
+import LadderDuoView from "@/components/LadderDuoView";
 import { tierIconSrc, StarBadge, CushionBadge } from "@/components/LadderTierBadge";
 import { useCurrentPlayer } from "@/lib/useCurrentPlayer";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +19,7 @@ import type {
   LadderPlayer,
   LadderTier,
 } from "@/lib/ladderData";
+import type { LadderDuoPageData } from "@/lib/ladderDuoData";
 
 function OptedInDot() {
   return (
@@ -92,6 +94,7 @@ type LadderViewProps = {
   pendingMatchesByTier: Record<number, LadderPendingMatch[]>;
   completedCycles: LadderCompletedCycle[];
   resultsByCycle: Record<number, LadderCycleResult[]>;
+  duo: LadderDuoPageData;
 };
 
 function LadderViewContent({
@@ -103,6 +106,7 @@ function LadderViewContent({
   pendingMatchesByTier,
   completedCycles,
   resultsByCycle,
+  duo,
 }: LadderViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -190,6 +194,17 @@ function LadderViewContent({
     observer.observe(el);
     return () => observer.disconnect();
   }, [allPendingMatches.length]);
+
+  // ?mode=duo switches to the Duo Ladder. Ignored (solo) until the duo ladder is enabled.
+  type LadderMode = "solo" | "duo";
+  const mode: LadderMode = searchParams.get("mode") === "duo" && duo.available ? "duo" : "solo";
+  const selectMode = (next: LadderMode) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "solo") params.delete("mode");
+    else params.set("mode", next);
+    params.delete("filter"); // the solo filters don't apply to duos
+    router.push(`/ladder?${params.toString()}`);
+  };
 
   type LadderPanel = "standings" | "results";
   const rawView = searchParams.get("view");
@@ -279,10 +294,14 @@ function LadderViewContent({
         <div className="max-w-4xl mx-auto px-4 sm:px-6 mb-8 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-white">
-              Tier Ladder
+              {mode === "duo" ? "Duo Ladder" : "Tier Ladder"}
             </h1>
             <p className="mt-2 text-[#687FA3]">
-              {view === "results"
+              {mode === "duo"
+                ? view === "results"
+                  ? "Final duo tiers and stars from every cycle that has finished. Badges need at least 3 duo matches."
+                  : "Fixed pairs climbing together. A duo is placed by the average of its two ratings; duo matches only move the duo's stars."
+                : view === "results"
                 ? "Final tiers and stars from every cycle that has finished. Badges need at least 3 ladder matches."
                 : isCycleClosed
                   ? "This cycle has finished — these are its final standings, grouped by tier."
@@ -297,7 +316,24 @@ function LadderViewContent({
           )}
         </div>
 
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 mb-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 mb-6 flex flex-wrap items-center gap-2">
+          {duo.available && (
+            <div className="inline-flex items-center gap-1 rounded-full border border-[#00C8DC]/25 bg-[#00C8DC]/5 p-1">
+              {(["solo", "duo"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => selectMode(m)}
+                  aria-pressed={mode === m}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00C8DC]/50 ${
+                    mode === m ? "bg-[#1a2540] text-white" : "text-[#687FA3] hover:text-white"
+                  }`}
+                >
+                  {m === "solo" ? "Solo" : "Duo"}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="inline-flex items-center gap-1 rounded-full border border-[#687FA3]/20 bg-[#687FA3]/5 p-1">
             <button
               type="button"
@@ -324,7 +360,16 @@ function LadderViewContent({
           </div>
         </div>
 
-        {view === "results" ? (
+        {mode === "duo" ? (
+          <LadderDuoView
+            duo={duo}
+            view={view}
+            completedCycles={completedCycles}
+            isLinked={isLinked}
+            hasActiveCycle={hasActiveCycle}
+            isCycleClosed={isCycleClosed}
+          />
+        ) : view === "results" ? (
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <LadderResultsPanel
               completedCycles={completedCycles}

@@ -33,6 +33,7 @@ type FormState = {
   notif_ladder_match_assigned: boolean;
   notif_ladder_queue_updates: boolean;
   notif_partner_invite: boolean;
+  notif_ladder_duo_updates: boolean;
   preferred_side: "left" | "right" | "both" | "";
   shirt_size: string;
   ig_handle: string;
@@ -64,6 +65,7 @@ export default function EditProfileModal({
     notif_ladder_match_assigned: true,
     notif_ladder_queue_updates: true,
     notif_partner_invite: true,
+    notif_ladder_duo_updates: true,
     preferred_side: player.preferred_side ?? "",
     shirt_size: player.shirt_size ?? "",
     ig_handle: player.ig_handle ?? "",
@@ -114,6 +116,7 @@ export default function EditProfileModal({
             ladder_match_assigned?: boolean;
             ladder_queue_updates?: boolean;
             partner_invite?: boolean;
+            ladder_duo_updates?: boolean;
           };
         };
         const prefs = json.notification_preferences ?? {};
@@ -126,6 +129,7 @@ export default function EditProfileModal({
           notif_ladder_match_assigned: prefs.ladder_match_assigned ?? true,
           notif_ladder_queue_updates: prefs.ladder_queue_updates ?? true,
           notif_partner_invite: prefs.partner_invite ?? true,
+          notif_ladder_duo_updates: prefs.ladder_duo_updates ?? true,
         }));
       } catch {
         // silently ignore; defaults stay true
@@ -189,6 +193,7 @@ export default function EditProfileModal({
             ladder_match_assigned: form.notif_ladder_match_assigned,
             ladder_queue_updates: form.notif_ladder_queue_updates,
             partner_invite: form.notif_partner_invite,
+            ladder_duo_updates: form.notif_ladder_duo_updates,
           },
         }),
       });
@@ -453,6 +458,12 @@ export default function EditProfileModal({
                   onChange={(v) => setForm((f) => ({ ...f, notif_partner_invite: v }))}
                   label="Partner Invites"
                   description="When someone invites you to be their partner for a paired event, and when your pair changes."
+                />
+                <Toggle
+                  checked={form.notif_ladder_duo_updates}
+                  onChange={(v) => setForm((f) => ({ ...f, notif_ladder_duo_updates: v }))}
+                  label="Ladder Duo Updates"
+                  description="Duo Ladder invites, when your invite is accepted or declined, and when a duo you're in is dissolved."
                 />
               </div>
             </div>

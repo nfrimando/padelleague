@@ -72,6 +72,8 @@ export async function POST(
       namesByPlayer: result.namesByPlayer,
       recorded: result.results.length,
       badgeEligible: result.results.filter((r) => r.badge_eligible).length,
+      duoResults: result.duoResults,
+      duoLabels: result.duoLabels,
       warnings: result.warnings,
     },
     { status: 200 },

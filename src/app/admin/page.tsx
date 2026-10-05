@@ -9,6 +9,7 @@ import { CreatePlayerTab } from "@/components/admin/CreatePlayerTab";
 import { EditPlayerTab } from "@/components/admin/EditPlayerTab";
 import { EventsTab } from "@/components/admin/EventsTab";
 import { LadderCyclesTab } from "@/components/admin/LadderCyclesTab";
+import { LadderDuosTab } from "@/components/admin/LadderDuosTab";
 import { LadderQueueTab } from "@/components/admin/LadderQueueTab";
 import { LadderRouletteTab } from "@/components/admin/LadderRouletteTab";
 import { MembersTab } from "@/components/admin/MembersTab";
@@ -33,6 +34,7 @@ type TabValue =
   | "REVISE_SCORE"
   | "LADDER_QUEUE"
   | "LADDER_ROULETTE"
+  | "LADDER_DUOS"
   | "LADDER_CYCLES";
 
 const NAV_GROUPS: {
@@ -67,6 +69,7 @@ const NAV_GROUPS: {
     items: [
       { value: "LADDER_QUEUE", label: "Queue" },
       { value: "LADDER_ROULETTE", label: "Roulette" },
+      { value: "LADDER_DUOS", label: "Duos" },
       { value: "LADDER_CYCLES", label: "Cycles" },
     ],
   },
@@ -474,6 +477,8 @@ function AdminPageContent() {
                   <LadderQueueTab enabled={activeTab === "LADDER_QUEUE" && isAdmin} />
                 ) : activeTab === "LADDER_ROULETTE" ? (
                   <LadderRouletteTab />
+                ) : activeTab === "LADDER_DUOS" ? (
+                  <LadderDuosTab enabled={activeTab === "LADDER_DUOS" && isAdmin} />
                 ) : activeTab === "LADDER_CYCLES" ? (
                   <LadderCyclesTab enabled={activeTab === "LADDER_CYCLES" && isAdmin} />
                 ) : null}

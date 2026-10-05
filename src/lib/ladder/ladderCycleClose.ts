@@ -2,6 +2,12 @@ import type { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { getLastNameKey } from "@/lib/utils";
 import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 import type { TierBucketRow } from "@/lib/ladder/ladderPlacement";
+import { isDuoLadderAvailable } from "@/lib/ladder/ladderSchema";
+import {
+  computeDuoCycleResults,
+  writeDuoCycleResults,
+  type DuoCycleResultDraft,
+} from "@/lib/ladder/ladderDuoCycle";
 
 // A player needs this many completed ladder matches in the cycle to earn a badge and a rank.
 // Players below it are still recorded (with null ranks) so the threshold stays revisitable.
@@ -99,18 +105,38 @@ export function computeCycleResults(
     });
   }
 
+  assignCycleRanks(drafts, (d) => getLastNameKey(namesByPlayer.get(String(d.player_id)) ?? ""));
+
+  return drafts;
+}
+
+export type RankableCycleDraft = {
+  badge_eligible: boolean;
+  tier_id: number;
+  tier_rank: number;
+  stars: number;
+  wins: number;
+  overall_rank: number | null;
+  tier_position: number | null;
+};
+
+// Assigns overall_rank / tier_position in place to the badge-eligible drafts: tier rank desc, stars
+// desc, wins desc, then `nameKeyOf` (the name tiebreak that makes ranks unique 1..N). Shared by the
+// solo and duo ladders so both rank identically.
+export function assignCycleRanks<T extends RankableCycleDraft>(
+  drafts: T[],
+  nameKeyOf: (draft: T) => string,
+): void {
   const eligible = drafts
     .filter((d) => d.badge_eligible)
     .sort((a, b) => {
       if (b.tier_rank !== a.tier_rank) return b.tier_rank - a.tier_rank;
       if (b.stars !== a.stars) return b.stars - a.stars;
       if (b.wins !== a.wins) return b.wins - a.wins;
-      return getLastNameKey(namesByPlayer.get(String(a.player_id)) ?? "").localeCompare(
-        getLastNameKey(namesByPlayer.get(String(b.player_id)) ?? ""),
-      );
+      return nameKeyOf(a).localeCompare(nameKeyOf(b));
     });
 
-  // One walk assigns both placings: eligible is already in final order, so each tier's players are
+  // One walk assigns both placings: eligible is already in final order, so each tier's entries are
   // contiguous within it and a per-tier counter yields tier_position.
   const positionByTier = new Map<number, number>();
   eligible.forEach((draft, index) => {
@@ -119,8 +145,6 @@ export function computeCycleResults(
     positionByTier.set(draft.tier_id, nextPosition);
     draft.tier_position = nextPosition;
   });
-
-  return drafts;
 }
 
 type StandingRow = {
@@ -145,6 +169,9 @@ export type CloseLadderCycleResult =
       cycle: { id: number; label: string; status: string };
       results: LadderCycleResultDraft[];
       namesByPlayer: Record<string, string>;
+      // Duo ladder snapshot for the same cycle. Empty when the duo ladder isn't enabled.
+      duoResults: DuoCycleResultDraft[];
+      duoLabels: Record<string, string>;
       written: boolean;
       warnings: string[];
     }
@@ -323,12 +350,25 @@ export async function closeLadderCycle(
     );
   }
 
+  // The duo ladder shares the cycle, so it closes with it.
+  const duoAvailable = await isDuoLadderAvailable(supabase);
+  let duoResults: DuoCycleResultDraft[] = [];
+  let duoLabels: Record<string, string> = {};
+  if (duoAvailable) {
+    const duo = await computeDuoCycleResults(supabase, cycle, tiers);
+    if (!duo.ok) return { ok: false, error: duo.error };
+    duoResults = duo.results;
+    duoLabels = duo.labels;
+  }
+
   if (dryRun) {
     return {
       ok: true,
       cycle,
       results,
       namesByPlayer: Object.fromEntries(namesByPlayer),
+      duoResults,
+      duoLabels,
       written: false,
       warnings,
     };
@@ -351,6 +391,12 @@ export async function closeLadderCycle(
     if (insertError) {
       return { ok: false, error: `Failed to write cycle results: ${insertError.message}` };
     }
+  }
+
+  // Written before the status flip, so a failure here aborts the close the same way a solo one does.
+  if (duoAvailable) {
+    const duoWriteError = await writeDuoCycleResults(supabase, cycleId, duoResults);
+    if (duoWriteError) return { ok: false, error: duoWriteError };
   }
 
   const { error: updateError } = await supabase
@@ -383,11 +429,24 @@ export async function closeLadderCycle(
     warnings.push(`Cycle closed, but clearing the ladder queue failed: ${queueError.message}`);
   }
 
+  if (duoAvailable) {
+    const { error: duoQueueError } = await supabase
+      .from("ladder_duo_queue_entries")
+      .update({ status: "removed", status_reason: "cycle_closed", closed_at: closedAt, updated_at: closedAt })
+      .eq("cycle_id", cycleId)
+      .eq("status", "waiting");
+    if (duoQueueError) {
+      warnings.push(`Cycle closed, but clearing the duo queue failed: ${duoQueueError.message}`);
+    }
+  }
+
   return {
     ok: true,
     cycle: { ...cycle, status: "completed" },
     results,
     namesByPlayer: Object.fromEntries(namesByPlayer),
+    duoResults,
+    duoLabels,
     written: true,
     warnings,
   };

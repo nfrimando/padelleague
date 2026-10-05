@@ -33,6 +33,7 @@ import RivalriesSection from "./RivalriesSection";
 import PartnersSection from "./PartnersSection";
 import DashboardBanner from "./DashboardBanner";
 import PartnerInvitePrompt, { type PartnerInvite } from "./PartnerInvitePrompt";
+import DuoInvitePrompt from "./DuoInvitePrompt";
 import PredictionsTab from "./PredictionsTab";
 import { useUnviewedPredictionResults } from "@/lib/useUnviewedPredictionResults";
 import type { User } from "@supabase/supabase-js";
@@ -456,6 +457,7 @@ function DashboardPageContent() {
                 onDecline={(i) => void respondToInvite(i, "decline")}
               />
             ))}
+            <DuoInvitePrompt />
             {pendingPaymentSignup && (
               <DashboardBanner
                 type="pending_payment"
