@@ -1,42 +1,42 @@
 // Comparison-based recalibration survey — the pure, server-owned logic that turns
-// a series of head-to-head comparisons ("is the calibratee significantly/slightly
-// better/worse than player X?") into a single derived rating.
+// a series of head-to-head comparisons ("is the calibratee better than, about the
+// same as, or worse than player X?") into a single derived rating.
+//
+// It is a binary search over a rating bracket [lo, hi]: "better" raises lo to the
+// opponent's rating, "worse" lowers hi, "about the same" narrows to the opponent's
+// rating ± SAME_BAND. Each next opponent is the one nearest the bracket midpoint. Two
+// guards keep a single careless answer from poisoning the result: an answer that
+// contradicts the bracket undoes the cut it contradicts, and once the bracket closes we
+// ask one opponent just outside each edge to confirm it.
 //
 // The client never runs any of this and never sees a rating: the server picks each
-// next opponent (selectNextAnchor), records the answer, decides when to stop
-// (shouldStop), and derives the final value (deriveRating). The full trail is
-// persisted to recalibration_respondents.survey_answers as an audit record.
-//
-// Tunables are calibrated to the app's 0–10 rating scale, where ~0.5 is a
-// "significant" gap and ~1.0 ≈ two skill levels (see src/lib/ratings/v3/calculate.ts).
+// next opponent (selectNextAnchor), records the answer, and derives the final value
+// (deriveRating) once there is no one left to ask. The full trail is persisted to
+// recalibration_respondents.survey_answers as an audit record.
 
-export const SURVEY_VERSION = 1 as const;
+import { ratingGapForWinProbability } from "@/lib/ratings/v3/calculate";
 
-export const DELTA_SLIGHT = 0.25; // "slightly better/worse" offset from the opponent
-export const DELTA_SIGNIFICANT = 0.75; // "significantly better/worse" offset
-export const MIN_ANSWERS = 5; // real answers (excludes "don't know") before we may stop
-export const MAX_ANSWERS = 9; // hard cap on real answers
-export const CONVERGE_WINDOW = 3; // inspect the last N implied ratings...
-export const CONVERGE_SPREAD = 0.3; // ...stop once their (max - min) <= this
-export const MAX_QUESTIONS = 14; // absolute cap incl. "don't know", guards against loops
-export const DERIVED_MARGIN = 0.5; // headroom above the pool max when clamping the result
+export const SURVEY_VERSION = 2 as const;
 
-export type SurveyChoice =
+// "About the same" = the stronger player would win no more than this share of matches.
+export const SAME_WIN_PROB = 0.6;
+// Rating gap matching SAME_WIN_PROB on the v3 EWP curve (≈ 0.47). Used both as the
+// half-width of an "about the same" answer and as the bracket width that counts as closed.
+export const SAME_BAND = ratingGapForWinProbability(SAME_WIN_PROB);
+export const MAX_QUESTIONS = 10; // players shown per rater, including "don't know"
+export const DERIVED_MARGIN = 0.5; // headroom beyond the pool's ends for the bracket
+
+/** v1 magnitude choices — no longer offered, but kept so stored surveys still read. */
+export type LegacySurveyChoice =
   | "significantly_better"
   | "slightly_better"
-  | "relatively_same"
   | "slightly_worse"
-  | "significantly_worse"
-  | "dont_know";
+  | "significantly_worse";
 
-export const SURVEY_CHOICES: SurveyChoice[] = [
-  "significantly_better",
-  "slightly_better",
-  "relatively_same",
-  "slightly_worse",
-  "significantly_worse",
-  "dont_know",
-];
+export type SurveyChoice = "better" | "relatively_same" | "worse" | "dont_know" | LegacySurveyChoice;
+
+/** Choices the API accepts. */
+export const SURVEY_CHOICES: SurveyChoice[] = ["better", "relatively_same", "worse", "dont_know"];
 
 export type SurveyQuestion = {
   order: number;
@@ -46,13 +46,13 @@ export type SurveyQuestion = {
   anchorPlayerImage: string | null;
   anchorRating: number; // audit-only; never sent to the responding player
   choice: SurveyChoice | null; // null while pending
-  impliedRating: number | null; // null for dont_know / pending
+  impliedRating: number | null; // running estimate after this answer; null for dont_know / pending
   askedAt: string;
   answeredAt: string | null;
 };
 
 export type SurveyState = {
-  version: typeof SURVEY_VERSION;
+  version: 1 | typeof SURVEY_VERSION;
   status: "in_progress" | "complete";
   startedAt: string;
   completedAt: string | null;
@@ -69,62 +69,92 @@ export type AnchorPoolPlayer = {
   rating: number;
 };
 
-/** Signed offset applied to the opponent's rating, or null for "don't know". */
-export function choiceToOffset(choice: SurveyChoice): number | null {
+export type Bracket = { lo: number; hi: number };
+
+/** +1 = calibratee is better, -1 = worse, 0 = about the same, null = no signal. */
+export function choiceDirection(choice: SurveyChoice): 1 | 0 | -1 | null {
   switch (choice) {
-    case "significantly_better":
-      return DELTA_SIGNIFICANT;
+    case "better":
     case "slightly_better":
-      return DELTA_SLIGHT;
+    case "significantly_better":
+      return 1;
     case "relatively_same":
       return 0;
+    case "worse":
     case "slightly_worse":
-      return -DELTA_SLIGHT;
     case "significantly_worse":
-      return -DELTA_SIGNIFICANT;
+      return -1;
     case "dont_know":
       return null;
   }
 }
 
-/** Implied calibratee rating from one comparison, clamped to >= 0. null = no signal. */
-export function impliedRating(anchorRating: number, choice: SurveyChoice): number | null {
-  const offset = choiceToOffset(choice);
-  if (offset === null) return null;
-  return Math.max(0, anchorRating + offset);
+function isRealAnswer(q: SurveyQuestion): boolean {
+  return q.choice !== null && choiceDirection(q.choice) !== null;
 }
 
-export function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+/** Number of answered, non-"don't know" questions. */
+export function realAnswerCount(questions: SurveyQuestion[]): number {
+  return questions.filter(isRealAnswer).length;
 }
 
-/** Implied ratings of every answered, non-"don't know" question, in ask order. */
-export function answeredImpliedRatings(state: SurveyState): number[] {
-  return state.questions
-    .filter((q) => q.choice !== null && q.impliedRating !== null)
-    .map((q) => q.impliedRating as number);
+/** Lowest and highest rating in a pool sorted ascending by rating. */
+export function poolBounds(poolSortedAsc: AnchorPoolPlayer[]): { poolMin: number; poolMax: number } {
+  return {
+    poolMin: poolSortedAsc[0]?.rating ?? 0,
+    poolMax: poolSortedAsc[poolSortedAsc.length - 1]?.rating ?? 0,
+  };
 }
 
 /**
- * Pick the next opponent: the not-yet-asked pool player whose rating is closest to
- * the running estimate (median of implied ratings so far, or the seed rating — the
- * calibratee's current rating — before any answers). Returns null if exhausted.
+ * Replay the answers into a bracket. Each cut is stacked per side; an answer that
+ * contradicts the bracket (e.g. "worse" than someone at or below lo) pops the cuts it
+ * contradicts and is itself ignored, since we can't tell which of the two was wrong.
  */
-export function selectNextAnchor(
-  poolSortedAsc: AnchorPoolPlayer[],
-  askedIds: Set<number>,
-  answered: number[],
-  seedRating: number,
-): AnchorPoolPlayer | null {
-  const estimate = answered.length > 0 ? (median(answered) as number) : seedRating;
+export function computeBracket(
+  questions: SurveyQuestion[],
+  poolMin: number,
+  poolMax: number,
+): Bracket {
+  const los = [Math.max(0, poolMin - DERIVED_MARGIN)];
+  const his = [poolMax + DERIVED_MARGIN];
+  const top = (stack: number[]) => stack[stack.length - 1];
+
+  for (const q of questions) {
+    if (q.choice === null) continue;
+    const dir = choiceDirection(q.choice);
+    if (dir === null) continue;
+    const a = q.anchorRating;
+    // The range this answer alone says the calibratee is in.
+    const low = dir > 0 ? a : dir < 0 ? -Infinity : a - SAME_BAND;
+    const high = dir < 0 ? a : dir > 0 ? Infinity : a + SAME_BAND;
+
+    if (low >= top(his)) {
+      while (his.length > 1 && top(his) <= low) his.pop();
+      continue;
+    }
+    if (high <= top(los)) {
+      while (los.length > 1 && top(los) >= high) los.pop();
+      continue;
+    }
+    if (low > top(los)) los.push(low);
+    if (high < top(his)) his.push(high);
+  }
+
+  return { lo: top(los), hi: top(his) };
+}
+
+/** Bracket midpoint after the given answers — the running estimate. */
+export function runningEstimate(questions: SurveyQuestion[], poolMin: number, poolMax: number): number {
+  const { lo, hi } = computeBracket(questions, poolMin, poolMax);
+  return Math.round(((lo + hi) / 2) * 100) / 100;
+}
+
+function nearest(candidates: AnchorPoolPlayer[], target: number): AnchorPoolPlayer | null {
   let best: AnchorPoolPlayer | null = null;
   let bestDist = Infinity;
-  for (const candidate of poolSortedAsc) {
-    if (askedIds.has(candidate.player_id)) continue;
-    const dist = Math.abs(candidate.rating - estimate);
+  for (const candidate of candidates) {
+    const dist = Math.abs(candidate.rating - target);
     if (dist < bestDist) {
       best = candidate;
       bestDist = dist;
@@ -133,32 +163,74 @@ export function selectNextAnchor(
   return best;
 }
 
-/** Stop once we have enough converged answers, hit the cap, or run out of opponents. */
-export function shouldStop(answered: number[], poolRemaining: number): boolean {
-  if (answered.length >= MAX_ANSWERS) return true;
-  if (poolRemaining <= 0 && answered.length > 0) return true;
-  if (answered.length < MIN_ANSWERS) return false;
-  const recent = answered.slice(-CONVERGE_WINDOW);
-  const spread = Math.max(...recent) - Math.min(...recent);
-  return spread <= CONVERGE_SPREAD;
+/**
+ * Confirmation opponent just outside one edge of the bracket: walking outward from the
+ * edge (skipping players the rater didn't know), the first player found. Returns null
+ * when that player was already answered — the edge is confirmed — or nobody is there.
+ */
+function confirmationAnchor(
+  poolSortedAsc: AnchorPoolPlayer[],
+  questions: SurveyQuestion[],
+  edge: number,
+  side: "below" | "above",
+): AnchorPoolPlayer | null {
+  const choiceById = new Map(questions.map((q) => [q.anchorPlayerId, q.choice]));
+  const outside =
+    side === "below"
+      ? poolSortedAsc.filter((p) => p.rating < edge).reverse()
+      : poolSortedAsc.filter((p) => p.rating > edge);
+  for (const candidate of outside) {
+    if (!choiceById.has(candidate.player_id)) return candidate;
+    if (choiceById.get(candidate.player_id) === "dont_know") continue;
+    return null;
+  }
+  return null;
 }
 
 /**
- * Final rating from all implied ratings — the median (robust to a single careless or
- * contradictory answer), clamped to the rating scale and rounded to 2 dp. Confidence
- * is 1 minus the normalized spread of the answers.
+ * Pick the next opponent, or null when the survey should end (cap reached, bracket
+ * closed and confirmed, or no one left to ask). Before any real answer: the unasked
+ * player nearest the seed (the calibratee's current rating, or mid-pool for recruits).
+ * While the bracket is open: the unasked player nearest its midpoint. Once closed: one
+ * confirmation opponent below lo, then one above hi.
+ */
+export function selectNextAnchor(
+  poolSortedAsc: AnchorPoolPlayer[],
+  questions: SurveyQuestion[],
+  seedRating: number,
+): AnchorPoolPlayer | null {
+  if (questions.length >= MAX_QUESTIONS) return null;
+  const askedIds = new Set(questions.map((q) => q.anchorPlayerId));
+  const unasked = poolSortedAsc.filter((p) => !askedIds.has(p.player_id));
+  if (unasked.length === 0) return null;
+  if (realAnswerCount(questions) === 0) return nearest(unasked, seedRating);
+
+  const { poolMin, poolMax } = poolBounds(poolSortedAsc);
+  const { lo, hi } = computeBracket(questions, poolMin, poolMax);
+  const inside = unasked.filter((p) => p.rating > lo && p.rating < hi);
+  if (hi - lo > SAME_BAND && inside.length > 0) return nearest(inside, (lo + hi) / 2);
+
+  return (
+    confirmationAnchor(poolSortedAsc, questions, lo, "below") ??
+    confirmationAnchor(poolSortedAsc, questions, hi, "above")
+  );
+}
+
+/**
+ * Final rating: the bracket midpoint, clamped to the rating scale and rounded to 2 dp.
+ * Confidence is 1 minus half the bracket width (a 2.0-wide bracket => zero). Returns
+ * null when there are no real answers to derive from.
  */
 export function deriveRating(
-  answered: number[],
-  poolMax: number,
-): { derivedRating: number; confidence: number } {
-  const mid = median(answered);
-  if (mid === null) return { derivedRating: 0, confidence: 0 };
-  const clamped = Math.min(Math.max(0, mid), poolMax + DERIVED_MARGIN);
+  questions: SurveyQuestion[],
+  poolSortedAsc: AnchorPoolPlayer[],
+): { derivedRating: number; confidence: number } | null {
+  if (realAnswerCount(questions) === 0) return null;
+  const { poolMin, poolMax } = poolBounds(poolSortedAsc);
+  const { lo, hi } = computeBracket(questions, poolMin, poolMax);
+  const clamped = Math.min(Math.max(0, (lo + hi) / 2), poolMax + DERIVED_MARGIN);
   const derivedRating = Math.round(clamped * 100) / 100;
-  const spread = answered.length > 1 ? Math.max(...answered) - Math.min(...answered) : 0;
-  // ~2.0 points of spread => zero confidence; tighter => closer to 1.
-  const confidence = Math.round(Math.max(0, 1 - spread / 2) * 100) / 100;
+  const confidence = Math.round(Math.min(1, Math.max(0, 1 - (hi - lo) / 2)) * 100) / 100;
   return { derivedRating, confidence };
 }
 
@@ -204,7 +276,7 @@ export type RespondentSurveySummary = {
 };
 
 export function toRespondentSurveySummary(state: SurveyState): RespondentSurveySummary {
-  return { status: state.status, answeredCount: answeredImpliedRatings(state).length };
+  return { status: state.status, answeredCount: realAnswerCount(state.questions) };
 }
 
 /** Counts for the rater-facing recap (no rating numbers). */
@@ -215,9 +287,11 @@ export function summarizeChoices(
   let worse = 0;
   let same = 0;
   for (const q of state.questions) {
-    if (q.choice === "significantly_better" || q.choice === "slightly_better") better += 1;
-    else if (q.choice === "significantly_worse" || q.choice === "slightly_worse") worse += 1;
-    else if (q.choice === "relatively_same") same += 1;
+    if (q.choice === null) continue;
+    const dir = choiceDirection(q.choice);
+    if (dir === 1) better += 1;
+    else if (dir === -1) worse += 1;
+    else if (dir === 0) same += 1;
   }
   return { better, worse, same, total: better + worse + same };
 }

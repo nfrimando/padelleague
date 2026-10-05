@@ -20,9 +20,12 @@ import RecruitSurveyModal from "./RecruitSurveyModal";
 import type { SurveyChoice, SurveyState } from "@/lib/recalibration/survey";
 
 const CHOICE_LABELS: Record<SurveyChoice, string> = {
+  better: "Better",
+  worse: "Worse",
+  // v1 surveys recorded a magnitude; kept so older trails still read.
   significantly_better: "Significantly better",
   slightly_better: "Slightly better",
-  relatively_same: "Relatively the same",
+  relatively_same: "About the same",
   slightly_worse: "Slightly worse",
   significantly_worse: "Significantly worse",
   dont_know: "Didn't know",

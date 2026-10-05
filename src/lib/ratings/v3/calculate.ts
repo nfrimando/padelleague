@@ -55,6 +55,11 @@ export function computeV3ExpectedWinProbability(
   return [ewp1, 1 - ewp1];
 }
 
+/** Rating gap at which the stronger side's expected win probability equals `p` (inverse of the EWP curve). */
+export function ratingGapForWinProbability(p: number): number {
+  return ELO_VAR_1 * Math.log10(p / (1 - p));
+}
+
 export function calculateV3Ratings<TPlayerId extends PlayerId>(
   input: RatingCalculationInput<TPlayerId>,
 ): RatingCalculationResult<TPlayerId> {

@@ -23,29 +23,19 @@ type Recap = { better: number; worse: number; same: number; total: number };
 
 type Phase =
   | { kind: "loading" }
-  | { kind: "question"; anchor: PublicAnchor; answeredCount: number; softTarget: number }
+  | { kind: "question"; anchor: PublicAnchor; questionNumber: number; maxQuestions: number }
   | { kind: "done"; recap: Recap }
   | { kind: "error"; message: string };
 
 const CHOICES: { choice: SurveyChoice; label: string; tone: string }[] = [
   {
-    choice: "significantly_better",
-    label: "Significantly better",
+    choice: "better",
+    label: "Better",
     tone: "border-emerald-500/40 hover:border-emerald-400/80 hover:bg-emerald-500/10 text-emerald-200",
   },
   {
-    choice: "slightly_better",
-    label: "Slightly better",
-    tone: "border-emerald-500/20 hover:border-emerald-400/50 hover:bg-emerald-500/5 text-emerald-100/90",
-  },
-  {
-    choice: "slightly_worse",
-    label: "Slightly worse",
-    tone: "border-rose-500/20 hover:border-rose-400/50 hover:bg-rose-500/5 text-rose-100/90",
-  },
-  {
-    choice: "significantly_worse",
-    label: "Significantly worse",
+    choice: "worse",
+    label: "Worse",
     tone: "border-rose-500/40 hover:border-rose-400/80 hover:bg-rose-500/10 text-rose-200",
   },
 ];
@@ -126,8 +116,8 @@ export default function RecalibrationSurveyModal({
     setPhase({
       kind: "question",
       anchor: question.anchorPlayer,
-      answeredCount: (json.answeredCount as number) ?? 0,
-      softTarget: (json.softTarget as number) ?? 5,
+      questionNumber: (json.questionNumber as number) ?? 1,
+      maxQuestions: (json.maxQuestions as number) ?? 10,
     });
   }, []);
 
@@ -202,7 +192,7 @@ export default function RecalibrationSurveyModal({
           {phase.kind === "question" && (
             <div className="space-y-5">
               <p className="text-[11px] text-[#687FA3]">
-                Question {phase.answeredCount + 1} · usually a handful of comparisons
+                Player {phase.questionNumber} of up to {phase.maxQuestions}
               </p>
 
               {/* Two players, stacked on mobile */}
@@ -235,6 +225,9 @@ export default function RecalibrationSurveyModal({
                   Compared to <strong>{phase.anchor.name ?? "this player"}</strong>,{" "}
                   <strong>{calibratee.name ?? "they"}</strong> is…
                 </p>
+                <p className="text-[11px] text-[#687FA3] text-center">
+                  Who would usually win a match between them?
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {CHOICES.map((c) => (
                     <button
@@ -254,7 +247,7 @@ export default function RecalibrationSurveyModal({
                   onClick={() => answer("relatively_same")}
                   className="w-full py-3 px-4 rounded-xl border border-[#687FA3]/40 hover:border-[#687FA3]/70 hover:bg-white/5 text-white/80 bg-[#0E1523]/40 font-bold text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Relatively the same
+                  About the same
                 </button>
                 <button
                   type="button"

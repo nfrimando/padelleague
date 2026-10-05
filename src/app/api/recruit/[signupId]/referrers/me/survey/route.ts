@@ -3,16 +3,16 @@ import { getServerServiceClient } from "@/app/api/_lib/supabase";
 import { getAuthorizedPlayer } from "@/app/api/recruit/_lib/auth";
 import { buildAnchorPool } from "@/app/api/recalibration/_lib/pool";
 import {
-  MIN_ANSWERS,
+  MAX_QUESTIONS,
   SURVEY_CHOICES,
-  answeredImpliedRatings,
+  choiceDirection,
   createSurveyState,
   deriveRating,
-  impliedRating,
   pendingQuestion,
+  poolBounds,
   questionToPublicAnchor,
+  runningEstimate,
   selectNextAnchor,
-  shouldStop,
   summarizeChoices,
   type AnchorPoolPlayer,
   type SurveyChoice,
@@ -99,7 +99,7 @@ export async function POST(
       { status: 409 },
     );
   }
-  const poolMax = pool[pool.length - 1].rating;
+  const { poolMin, poolMax } = poolBounds(pool);
   const seed = poolMax / 2; // applicant has no prior rating; start in the middle
 
   let state = (referrerRow.survey_answers as SurveyState | null) ?? null;
@@ -113,12 +113,11 @@ export async function POST(
   }
 
   if (action === "start") {
-    if (state && state.status === "in_progress") {
-      const pending = pendingQuestion(state);
-      if (pending) return questionResponse(state, pending);
-    } else {
-      state = createSurveyState(now);
-    }
+    // Resume a pending question; otherwise start fresh (including after a run where
+    // every player shown was marked "don't know").
+    const resumable = state?.status === "in_progress" ? pendingQuestion(state) : null;
+    if (state && resumable) return questionResponse(state, resumable);
+    state = createSurveyState(now);
     const next = appendNextQuestion(state, pool, seed, now);
     if (!next) {
       return NextResponse.json(
@@ -155,15 +154,27 @@ export async function POST(
   }
 
   pending.choice = choice as SurveyChoice;
-  pending.impliedRating = impliedRating(pending.anchorRating, choice as SurveyChoice);
+  pending.impliedRating =
+    choiceDirection(pending.choice) === null
+      ? null
+      : runningEstimate(state.questions, poolMin, poolMax);
   pending.answeredAt = now;
 
-  const answered = answeredImpliedRatings(state);
-  const askedIds = new Set(state.questions.map((q) => q.anchorPlayerId));
-  const poolRemaining = pool.filter((p) => !askedIds.has(p.player_id)).length;
-
-  if (shouldStop(answered, poolRemaining)) {
-    const { derivedRating, confidence } = deriveRating(answered, poolMax);
+  const next = appendNextQuestion(state, pool, seed, now);
+  if (!next) {
+    const result = deriveRating(state.questions, pool);
+    if (!result) {
+      // Every player shown was marked "don't know" — nothing to derive from.
+      await persist(state);
+      return NextResponse.json(
+        {
+          error:
+            "You didn't recognize enough of these players to give an assessment. Restart to try again.",
+        },
+        { status: 409 },
+      );
+    }
+    const { derivedRating, confidence } = result;
     state.status = "complete";
     state.completedAt = now;
     state.derivedRating = derivedRating;
@@ -180,32 +191,18 @@ export async function POST(
     return NextResponse.json({ done: true, recap: summarizeChoices(state) });
   }
 
-  const next = appendNextQuestion(state, pool, seed, now);
-  if (!next) {
-    // Ran out of opponents without a usable answer (e.g. everyone marked "don't know").
-    await persist(state);
-    return NextResponse.json(
-      {
-        error:
-          "We've run out of players to compare. Restart and rate the players you do recognize.",
-      },
-      { status: 409 },
-    );
-  }
   await persist(state);
   return questionResponse(state, next);
 }
 
-/** Append the next pending question for the running estimate; null if pool exhausted. */
+/** Append the next pending question; null when the survey should end. */
 function appendNextQuestion(
   state: SurveyState,
   pool: AnchorPoolPlayer[],
   seed: number,
   now: string,
 ): SurveyQuestion | null {
-  const askedIds = new Set(state.questions.map((q) => q.anchorPlayerId));
-  const answered = answeredImpliedRatings(state);
-  const anchor = selectNextAnchor(pool, askedIds, answered, seed);
+  const anchor = selectNextAnchor(pool, state.questions, seed);
   if (!anchor) return null;
   const question: SurveyQuestion = {
     order: state.questions.length + 1,
@@ -227,7 +224,7 @@ function questionResponse(state: SurveyState, question: SurveyQuestion) {
   return NextResponse.json({
     done: false,
     question: { anchorPlayer: questionToPublicAnchor(question) },
-    answeredCount: answeredImpliedRatings(state).length,
-    softTarget: MIN_ANSWERS,
+    questionNumber: state.questions.length,
+    maxQuestions: MAX_QUESTIONS,
   });
 }
