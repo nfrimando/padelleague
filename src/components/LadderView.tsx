@@ -6,6 +6,7 @@ import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
 import LadderOptInBanner from "@/components/LadderOptInBanner";
 import LadderQueuePanel from "@/components/LadderQueuePanel";
+import { LADDER_ROULETTE_ENABLED } from "@/lib/ladder/ladderQueueShared";
 import LadderResultsPanel from "@/components/LadderResultsPanel";
 import LadderDuoView from "@/components/LadderDuoView";
 import { tierIconSrc, StarBadge, CushionBadge } from "@/components/LadderTierBadge";
@@ -223,10 +224,16 @@ function LadderViewContent({
 
   type LadderFilter = "optedIn" | "played" | "either" | "all";
   const rawFilter = searchParams.get("filter");
-  const filter: LadderFilter =
-    rawFilter === "optedIn" || rawFilter === "played" || rawFilter === "all"
+  // With the roulette hidden there's no opt-in to filter on: default to everyone placed, and fall
+  // old optedIn/either links back to that.
+  const defaultFilter: LadderFilter = LADDER_ROULETTE_ENABLED ? "either" : "all";
+  const filter: LadderFilter = LADDER_ROULETTE_ENABLED
+    ? rawFilter === "optedIn" || rawFilter === "played" || rawFilter === "all"
       ? rawFilter
-      : "either";
+      : "either"
+    : rawFilter === "played"
+      ? "played"
+      : "all";
 
   const activePlayers = allActivePlayers.filter((p) => {
     if (filter === "all") return true;
@@ -243,7 +250,7 @@ function LadderViewContent({
 
   const setFilter = (next: LadderFilter) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === "either") params.delete("filter");
+    if (next === defaultFilter) params.delete("filter");
     else params.set("filter", next);
     router.push(`/ladder?${params.toString()}`);
   };
@@ -305,7 +312,9 @@ function LadderViewContent({
                 ? "Final tiers and stars from every cycle that has finished. Badges need at least 3 ladder matches."
                 : isCycleClosed
                   ? "This cycle has finished — these are its final standings, grouped by tier."
-                  : "Standings for the current cycle, grouped by tier. Anyone can play ladder matches; the roulette draw is opt-in."}
+                  : LADDER_ROULETTE_ENABLED
+                    ? "Standings for the current cycle, grouped by tier. Anyone can play ladder matches; the roulette draw is opt-in."
+                    : "Standings for the current cycle, grouped by tier."}
             </p>
           </div>
           {activeCycle && (
@@ -378,16 +387,25 @@ function LadderViewContent({
           </div>
         ) : (
           <>
-        <LadderOptInBanner
-          isLinked={isLinked}
-          optIn={optIn}
-          saving={savingOptIn}
-          onToggle={toggleOptIn}
-          tierName={myStanding?.tierName ?? null}
-          stars={myStanding?.stars ?? null}
-        />
+        {LADDER_ROULETTE_ENABLED && (
+          <LadderOptInBanner
+            isLinked={isLinked}
+            optIn={optIn}
+            saving={savingOptIn}
+            onToggle={toggleOptIn}
+            tierName={myStanding?.tierName ?? null}
+            stars={myStanding?.stars ?? null}
+          />
+        )}
 
-        {isLinked && hasActiveCycle && !isCycleClosed && <LadderQueuePanel />}
+        {isLinked && hasActiveCycle && !isCycleClosed && (
+          <LadderQueuePanel
+            // The roulette banner used to carry the player's own badge; with it hidden, the queue
+            // panel does.
+            tierName={LADDER_ROULETTE_ENABLED ? null : (myStanding?.tierName ?? null)}
+            stars={myStanding?.stars ?? null}
+          />
+        )}
 
         {!hasActiveCycle ? (
           <p className="max-w-4xl mx-auto px-4 sm:px-6 text-sm text-[#687FA3]">
@@ -425,17 +443,32 @@ function LadderViewContent({
             <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <div className="flex flex-wrap items-center gap-2 mb-6">
               <div className="flex items-center gap-1 rounded-full border border-[#687FA3]/20 bg-[#687FA3]/5 p-1">
-                <button
-                  type="button"
-                  onClick={() => setFilter("optedIn")}
-                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
-                    filter === "optedIn"
-                      ? "bg-[#1a2540] text-white"
-                      : "text-[#687FA3] hover:text-white"
-                  }`}
-                >
-                  In Roulette
-                </button>
+                {!LADDER_ROULETTE_ENABLED && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("all")}
+                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                      filter === "all"
+                        ? "bg-[#1a2540] text-white"
+                        : "text-[#687FA3] hover:text-white"
+                    }`}
+                  >
+                    All
+                  </button>
+                )}
+                {LADDER_ROULETTE_ENABLED && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("optedIn")}
+                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                      filter === "optedIn"
+                        ? "bg-[#1a2540] text-white"
+                        : "text-[#687FA3] hover:text-white"
+                    }`}
+                  >
+                    In Roulette
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setFilter("played")}
@@ -447,17 +480,19 @@ function LadderViewContent({
                 >
                   Played Only
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setFilter("either")}
-                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
-                    filter === "either"
-                      ? "bg-[#1a2540] text-white"
-                      : "text-[#687FA3] hover:text-white"
-                  }`}
-                >
-                  Either
-                </button>
+                {LADDER_ROULETTE_ENABLED && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("either")}
+                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
+                      filter === "either"
+                        ? "bg-[#1a2540] text-white"
+                        : "text-[#687FA3] hover:text-white"
+                    }`}
+                  >
+                    Either
+                  </button>
+                )}
               </div>
 
               {filter !== "all" && (
@@ -504,9 +539,11 @@ function LadderViewContent({
             </div>
 
             {/* The row dot's only explanation used to be a `title`, which never fires on touch. */}
-            <p className="flex items-center gap-1.5 mb-2 text-[10px] text-[#687FA3]/60">
-              <OptedInDot />= in the roulette draw
-            </p>
+            {LADDER_ROULETTE_ENABLED && (
+              <p className="flex items-center gap-1.5 mb-2 text-[10px] text-[#687FA3]/60">
+                <OptedInDot />= in the roulette draw
+              </p>
+            )}
 
             {activePlayers.length === 0 ? (
               <p className="text-sm text-[#687FA3]">
@@ -529,7 +566,7 @@ function LadderViewContent({
                         openInNewTab
                       />
                       <div className="flex items-center gap-2 shrink-0">
-                        {player.isOptedIn && <OptedInDot />}
+                        {LADDER_ROULETTE_ENABLED && player.isOptedIn && <OptedInDot />}
                         <span className="text-[10px] font-semibold text-[#687FA3]/60 tabular-nums">
                           {player.winsThisCycle}W
                         </span>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Clock, Swords, Users } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { tierIconSrc, StarBadge } from "@/components/LadderTierBadge";
 import { supabase } from "@/lib/supabase";
 import {
   QUEUE_GROUP_SIZE,
@@ -32,7 +33,14 @@ async function authedFetch(path: string, method: "GET" | "POST") {
 
 // Self-serve ladder queue: join → wait for 4 in your tier → matched with a play-by deadline.
 // Shown only to a linked player while a cycle is active.
-export default function LadderQueuePanel() {
+// tierName/stars render the player's own tier badge (the job the roulette banner used to do).
+export default function LadderQueuePanel({
+  tierName: badgeTierName = null,
+  stars = null,
+}: {
+  tierName?: string | null;
+  stars?: number | null;
+} = {}) {
   const [state, setState] = useState<LadderQueueState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +152,19 @@ export default function LadderQueuePanel() {
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl font-black text-white leading-tight">{headline}</h2>
               <p className="mt-1 text-sm text-[#687FA3] leading-relaxed break-words">{subtext}</p>
+              {badgeTierName && (
+                <div className="mt-2.5 inline-flex items-center gap-1.5">
+                  <img
+                    src={tierIconSrc(badgeTierName)}
+                    alt=""
+                    className="w-5 h-5 object-contain shrink-0"
+                  />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-[#687FA3]">
+                    {badgeTierName}
+                  </span>
+                  <StarBadge stars={stars ?? 0} />
+                </div>
+              )}
               {open?.playByAt && (
                 <p className="mt-1.5 text-xs font-bold uppercase tracking-widest text-amber-300/80">
                   Play by {formatPlayBy(open.playByAt)}

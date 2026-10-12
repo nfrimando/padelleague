@@ -881,7 +881,7 @@ export function UpdateMatchTab() {
                   )}
                   {updateMatchStatus === "assigned" && (
                     <option value="assigned" disabled>
-                      assigned (ladder roulette, not yet scheduled)
+                      assigned (ladder, not yet scheduled)
                     </option>
                   )}
                   {UPDATE_MATCH_STATUS_OPTIONS.map((status) => (

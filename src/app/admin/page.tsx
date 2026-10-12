@@ -18,6 +18,7 @@ import { UpdateMatchTab } from "@/components/admin/UpdateMatchTab";
 import { ReviseScoreTab } from "@/components/admin/ReviseScoreTab";
 import { supabase } from "@/lib/supabase";
 import { checkIsAdmin } from "@/lib/adminCheck";
+import { LADDER_ROULETTE_ENABLED } from "@/lib/ladder/ladderQueueShared";
 import { Player } from "@/lib/types";
 import { useMatchEvents } from "@/lib/useMatchEvents";
 import { useScheduledMatches } from "@/lib/useScheduledMatches";
@@ -68,7 +69,8 @@ const NAV_GROUPS: {
     label: "Ladder",
     items: [
       { value: "LADDER_QUEUE", label: "Queue" },
-      { value: "LADDER_ROULETTE", label: "Roulette" },
+      // Hidden while the queue replaces the roulette; a stale ?tab= link falls back to the default.
+      ...(LADDER_ROULETTE_ENABLED ? [{ value: "LADDER_ROULETTE" as const, label: "Roulette" }] : []),
       { value: "LADDER_DUOS", label: "Duos" },
       { value: "LADDER_CYCLES", label: "Cycles" },
     ],

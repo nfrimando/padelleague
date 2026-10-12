@@ -275,7 +275,7 @@ export function LadderCyclesTab({ enabled }: { enabled: boolean }) {
 
       {!activeCycle && cycles.length > 0 && (
         <p className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          No cycle is currently active, so the roulette and new ladder matches will fail until the
+          No cycle is currently active, so the queue and new ladder matches will fail until the
           next cycle is started below.
         </p>
       )}
@@ -389,7 +389,7 @@ function PreviewPanel({
             ) : (
               <>
                 This marks the cycle completed and freezes these results. It leaves{" "}
-                <strong>no active cycle</strong>, so the roulette and new ladder matches will fail
+                <strong>no active cycle</strong>, so the queue and new ladder matches will fail
                 until the next cycle is created. Continue?
               </>
             )}

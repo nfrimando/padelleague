@@ -24,3 +24,7 @@ export function formatPlayBy(iso: string | null): string {
     day: "numeric",
   }).format(date);
 }
+
+// Cycle 2 replaced the roulette draw with the self-serve queue. The roulette backend is kept
+// (queue matchmaking reuses its team split); this only hides its UI. Flip to re-enable.
+export const LADDER_ROULETTE_ENABLED = false;

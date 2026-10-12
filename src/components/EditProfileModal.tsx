@@ -8,6 +8,7 @@ import { countryToFlag } from "@/lib/utils";
 import { COUNTRY_LIST, PHONE_CODES } from "@/lib/countries";
 import type { Player } from "@/lib/types";
 import Toggle from "@/components/Toggle";
+import { LADDER_ROULETTE_ENABLED } from "@/lib/ladder/ladderQueueShared";
 
 type Props = {
   player: Player;
@@ -388,12 +389,15 @@ export default function EditProfileModal({
             label="Public profile"
             description="Anyone can see your photo and contact details. When off, only league members can."
           />
-          <Toggle
-            checked={form.is_ladder_opt_in}
-            onChange={(v) => setForm((f) => ({ ...f, is_ladder_opt_in: v }))}
-            label="Ladder roulette"
-            description="Enter the roulette draw for auto-generated 2v2 ladder matches. You can play ladder matches either way."
-          />
+          {/* Hidden, but is_ladder_opt_in stays in the form and payload so saving keeps the stored value. */}
+          {LADDER_ROULETTE_ENABLED && (
+            <Toggle
+              checked={form.is_ladder_opt_in}
+              onChange={(v) => setForm((f) => ({ ...f, is_ladder_opt_in: v }))}
+              label="Ladder roulette"
+              description="Enter the roulette draw for auto-generated 2v2 ladder matches. You can play ladder matches either way."
+            />
+          )}
           <Toggle
             checked={form.is_duel_roulette_opt_in}
             onChange={(v) =>
@@ -445,7 +449,7 @@ export default function EditProfileModal({
                   checked={form.notif_ladder_match_assigned}
                   onChange={(v) => setForm((f) => ({ ...f, notif_ladder_match_assigned: v }))}
                   label="Ladder Match Assignments"
-                  description="When the ladder queue or roulette assigns you a match."
+                  description="When the ladder queue assigns you a match."
                 />
                 <Toggle
                   checked={form.notif_ladder_queue_updates}
