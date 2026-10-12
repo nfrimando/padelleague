@@ -398,7 +398,8 @@ function LadderViewContent({
           />
         )}
 
-        {isLinked && hasActiveCycle && !isCycleClosed && (
+        {/* Not gated on isLinked: the panel checks the session itself so its fetch starts sooner. */}
+        {hasActiveCycle && !isCycleClosed && (
           <LadderQueuePanel
             // The roulette banner used to carry the player's own badge; with it hidden, the queue
             // panel does.

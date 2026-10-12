@@ -32,48 +32,46 @@ export async function GET(request: Request) {
   const cycleId = await fetchActiveCycleId(supabase);
   if (!cycleId) return NextResponse.json(empty, { status: 200 });
 
-  const standing = (await fetchLatestLadderStandings(supabase, cycleId, [playerId])).get(
-    String(playerId),
-  );
-
-  let tier: LadderQueueState["tier"] = null;
-  if (standing) {
+  // Independent lookups run in parallel; this route gates the /ladder join button.
+  const loadTier = async (): Promise<LadderQueueState["tier"]> => {
+    const standing = (await fetchLatestLadderStandings(supabase, cycleId, [playerId])).get(
+      String(playerId),
+    );
+    if (!standing) return null;
     const { data: tierRow } = await supabase
       .from("ladder_tiers")
       .select("id, name")
       .eq("id", standing.tierId)
       .maybeSingle();
-    tier = tierRow ? { id: tierRow.id as number, name: tierRow.name as string } : null;
-  }
+    return tierRow ? { id: tierRow.id as number, name: tierRow.name as string } : null;
+  };
 
-  const { data: entry } = await supabase
-    .from("ladder_queue_entries")
-    .select("tier_id, queued_at, created_at")
-    .eq("player_id", playerId)
-    .eq("status", "waiting")
-    .maybeSingle();
-
-  let waiting: LadderQueueState["waiting"] = null;
-  if (entry) {
+  const loadWaiting = async (): Promise<LadderQueueState["waiting"]> => {
+    const { data: entry } = await supabase
+      .from("ladder_queue_entries")
+      .select("tier_id, queued_at, created_at")
+      .eq("player_id", playerId)
+      .eq("status", "waiting")
+      .maybeSingle();
+    if (!entry) return null;
     const tierId = entry.tier_id as number;
     const queuedAt = entry.queued_at as string;
-    const { count: ahead } = await supabase
-      .from("ladder_queue_entries")
-      .select("id", { count: "exact", head: true })
-      .eq("cycle_id", cycleId)
-      .eq("tier_id", tierId)
-      .eq("status", "waiting")
-      .lt("queued_at", queuedAt);
-    waiting = {
-      queuedAt,
-      position: (ahead ?? 0) + 1,
-      waitingCount: await countWaitingInTier(supabase, cycleId, tierId),
-    };
-  }
+    const [{ count: ahead }, waitingCount] = await Promise.all([
+      supabase
+        .from("ladder_queue_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("cycle_id", cycleId)
+        .eq("tier_id", tierId)
+        .eq("status", "waiting")
+        .lt("queued_at", queuedAt),
+      countWaitingInTier(supabase, cycleId, tierId),
+    ]);
+    return { queuedAt, position: (ahead ?? 0) + 1, waitingCount };
+  };
 
-  let openMatch: LadderQueueState["openMatch"] = null;
-  const open = await findOpenLadderMatch(supabase, cycleId, playerId);
-  if (open) {
+  const loadOpenMatch = async (): Promise<LadderQueueState["openMatch"]> => {
+    const open = await findOpenLadderMatch(supabase, cycleId, playerId);
+    if (!open) return null;
     const { data: teams } = await supabase
       .from("match_teams")
       .select("team_number, player_1_id, player_2_id")
@@ -91,8 +89,10 @@ export async function GET(request: Request) {
       const t = (teams ?? []).find((row) => row.team_number === n);
       return t ? [nameOf(t.player_1_id as number), nameOf(t.player_2_id as number)] : [];
     };
-    openMatch = { ...open, team1: team(1), team2: team(2) };
-  }
+    return { ...open, team1: team(1), team2: team(2) };
+  };
+
+  const [tier, waiting, openMatch] = await Promise.all([loadTier(), loadWaiting(), loadOpenMatch()]);
 
   const state: LadderQueueState = { cycleId, tier, waiting, openMatch };
   return NextResponse.json(state, { status: 200 });

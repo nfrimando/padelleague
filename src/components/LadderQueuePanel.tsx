@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Clock, Swords, Users } from "lucide-react";
+import { Clock, Loader2, Swords, Users } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { tierIconSrc, StarBadge } from "@/components/LadderTierBadge";
 import { supabase } from "@/lib/supabase";
@@ -17,22 +17,43 @@ const PRIMARY_BUTTON =
 const SECONDARY_BUTTON =
   "inline-flex items-center justify-center w-full sm:w-auto shrink-0 min-h-11 px-6 rounded-xl bg-[#1a2540] border border-[#687FA3]/30 text-white text-sm font-bold transition-colors cursor-pointer hover:border-rose-500/50 hover:text-rose-300 disabled:opacity-60 disabled:cursor-not-allowed";
 
+class RequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function authedFetch(path: string, method: "GET" | "POST") {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) throw new Error("Please sign in again.");
+  if (!session) throw new RequestError("Please sign in again.", 401);
   const res = await fetch(path, {
     method,
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok) throw new Error((json.error as string) || `Request failed (${res.status})`);
+  if (!res.ok) {
+    throw new RequestError((json.error as string) || `Request failed (${res.status})`, res.status);
+  }
   return json;
 }
 
+function BusyLabel({ label }: { label: string }) {
+  return (
+    <>
+      <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+      {label}
+    </>
+  );
+}
+
 // Self-serve ladder queue: join → wait for 4 in your tier → matched with a play-by deadline.
-// Shown only to a linked player while a cycle is active.
+// Shown only to a linked player while a cycle is active. It resolves that itself (local session
+// check + the queue API's 401/403) so the fetch starts on mount instead of after useCurrentPlayer.
 // tierName/stars render the player's own tier badge (the job the roulette banner used to do).
 export default function LadderQueuePanel({
   tierName: badgeTierName = null,
@@ -42,7 +63,11 @@ export default function LadderQueuePanel({
   stars?: number | null;
 } = {}) {
   const [state, setState] = useState<LadderQueueState | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Not signed in / not linked to a player: render nothing.
+  const [hidden, setHidden] = useState(false);
+  // Label shown in the action button while a POST is in flight; null when idle.
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const busy = busyLabel !== null;
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmBackout, setConfirmBackout] = useState(false);
@@ -50,17 +75,31 @@ export default function LadderQueuePanel({
   const load = useCallback(async () => {
     try {
       setState((await authedFetch("/api/ladder/queue", "GET")) as unknown as LadderQueueState);
+      setHidden(false);
     } catch (err) {
+      if (err instanceof RequestError && (err.status === 401 || err.status === 403)) {
+        setHidden(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to load the queue.");
     }
   }, []);
 
   useEffect(() => {
     void load();
+    // Re-resolve on sign-in/out, which used to happen by LadderView remounting this on isLinked.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT") void load();
+    });
+    return () => sub.subscription.unsubscribe();
   }, [load]);
 
-  async function act(path: string, success: (json: Record<string, unknown>) => string | null) {
-    setBusy(true);
+  async function act(
+    path: string,
+    label: string,
+    success: (json: Record<string, unknown>) => string | null,
+  ) {
+    setBusyLabel(label);
     setError(null);
     setNotice(null);
     try {
@@ -70,11 +109,11 @@ export default function LadderQueuePanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
-      setBusy(false);
+      setBusyLabel(null);
     }
   }
 
-  if (state && !state.cycleId) return null;
+  if (hidden || (state && !state.cycleId)) return null;
 
   const tierName = state?.tier?.name ?? "your tier";
   const open = state?.openMatch ?? null;
@@ -88,13 +127,13 @@ export default function LadderQueuePanel({
       type="button"
       disabled={busy || !state?.tier}
       onClick={() =>
-        act("/api/ladder/queue/join", (json) =>
+        act("/api/ladder/queue/join", "Joining…", (json) =>
           json.matchId ? "You've been matched! Check your email for the details." : null,
         )
       }
       className={PRIMARY_BUTTON}
     >
-      Join the queue
+      {!state ? <BusyLabel label="Checking…" /> : busyLabel ? <BusyLabel label={busyLabel} /> : "Join the queue"}
     </button>
   );
 
@@ -113,7 +152,7 @@ export default function LadderQueuePanel({
         onClick={() => setConfirmBackout(true)}
         className={SECONDARY_BUTTON}
       >
-        Back out
+        {busyLabel ? <BusyLabel label={busyLabel} /> : "Back out"}
       </button>
     ) : null;
   } else if (waiting) {
@@ -124,10 +163,10 @@ export default function LadderQueuePanel({
       <button
         type="button"
         disabled={busy}
-        onClick={() => act("/api/ladder/queue/leave", () => "You've left the queue.")}
+        onClick={() => act("/api/ladder/queue/leave", "Leaving…", () => "You've left the queue.")}
         className={SECONDARY_BUTTON}
       >
-        Leave the queue
+        {busyLabel ? <BusyLabel label={busyLabel} /> : "Leave the queue"}
       </button>
     );
   }
@@ -149,7 +188,7 @@ export default function LadderQueuePanel({
             <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#00C8DC]/10 text-[#00C8DC]">
               {icon}
             </span>
-            <div className="min-w-0">
+            <div className={`min-w-0 ${state ? "" : "animate-pulse"}`}>
               <h2 className="text-lg sm:text-xl font-black text-white leading-tight">{headline}</h2>
               <p className="mt-1 text-sm text-[#687FA3] leading-relaxed break-words">{subtext}</p>
               {badgeTierName && (
@@ -209,7 +248,7 @@ export default function LadderQueuePanel({
               onClick={() => {
                 setConfirmBackout(false);
                 if (open) {
-                  void act(`/api/ladder/queue/matches/${open.matchId}/backout`, () =>
+                  void act(`/api/ladder/queue/matches/${open.matchId}/backout`, "Backing out…", () =>
                     "You've backed out. The other players are back in the queue.",
                   );
                 }
