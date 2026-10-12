@@ -16,6 +16,8 @@ export type AdminDuoQueueOverview = {
     playByAt: string | null;
     dateLocal: string | null;
     duos: string[];
+    // Both members of both duos — the admin backs a duo out by picking one of its members.
+    members: Array<{ playerId: number; name: string; duoId: number; duoLabel: string }>;
   }>;
   strikes: Array<{ duoId: number; label: string; backouts: number }>;
 };
@@ -106,7 +108,18 @@ export async function GET(request: Request) {
       queuedAt: w.queued_at as string,
       requeueReason: (w.requeue_reason as string | null) ?? null,
     })),
-    openMatches: open.map(({ duoIds: ids, ...m }) => ({ ...m, duos: ids.map(labelOf) })),
+    openMatches: open.map(({ duoIds: ids, ...m }) => ({
+      ...m,
+      duos: ids.map(labelOf),
+      members: ids.flatMap((duoId) => {
+        const d = (duos ?? []).find((row) => Number(row.id) === duoId);
+        if (!d) return [];
+        return [d.player_low_id as number, d.player_high_id as number].map((playerId) => {
+          const p = playerById.get(playerId);
+          return { playerId, name: p?.nickname || p?.name || `#${playerId}`, duoId, duoLabel: labelOf(duoId) };
+        });
+      }),
+    })),
     strikes: [...backouts.entries()]
       .map(([duoId, count]) => ({ duoId, label: labelOf(duoId), backouts: count }))
       .sort((a, b) => b.backouts - a.backouts || a.label.localeCompare(b.label)),

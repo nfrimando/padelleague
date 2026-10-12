@@ -13,6 +13,7 @@ import {
 } from "@/lib/email/notifications/ladderQueueUpdates";
 import { QUEUE_GROUP_SIZE, computePlayByAt } from "@/lib/ladder/ladderQueueShared";
 import { cancelDuoQueueMatchIfOpen } from "@/lib/ladder/ladderDuoQueue";
+import { addStrikeAdjustments } from "@/lib/ladder/ladderStrikes";
 
 // The self-serve ladder queue. See .claude/ladder.md → "Auto-queue" for the mechanic and
 // supabase/migrations/20261004000000..2 for the schema. The two writes that must be atomic
@@ -408,7 +409,8 @@ export async function syncWaitingEntriesToStanding(
   }
 }
 
-// Strikes are derived, not stored: one per queue match a player backed out of.
+// Strikes are derived, not stored: one per queue match a player backed out of, plus any manual
+// admin corrections (ladder_strike_adjustments).
 export async function fetchBackoutCounts(
   supabase: SupabaseClient,
   cycleId: number,
@@ -424,5 +426,5 @@ export async function fetchBackoutCounts(
     const id = row.cancelled_by_player_id as number | null;
     if (id != null) counts.set(id, (counts.get(id) ?? 0) + 1);
   }
-  return counts;
+  return addStrikeAdjustments(supabase, cycleId, "player_id", counts);
 }

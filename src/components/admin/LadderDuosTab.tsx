@@ -45,7 +45,8 @@ async function adminFetch(path: string, init?: { method: "POST" | "PATCH"; body:
 }
 
 // Admin controls for the Duo Ladder: the duo queue (waiting, overdue matches, strikes), every duo
-// with its standing and the per-duo tools (±1★, rename, dissolve), and direct duo creation.
+// with its standing and the per-duo tools (queue, ±1★, ±1 strike, rename, dissolve), and direct duo
+// creation. Queue / back out act on the members' behalf, exactly as if they'd done it themselves.
 export function LadderDuosTab({ enabled }: { enabled: boolean }) {
   const { players } = useAdminDataContext();
   const [list, setList] = useState<AdminDuoList | null>(null);
@@ -63,6 +64,8 @@ export function LadderDuosTab({ enabled }: { enabled: boolean }) {
   const [forceDissolve, setForceDissolve] = useState(false);
   const [confirmDissolveId, setConfirmDissolveId] = useState<number | null>(null);
   const [confirmExpireId, setConfirmExpireId] = useState<number | null>(null);
+  const [backout, setBackout] = useState<{ matchId: number; playerId: number | null } | null>(null);
+  const [strikeReason, setStrikeReason] = useState("");
 
   const [playerA, setPlayerA] = useState<Player | null>(null);
   const [playerB, setPlayerB] = useState<Player | null>(null);
@@ -137,6 +140,7 @@ export function LadderDuosTab({ enabled }: { enabled: boolean }) {
     }
     setExpandedId(duo.duoId);
     setReason("");
+    setStrikeReason("");
     setRenameValue(duo.name ?? "");
     setForceDissolve(false);
     setConfirmDissolveId(null);
@@ -251,6 +255,78 @@ export function LadderDuosTab({ enabled }: { enabled: boolean }) {
                               {m.dateLocal ? ` ${m.dateLocal}` : ""} · play by {formatPlayBy(m.playByAt)}
                             </span>
                             {overdue && <span className="font-semibold text-amber-300">Overdue</span>}
+                            {backout?.matchId === m.matchId ? (
+                              backout.playerId == null ? (
+                                <>
+                                  <span className="text-slate-400">Which duo backed out?</span>
+                                  {[...new Set(m.members.map((p) => p.duoId))].map((duoId) => {
+                                    const member = m.members.find((p) => p.duoId === duoId);
+                                    if (!member) return null;
+                                    return (
+                                      <button
+                                        key={duoId}
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => setBackout({ matchId: m.matchId, playerId: member.playerId })}
+                                        className={`${smallButtonCls} border border-slate-700 text-slate-300 hover:border-slate-500`}
+                                      >
+                                        {member.duoLabel}
+                                      </button>
+                                    );
+                                  })}
+                                  <button
+                                    type="button"
+                                    onClick={() => setBackout(null)}
+                                    className={`${smallButtonCls} text-slate-400 hover:text-slate-200`}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-slate-400">
+                                    Back out{" "}
+                                    {m.members.find((p) => p.playerId === backout.playerId)?.duoLabel}? That duo
+                                    gets a strike; the other duo is requeued.
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => {
+                                      const playerId = backout.playerId;
+                                      setBackout(null);
+                                      void run(
+                                        `/api/admin/ladder/duo-queue/matches/${m.matchId}/backout`,
+                                        { method: "POST", body: { playerId } },
+                                        () => `Match #${m.matchId} cancelled as a backout; the other duo is back in the queue.`,
+                                      );
+                                    }}
+                                    className={`${smallButtonCls} border border-rose-500/40 text-rose-300 hover:bg-rose-500/10`}
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBackout(null)}
+                                    className={`${smallButtonCls} text-slate-400 hover:text-slate-200`}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              )
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                  setConfirmExpireId(null);
+                                  setBackout({ matchId: m.matchId, playerId: null });
+                                }}
+                                className={`${smallButtonCls} border border-slate-700 text-slate-300 hover:border-slate-500`}
+                              >
+                                Back out…
+                              </button>
+                            )}
                             {overdue &&
                               (confirming ? (
                                 <>
@@ -282,7 +358,10 @@ export function LadderDuosTab({ enabled }: { enabled: boolean }) {
                                 <button
                                   type="button"
                                   disabled={busy}
-                                  onClick={() => setConfirmExpireId(m.matchId)}
+                                  onClick={() => {
+                                    setBackout(null);
+                                    setConfirmExpireId(m.matchId);
+                                  }}
                                   className={`${smallButtonCls} border border-amber-500/40 text-amber-300 hover:bg-amber-500/10`}
                                 >
                                   Expire
@@ -371,6 +450,25 @@ export function LadderDuosTab({ enabled }: { enabled: boolean }) {
                         {d.strikes > 0 && <span className="text-amber-300">{d.strikes} strike{d.strikes === 1 ? "" : "s"}</span>}
                         {d.waiting && <span className="text-[#00C8DC]">queued</span>}
                         {d.openMatchId && <span className="text-blue-300">match #{d.openMatchId}</span>}
+                        {d.status === "active" && !d.waiting && !d.openMatchId && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(
+                                "/api/admin/ladder/duo-queue/add",
+                                { method: "POST", body: { duoId: d.duoId } },
+                                (json) =>
+                                  json.matchId
+                                    ? `${d.label} queued and matched — match #${json.matchId as number} created.`
+                                    : `${d.label} added to the duo queue (${json.waitingCount as number}/2 waiting in their tier).`,
+                              )
+                            }
+                            className={`${smallButtonCls} border border-[#00C8DC]/40 text-[#00C8DC] hover:bg-[#00C8DC]/10`}
+                          >
+                            Queue
+                          </button>
+                        )}
                         {d.status === "active" && (
                           <button
                             type="button"
@@ -414,6 +512,38 @@ export function LadderDuosTab({ enabled }: { enabled: boolean }) {
                                 }`}
                               >
                                 {delta === -1 ? "−1★ (penalty)" : "+1★"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Strikes · {d.strikes}
+                          </p>
+                          <input
+                            type="text"
+                            value={strikeReason}
+                            onChange={(e) => setStrikeReason(e.target.value)}
+                            placeholder="Reason (required) — e.g. no-show on #123"
+                            className={inputCls}
+                          />
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            {([-1, 1] as const).map((delta) => (
+                              <button
+                                key={delta}
+                                type="button"
+                                disabled={busy || !strikeReason.trim() || (delta === -1 && d.strikes === 0)}
+                                onClick={() =>
+                                  void run(
+                                    "/api/admin/ladder/strikes/adjust",
+                                    { method: "POST", body: { duoId: d.duoId, delta, reason: strikeReason.trim() } },
+                                    () => `${delta === 1 ? "Strike added to" : "Strike removed from"} ${d.label}.`,
+                                  ).then((ok) => ok && setStrikeReason(""))
+                                }
+                                className={`${buttonCls} border border-slate-700 text-slate-300 hover:border-slate-500`}
+                              >
+                                {delta === -1 ? "Remove strike" : "Add strike"}
                               </button>
                             ))}
                           </div>

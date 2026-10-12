@@ -39,7 +39,8 @@ async function adminFetch(path: string, init?: { method: "POST"; body: unknown }
 }
 
 // Admin view of the self-serve ladder queue: who's waiting per tier, open queue matches and their
-// deadlines, backout (strike) counts, and the manual ±1★ tool for case-by-case penalties.
+// deadlines, backout (strike) counts, and the manual ±1★ tool for case-by-case penalties. Admins can
+// also act on a player's behalf — queue them, back them out of a match, or correct their strikes.
 export function LadderQueueTab({ enabled }: { enabled: boolean }) {
   const { players } = useAdminDataContext();
   const [overview, setOverview] = useState<AdminQueueOverview | null>(null);
@@ -53,6 +54,17 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
   const [reason, setReason] = useState("");
   const [confirmExpireId, setConfirmExpireId] = useState<number | null>(null);
   const suggestions = usePlayerSearch(players, search);
+
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queuePlayer, setQueuePlayer] = useState<Player | null>(null);
+  const queueSuggestions = usePlayerSearch(players, queueSearch);
+
+  const [backout, setBackout] = useState<{ matchId: number; playerId: number | null } | null>(null);
+
+  const [strikeReason, setStrikeReason] = useState("");
+  const [strikeSearch, setStrikeSearch] = useState("");
+  const [strikePlayer, setStrikePlayer] = useState<Player | null>(null);
+  const strikeSuggestions = usePlayerSearch(players, strikeSearch);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,19 +82,52 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
     if (enabled) void load();
   }, [enabled, load]);
 
-  async function run(path: string, body: unknown, success: string) {
+  async function run(
+    path: string,
+    body: unknown,
+    success: string | ((json: Record<string, unknown>) => string),
+  ): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      await adminFetch(path, { method: "POST", body });
-      setNotice(success);
+      const json = await adminFetch(path, { method: "POST", body });
+      setNotice(typeof success === "string" ? success : success(json));
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed.");
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  function addToQueue() {
+    if (!queuePlayer) return;
+    const name = queuePlayer.nickname || queuePlayer.name || `#${queuePlayer.player_id}`;
+    void run("/api/admin/ladder/queue/add", { playerId: Number(queuePlayer.player_id) }, (json) =>
+      json.matchId
+        ? `${name} queued and matched — match #${json.matchId as number} created.`
+        : `${name} added to the queue (${json.waitingCount as number}/4 waiting in their tier).`,
+    ).then((ok) => {
+      if (!ok) return;
+      setQueuePlayer(null);
+      setQueueSearch("");
+    });
+  }
+
+  function adjustStrike(playerId: number, name: string, delta: 1 | -1) {
+    void run(
+      "/api/admin/ladder/strikes/adjust",
+      { playerId, delta, reason: strikeReason.trim() },
+      `${delta === 1 ? "Strike added to" : "Strike removed from"} ${name}.`,
+    ).then((ok) => {
+      if (!ok) return;
+      setStrikeReason("");
+      setStrikePlayer(null);
+      setStrikeSearch("");
+    });
   }
 
   function adjust(delta: 1 | -1) {
@@ -177,6 +222,40 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
         </section>
 
         <section className={sectionCls}>
+          <h3 className={headingCls}>Add to queue</h3>
+          <div className="space-y-3">
+            <PlayerSearchBox
+              value={queueSearch}
+              suggestions={queueSuggestions}
+              maxSuggestions={7}
+              selectedPlayerName={queuePlayer?.name || null}
+              onValueChange={setQueueSearch}
+              onSelectPlayer={(p) => {
+                setQueuePlayer(p);
+                setQueueSearch(p.name || "");
+              }}
+              onClear={() => {
+                setQueueSearch("");
+                setQueuePlayer(null);
+              }}
+            />
+            <button
+              type="button"
+              disabled={busy || !queuePlayer}
+              onClick={addToQueue}
+              className={`${buttonCls} w-full sm:w-auto bg-[#00C8DC] text-[#0E1523] hover:bg-white`}
+            >
+              Add to queue
+            </button>
+            <p className="text-xs text-slate-500">
+              Queues the player on their behalf — same rules as joining themselves (placed in their
+              tier, one open ladder match at a time). If it completes a group of 4, the match is created
+              and all 4 are emailed.
+            </p>
+          </div>
+        </section>
+
+        <section className={sectionCls}>
           <h3 className={headingCls}>Open queue matches</h3>
           {!overview || overview.openMatches.length === 0 ? (
             <p className="text-sm text-slate-500">{overview ? "None." : "Loading…"}</p>
@@ -196,6 +275,74 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
                         {m.dateLocal ? ` ${m.dateLocal}` : ""} · play by {formatPlayBy(m.playByAt)}
                       </span>
                       {overdue && <span className="font-semibold text-amber-300">Overdue</span>}
+                      {backout?.matchId === m.matchId ? (
+                        backout.playerId == null ? (
+                          <>
+                            <span className="text-slate-400">Who backed out?</span>
+                            {m.participants.map((p) => (
+                              <button
+                                key={p.playerId}
+                                type="button"
+                                disabled={busy}
+                                onClick={() => setBackout({ matchId: m.matchId, playerId: p.playerId })}
+                                className={`${buttonCls} px-2 py-0.5 text-xs border border-slate-700 text-slate-300 hover:border-slate-500`}
+                              >
+                                {p.name}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setBackout(null)}
+                              className={`${buttonCls} px-2 py-0.5 text-xs text-slate-400 hover:text-slate-200`}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-slate-400">
+                              Back out{" "}
+                              {m.participants.find((p) => p.playerId === backout.playerId)?.name}? They get a
+                              strike; the other 3 are requeued.
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                const playerId = backout.playerId;
+                                setBackout(null);
+                                void run(
+                                  `/api/admin/ladder/queue/matches/${m.matchId}/backout`,
+                                  { playerId },
+                                  `Match #${m.matchId} cancelled as a backout; the other players are back in the queue.`,
+                                );
+                              }}
+                              className={`${buttonCls} px-2 py-0.5 text-xs border border-rose-500/40 text-rose-300 hover:bg-rose-500/10`}
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBackout(null)}
+                              className={`${buttonCls} px-2 py-0.5 text-xs text-slate-400 hover:text-slate-200`}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setConfirmExpireId(null);
+                            setBackout({ matchId: m.matchId, playerId: null });
+                          }}
+                          className={`${buttonCls} px-2 py-0.5 text-xs border border-slate-700 text-slate-300 hover:border-slate-500`}
+                        >
+                          Back out…
+                        </button>
+                      )}
                       {overdue &&
                         (confirming ? (
                           <>
@@ -227,7 +374,10 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => setConfirmExpireId(m.matchId)}
+                            onClick={() => {
+                              setBackout(null);
+                              setConfirmExpireId(m.matchId);
+                            }}
                             className={`${buttonCls} px-2 py-0.5 text-xs border border-amber-500/40 text-amber-300 hover:bg-amber-500/10`}
                           >
                             Expire
@@ -248,18 +398,83 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
 
         <section className={sectionCls}>
           <h3 className={headingCls}>Strikes (backouts this cycle)</h3>
+          <input
+            type="text"
+            value={strikeReason}
+            onChange={(e) => setStrikeReason(e.target.value)}
+            placeholder="Reason (required to add or remove) — e.g. no-show on #123"
+            className="mb-3 block w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#00C8DC]/40"
+          />
           {!overview || overview.strikes.length === 0 ? (
-            <p className="text-sm text-slate-500">{overview ? "No backouts yet." : "Loading…"}</p>
+            <p className="text-sm text-slate-500">{overview ? "No strikes yet." : "Loading…"}</p>
           ) : (
             <ul className="space-y-1">
               {overview.strikes.map((s) => (
-                <li key={s.playerId} className="flex justify-between gap-2 text-sm">
-                  <span className="text-slate-300">{s.name}</span>
-                  <span className="text-slate-400">{s.backouts}</span>
+                <li key={s.playerId} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="min-w-0 truncate text-slate-300">{s.name}</span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={busy || !strikeReason.trim()}
+                      onClick={() => adjustStrike(s.playerId, s.name, -1)}
+                      aria-label={`Remove a strike from ${s.name}`}
+                      className={`${buttonCls} px-2 py-0.5 text-xs text-slate-400 hover:text-emerald-300`}
+                    >
+                      −1
+                    </button>
+                    <span className="w-4 text-center text-slate-400">{s.backouts}</span>
+                    <button
+                      type="button"
+                      disabled={busy || !strikeReason.trim()}
+                      onClick={() => adjustStrike(s.playerId, s.name, 1)}
+                      aria-label={`Add a strike to ${s.name}`}
+                      className={`${buttonCls} px-2 py-0.5 text-xs text-slate-400 hover:text-rose-300`}
+                    >
+                      +1
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>
           )}
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <div className="min-w-0 flex-1">
+              <PlayerSearchBox
+                value={strikeSearch}
+                suggestions={strikeSuggestions}
+                maxSuggestions={7}
+                selectedPlayerName={strikePlayer?.name || null}
+                onValueChange={setStrikeSearch}
+                onSelectPlayer={(p) => {
+                  setStrikePlayer(p);
+                  setStrikeSearch(p.name || "");
+                }}
+                onClear={() => {
+                  setStrikeSearch("");
+                  setStrikePlayer(null);
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              disabled={busy || !strikePlayer || !strikeReason.trim()}
+              onClick={() =>
+                strikePlayer &&
+                adjustStrike(
+                  Number(strikePlayer.player_id),
+                  strikePlayer.nickname || strikePlayer.name || `#${strikePlayer.player_id}`,
+                  1,
+                )
+              }
+              className={`${buttonCls} shrink-0 border border-rose-500/40 text-rose-300 hover:bg-rose-500/10`}
+            >
+              Add strike
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Strikes count backouts; manual changes are logged with the reason. Strikes don&apos;t
+            penalize anyone on their own — use Adjust stars for that.
+          </p>
         </section>
 
         <section className={sectionCls}>

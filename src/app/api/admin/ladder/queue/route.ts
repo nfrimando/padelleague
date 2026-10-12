@@ -12,6 +12,7 @@ export type AdminQueueOverview = {
     playByAt: string | null;
     dateLocal: string | null;
     players: string[];
+    participants: Array<{ playerId: number; name: string }>;
   }>;
   strikes: Array<{ playerId: number; name: string; backouts: number }>;
 };
@@ -95,6 +96,11 @@ export async function GET(request: Request) {
         .filter((t) => t.match_id === m.matchId)
         .sort((a, b) => (a.team_number as number) - (b.team_number as number))
         .map((t) => `${nameOf(t.player_1_id as number)} & ${nameOf(t.player_2_id as number)}`),
+      participants: (teams ?? [])
+        .filter((t) => t.match_id === m.matchId)
+        .sort((a, b) => (a.team_number as number) - (b.team_number as number))
+        .flatMap((t) => [t.player_1_id as number, t.player_2_id as number])
+        .map((playerId) => ({ playerId, name: nameOf(playerId) })),
     })),
     strikes: [...backouts.entries()]
       .map(([playerId, count]) => ({ playerId, name: nameOf(playerId), backouts: count }))

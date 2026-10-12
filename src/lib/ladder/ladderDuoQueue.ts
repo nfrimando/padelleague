@@ -4,6 +4,7 @@ import { DUO_QUEUE_GROUP_SIZE, duoDisplayName } from "@/lib/ladder/ladderDuoShar
 import { ensureDuoPlacement, fetchLatestDuoStandings } from "@/lib/ladder/ladderDuoPlacement";
 import { fetchActiveCycleId } from "@/lib/ladder/ladderQueue";
 import { isMissingTableError } from "@/lib/ladder/ladderSchema";
+import { addStrikeAdjustments } from "@/lib/ladder/ladderStrikes";
 import { notifyLadderMatchAssigned } from "@/lib/email/notifications/ladderMatchAssigned";
 import {
   notifyLadderDuoPartnerBackedOut,
@@ -68,7 +69,7 @@ export async function countWaitingDuosInTier(
 
 export async function joinDuoQueue(
   supabase: SupabaseClient,
-  params: { duoId: number; playerId: number },
+  params: { duoId: number; playerId: number | null },
 ): Promise<JoinDuoQueueResult> {
   const cycleId = await fetchActiveCycleId(supabase);
   if (!cycleId) return { ok: false, code: "no_active_cycle", error: JOIN_ERROR_TEXT.no_active_cycle };
@@ -549,7 +550,8 @@ export async function syncWaitingDuoEntriesToStanding(
   }
 }
 
-// Strikes are derived, not stored: one per duo queue match a duo backed out of.
+// Strikes are derived, not stored: one per duo queue match a duo backed out of, plus any manual
+// admin corrections (ladder_strike_adjustments).
 export async function fetchDuoBackoutCounts(
   supabase: SupabaseClient,
   cycleId: number,
@@ -564,5 +566,5 @@ export async function fetchDuoBackoutCounts(
     const id = row.cancelled_by_duo_id as number | null;
     if (id != null) counts.set(id, (counts.get(id) ?? 0) + 1);
   }
-  return counts;
+  return addStrikeAdjustments(supabase, cycleId, "duo_id", counts);
 }
