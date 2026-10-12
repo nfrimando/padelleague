@@ -173,6 +173,15 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
   const [bulkAddStatus, setBulkAddStatus] = useState<SignupStatus>("applied");
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
 
+  const [showPairUp, setShowPairUp] = useState(false);
+  const [pairSearchA, setPairSearchA] = useState("");
+  const [pairSearchB, setPairSearchB] = useState("");
+  const [pairPlayerA, setPairPlayerA] = useState<Player | null>(null);
+  const [pairPlayerB, setPairPlayerB] = useState<Player | null>(null);
+  const [pairStatus, setPairStatus] = useState<SignupStatus>("applied");
+  const [pairingLoading, setPairingLoading] = useState(false);
+  const [unpairingPairId, setUnpairingPairId] = useState<string | null>(null);
+
   const [signupSearch, setSignupSearch] = useState("");
 
   const addSignupSuggestions = usePlayerSearch(players, addSignupSearch);
@@ -277,6 +286,18 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     [eventSignups],
   );
 
+  // Players already in a confirmed pair can't be paired again until unpaired.
+  const pairablePlayers = useMemo(() => {
+    const paired = new Set(
+      eventSignups
+        .filter(s => s.pair_id && s.status !== "cancelled" && s.player_id !== null)
+        .map(s => Number(s.player_id)),
+    );
+    return players.filter(p => !paired.has(Number(p.player_id)));
+  }, [players, eventSignups]);
+  const pairSuggestionsA = usePlayerSearch(pairablePlayers, pairSearchA);
+  const pairSuggestionsB = usePlayerSearch(pairablePlayers, pairSearchB);
+
   const bulkAddFilteredPlayers = useMemo(() => {
     const q = bulkAddSearch.toLowerCase().trim();
     return players.filter(p => {
@@ -297,6 +318,15 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
+  const resetPairUp = () => {
+    setShowPairUp(false);
+    setPairSearchA("");
+    setPairSearchB("");
+    setPairPlayerA(null);
+    setPairPlayerB(null);
+    setPairStatus("applied");
+  };
+
   const handleDeselectEvent = () => {
     setSelectedEventId(null);
     setEditDraft(null);
@@ -308,6 +338,7 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setShowBulkAdd(false);
     setBulkAddSearch("");
     setBulkAddSelectedIds(new Set());
+    resetPairUp();
     setSignupSearch("");
     setBulkMarkPaidOpen(false);
     setBulkMarkPaidForm(EMPTY_PAY_FORM);
@@ -330,6 +361,7 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setShowBulkAdd(false);
     setBulkAddSearch("");
     setBulkAddSelectedIds(new Set());
+    resetPairUp();
     setSignupSearch("");
     setBulkMarkPaidOpen(false);
     setBulkMarkPaidForm(EMPTY_PAY_FORM);
@@ -623,6 +655,47 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
     setBulkAddSelectedIds(new Set());
     setBulkAddSearch("");
     setBulkAddLoading(false);
+  };
+
+  const handlePairUp = async (eventId: number) => {
+    if (!pairPlayerA?.player_id || !pairPlayerB?.player_id) { setSignupPanelError("Select two players to pair."); return; }
+    setPairingLoading(true);
+    setSignupPanelError(null);
+    const token = await getAccessToken();
+    if (!token) { setSignupPanelError("No active session."); setPairingLoading(false); return; }
+    const res = await fetch("/api/admin/signups/pair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        event_id: eventId,
+        player_a_id: Number(pairPlayerA.player_id),
+        player_b_id: Number(pairPlayerB.player_id),
+        status: pairStatus,
+      }),
+    });
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok) { setSignupPanelError(json.error ?? "Failed to pair players."); setPairingLoading(false); return; }
+    setPairSearchA("");
+    setPairSearchB("");
+    setPairPlayerA(null);
+    setPairPlayerB(null);
+    setPairingLoading(false);
+    await loadSignupsForEvent(eventId);
+  };
+
+  const handleUnpair = async (eventId: number, pairId: string) => {
+    setUnpairingPairId(pairId);
+    setSignupPanelError(null);
+    const token = await getAccessToken();
+    if (!token) { setSignupPanelError("No active session."); setUnpairingPairId(null); return; }
+    const res = await fetch(`/api/events/${eventId}/pairs/${encodeURIComponent(pairId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok) { setSignupPanelError(json.error ?? "Failed to unpair."); setUnpairingPairId(null); return; }
+    setUnpairingPairId(null);
+    await loadSignupsForEvent(eventId);
   };
 
   const handlePublishDraft = async (eventId: number) => {
@@ -1060,6 +1133,20 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                     Bulk add
                     <ChevronRight size={11} className={`transition-transform duration-150 ${showBulkAdd ? "rotate-90" : ""}`} />
                   </button>
+                  {selectedEvent.signup_mode === "paired" && (
+                    <button
+                      type="button"
+                      onClick={() => { const next = !showPairUp; resetPairUp(); setShowPairUp(next); }}
+                      className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors border ${
+                        showPairUp
+                          ? "border-[#00C8DC] text-[#00C8DC] bg-[#00C8DC]/5"
+                          : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      Pair up
+                      <ChevronRight size={11} className={`transition-transform duration-150 ${showPairUp ? "rotate-90" : ""}`} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Add signup — bulk */}
@@ -1129,7 +1216,74 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                   </div>
                 )}
 
-                {!showBulkAdd && <div className="mb-4" />}
+                {/* Pair up — paired events only */}
+                {showPairUp && selectedEvent.signup_mode === "paired" && (
+                  <div className="mt-2 mb-4 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-3 space-y-2">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Pairs two players directly — no invite needed. Players not yet signed up are added with the status below; anyone already signed up keeps their status.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="flex-1 min-w-0">
+                        <label className={labelCls}>Player 1</label>
+                        <PlayerSearchBox
+                          value={pairSearchA}
+                          suggestions={pairSuggestionsA}
+                          onValueChange={setPairSearchA}
+                          onClear={() => { setPairSearchA(""); setPairPlayerA(null); }}
+                          onSelectPlayer={player => {
+                            setPairPlayerA(player);
+                            setPairSearchA(String(player.name || "").trim());
+                          }}
+                          selectedPlayerName={pairPlayerA?.name ?? null}
+                          maxSuggestions={6}
+                          placeholder="Search players…"
+                          showSuggestions
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className={labelCls}>Player 2</label>
+                        <PlayerSearchBox
+                          value={pairSearchB}
+                          suggestions={pairSuggestionsB}
+                          onValueChange={setPairSearchB}
+                          onClear={() => { setPairSearchB(""); setPairPlayerB(null); }}
+                          onSelectPlayer={player => {
+                            setPairPlayerB(player);
+                            setPairSearchB(String(player.name || "").trim());
+                          }}
+                          selectedPlayerName={pairPlayerB?.name ?? null}
+                          maxSuggestions={6}
+                          placeholder="Search players…"
+                          showSuggestions
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-end gap-2 flex-wrap">
+                      <div>
+                        <label className={labelCls}>Status (new signups)</label>
+                        <select className={inputCls} value={pairStatus}
+                          onChange={ev => setPairStatus(ev.target.value as SignupStatus)}>
+                          {SIGNUP_STATUS_OPTIONS.filter(o => o !== "cancelled").map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handlePairUp(selectedEvent.event_id)}
+                        disabled={
+                          pairingLoading ||
+                          !pairPlayerA ||
+                          !pairPlayerB ||
+                          Number(pairPlayerA.player_id) === Number(pairPlayerB.player_id)
+                        }
+                        className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {pairingLoading ? "Pairing…" : "Pair"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!showBulkAdd && !showPairUp && <div className="mb-4" />}
 
                 {eventSignups.length > 0 ? (
                   <>
@@ -1226,6 +1380,16 @@ export function EventsTab({ enabled }: { enabled: boolean }) {
                                           return label ? `Pair w/ ${label}` : "Pair";
                                         })()}
                                       </span>
+                                    )}
+                                    {signup.pair_id && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleUnpair(selectedEvent.event_id, signup.pair_id!)}
+                                        disabled={unpairingPairId === signup.pair_id}
+                                        className="text-[10px] text-slate-400 hover:text-red-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {unpairingPairId === signup.pair_id ? "Unpairing…" : "Unpair"}
+                                      </button>
                                     )}
                                     {!signup.pair_id &&
                                       signup.looking_for_partner &&
