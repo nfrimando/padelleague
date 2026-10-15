@@ -9,6 +9,8 @@ import {
 
 export type LadderQueueState = {
   cycleId: number | null;
+  // Solo auto-requeue preference: back into the queue as soon as each ladder match is recorded.
+  autoRequeue: boolean;
   tier: { id: number; name: string } | null;
   waiting: { queuedAt: string; position: number; waitingCount: number } | null;
   openMatch: {
@@ -27,7 +29,13 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
   const { supabase, playerId } = auth;
 
-  const empty: LadderQueueState = { cycleId: null, tier: null, waiting: null, openMatch: null };
+  const empty: LadderQueueState = {
+    cycleId: null,
+    autoRequeue: false,
+    tier: null,
+    waiting: null,
+    openMatch: null,
+  };
 
   const cycleId = await fetchActiveCycleId(supabase);
   if (!cycleId) return NextResponse.json(empty, { status: 200 });
@@ -92,8 +100,22 @@ export async function GET(request: Request) {
     return { ...open, team1: team(1), team2: team(2) };
   };
 
-  const [tier, waiting, openMatch] = await Promise.all([loadTier(), loadWaiting(), loadOpenMatch()]);
+  const loadAutoRequeue = async (): Promise<boolean> => {
+    const { data } = await supabase
+      .from("players")
+      .select("ladder_auto_requeue")
+      .eq("player_id", playerId)
+      .maybeSingle();
+    return (data?.ladder_auto_requeue as boolean | null) ?? false;
+  };
 
-  const state: LadderQueueState = { cycleId, tier, waiting, openMatch };
+  const [tier, waiting, openMatch, autoRequeue] = await Promise.all([
+    loadTier(),
+    loadWaiting(),
+    loadOpenMatch(),
+    loadAutoRequeue(),
+  ]);
+
+  const state: LadderQueueState = { cycleId, autoRequeue, tier, waiting, openMatch };
   return NextResponse.json(state, { status: 200 });
 }

@@ -15,7 +15,7 @@ import {
   syncLadderStandingsForMatch,
   type SyncLadderStandingsResult,
 } from "@/lib/ladder/ladderStandingSync";
-import { cancelQueueMatchIfOpen } from "@/lib/ladder/ladderQueue";
+import { cancelQueueMatchIfOpen, requeueAfterMatch } from "@/lib/ladder/ladderQueue";
 import { notifyMatchCompleted } from "@/lib/email/notifications/matchCompleted";
 import { notifyMatchUpdated } from "@/lib/email/notifications/matchUpdated";
 import { resolveMatchPredictions } from "@/lib/predictions/resolveMatchPredictions";
@@ -252,7 +252,7 @@ export async function PATCH(
 
   const { data: matchRow, error: matchError } = await supabase
     .from("matches")
-    .select("match_id,date_local,time_local,venue,type,event_id")
+    .select("match_id,status,date_local,time_local,venue,type,event_id")
     .eq("match_id", matchId)
     .maybeSingle();
 
@@ -266,6 +266,9 @@ export async function PATCH(
   if (!matchRow) {
     return NextResponse.json({ error: "Match not found." }, { status: 404 });
   }
+
+  // Only a match that's ending now (not a re-save of a finished one) triggers ladder auto-requeue.
+  const wasOpen = matchRow.status === "assigned" || matchRow.status === "scheduled";
 
   const { data: teams, error: teamsError } = await supabase
     .from("match_teams")
@@ -787,6 +790,9 @@ export async function PATCH(
     await resolveMatchPredictions(supabase, matchId, { force: false })
       .catch((err) => console.error("[predictions] auto-resolve failed:", err));
 
+    // After the standings sync, so promoted/demoted players are queued in their new tier. Never throws.
+    if (wasOpen) await requeueAfterMatch(supabase, matchId);
+
     return NextResponse.json(
       {
         matchId,
@@ -888,6 +894,9 @@ export async function PATCH(
     }
 
     const forfeitEmailResult = await buildAndSendUpdatedEmail(supabase, matchId, matchRow, team1, team2, validation.value);
+
+    // A forfeit moves no stars but still ends the match. Never throws.
+    if (wasOpen) await requeueAfterMatch(supabase, matchId);
 
     return NextResponse.json(
       {

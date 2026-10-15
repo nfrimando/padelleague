@@ -157,11 +157,80 @@ export async function joinLadderQueue(
   };
 }
 
+// Auto-requeue (solo only): a player preference on `players`. See .claude/ladder.md → "Auto-requeue".
+export async function setLadderAutoRequeue(
+  supabase: SupabaseClient,
+  playerIds: number[],
+  enabled: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  if (playerIds.length === 0) return { ok: true };
+  const { error } = await supabase
+    .from("players")
+    .update({ ladder_auto_requeue: enabled })
+    .in("player_id", playerIds);
+  if (error) {
+    console.error("[ladder-queue] failed to set auto-requeue:", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+// After a solo ladder match is recorded (completed or forfeit), gives each of its players with
+// auto-requeue on a fresh ticket — back of the line, in their post-match tier. Call after
+// syncLadderStandingsForMatch. joinLadderQueue's own guards (open match, already waiting) make a
+// repeat call harmless. Never throws.
+export async function requeueAfterMatch(
+  supabase: SupabaseClient,
+  matchId: number,
+): Promise<number[]> {
+  try {
+    const { data: lm } = await supabase
+      .from("ladder_matches")
+      .select("cycle_id")
+      .eq("match_id", matchId)
+      .maybeSingle();
+    if (!lm) return []; // not a solo ladder match (duo matches aren't covered yet)
+
+    const activeCycleId = await fetchActiveCycleId(supabase);
+    if (!activeCycleId || activeCycleId !== (lm.cycle_id as number)) return [];
+
+    const { data: teams } = await supabase
+      .from("match_teams")
+      .select("player_1_id, player_2_id")
+      .eq("match_id", matchId);
+    const seatedIds = (teams ?? []).flatMap((t) => [t.player_1_id as number, t.player_2_id as number]);
+    if (seatedIds.length === 0) return [];
+
+    const { data: optedIn } = await supabase
+      .from("players")
+      .select("player_id")
+      .in("player_id", seatedIds)
+      .eq("ladder_auto_requeue", true);
+
+    const requeued: number[] = [];
+    for (const row of optedIn ?? []) {
+      const playerId = row.player_id as number;
+      const result = await joinLadderQueue(supabase, playerId);
+      if (result.ok) requeued.push(playerId);
+      else if (result.code !== "already_waiting" && result.code !== "has_open_match") {
+        console.error(`[ladder-queue] auto-requeue failed for player ${playerId}:`, result.error);
+      }
+    }
+    return requeued;
+  } catch (err) {
+    console.error("[ladder-queue] auto-requeue failed:", err);
+    return [];
+  }
+}
+
 export async function leaveLadderQueue(
   supabase: SupabaseClient,
   playerId: number,
   reason: "player_left" | "admin" = "player_left",
 ): Promise<{ ok: boolean; error?: string }> {
+  // Leaving means "stop" — otherwise auto-requeue would pull them back in after their next match.
+  if (reason === "player_left") await setLadderAutoRequeue(supabase, [playerId], false);
+
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("ladder_queue_entries")
@@ -266,6 +335,11 @@ export async function cancelQueueMatch(
 
   if (error) return { ok: false, error: error.message };
 
+  // A no-show stops auto-requeue for whoever backed out.
+  if (reason === "backout" && params.byPlayerId != null) {
+    await setLadderAutoRequeue(supabase, [params.byPlayerId], false);
+  }
+
   const requeued = ((data ?? []) as Array<{ requeued_player_id: number; requeued_tier_id: number }>)
     .map((r) => ({ playerId: Number(r.requeued_player_id), tierId: Number(r.requeued_tier_id) }));
   if (requeued.length === 0) return { ok: true, requeuedPlayerIds: [] };
@@ -320,6 +394,9 @@ export async function expireQueueMatch(
     .select("player_1_id, player_2_id")
     .eq("match_id", matchId);
   const playerIds = (teams ?? []).flatMap((t) => [t.player_1_id as number, t.player_2_id as number]);
+
+  // An unplayed match stops auto-requeue for all 4, so inactive players aren't matched again and again.
+  await setLadderAutoRequeue(supabase, playerIds, false);
 
   await notifyLadderQueueMatchExpired({ matchId, playByAt, playerIds }).catch((err) =>
     console.error("[email] notifyLadderQueueMatchExpired failed:", err),

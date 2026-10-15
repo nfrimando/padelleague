@@ -195,6 +195,14 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
                                   {REQUEUE_LABEL[w.requeueReason] ?? "requeued"}
                                 </span>
                               )}
+                              {w.autoRequeue && (
+                                <span
+                                  className="ml-2 text-xs text-[#00C8DC]/70"
+                                  title="Auto-requeue is on: rejoins after every match"
+                                >
+                                  auto
+                                </span>
+                              )}
                             </span>
                             <button
                               type="button"

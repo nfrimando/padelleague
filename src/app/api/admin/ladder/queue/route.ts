@@ -5,7 +5,7 @@ import { fetchActiveCycleId, fetchBackoutCounts } from "@/lib/ladder/ladderQueue
 export type AdminQueueOverview = {
   cycleId: number | null;
   tiers: Array<{ id: number; name: string; rank: number }>;
-  waiting: Array<{ playerId: number; name: string; tierId: number; queuedAt: string; requeueReason: string | null }>;
+  waiting: Array<{ playerId: number; name: string; tierId: number; queuedAt: string; requeueReason: string | null; autoRequeue: boolean }>;
   openMatches: Array<{
     matchId: number;
     status: string;
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     ...(teams ?? []).flatMap((t) => [t.player_1_id as number, t.player_2_id as number]),
   ]);
   const { data: players } = playerIds.size
-    ? await supabase.from("players").select("player_id, name, nickname").in("player_id", [...playerIds])
+    ? await supabase.from("players").select("player_id, name, nickname, ladder_auto_requeue").in("player_id", [...playerIds])
     : { data: [] as Array<Record<string, unknown>> };
   const nameOf = (id: number) => {
     const p = (players ?? []).find((row) => row.player_id === id);
@@ -89,6 +89,8 @@ export async function GET(request: Request) {
       tierId: w.tier_id as number,
       queuedAt: w.queued_at as string,
       requeueReason: (w.requeue_reason as string | null) ?? null,
+      autoRequeue:
+        (players ?? []).find((row) => row.player_id === w.player_id)?.ladder_auto_requeue === true,
     })),
     openMatches: open.map((m) => ({
       ...m,

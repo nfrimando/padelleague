@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Clock, Loader2, Swords, Users } from "lucide-react";
+import { Clock, Loader2, Repeat, Swords, Users } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { tierIconSrc, StarBadge } from "@/components/LadderTierBadge";
 import { supabase } from "@/lib/supabase";
@@ -26,14 +26,18 @@ class RequestError extends Error {
   }
 }
 
-async function authedFetch(path: string, method: "GET" | "POST") {
+async function authedFetch(path: string, method: "GET" | "POST", body?: unknown) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) throw new RequestError("Please sign in again.", 401);
   const res = await fetch(path, {
     method,
-    headers: { Authorization: `Bearer ${session.access_token}` },
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
@@ -98,12 +102,13 @@ export default function LadderQueuePanel({
     path: string,
     label: string,
     success: (json: Record<string, unknown>) => string | null,
+    body?: unknown,
   ) {
     setBusyLabel(label);
     setError(null);
     setNotice(null);
     try {
-      const json = await authedFetch(path, "POST");
+      const json = await authedFetch(path, "POST", body);
       setNotice(success(json));
       await load();
     } catch (err) {
@@ -118,6 +123,21 @@ export default function LadderQueuePanel({
   const tierName = state?.tier?.name ?? "your tier";
   const open = state?.openMatch ?? null;
   const waiting = state?.waiting ?? null;
+  const autoRequeue = state?.autoRequeue ?? false;
+
+  const toggleAutoRequeue = () =>
+    act(
+      "/api/ladder/queue/auto-requeue",
+      autoRequeue ? "Turning off…" : "Turning on…",
+      (json) => {
+        if (!json.autoRequeue) return "Auto-requeue is off. Rejoin by hand after each match.";
+        if (json.matchId) return "Auto-requeue is on, and you've been matched! Check your email for the details.";
+        if (json.joined) return "Auto-requeue is on. You're in the queue and will rejoin after every match.";
+        if (typeof json.joinWarning === "string") return `Auto-requeue is on, but you couldn't join yet: ${json.joinWarning}`;
+        return "Auto-requeue is on. You'll go back into the queue as soon as each match is recorded.";
+      },
+      { enabled: !autoRequeue },
+    );
 
   let icon = <Users className="w-5 h-5" />;
   let headline = "Queue for a ladder match";
@@ -133,7 +153,15 @@ export default function LadderQueuePanel({
       }
       className={PRIMARY_BUTTON}
     >
-      {!state ? <BusyLabel label="Checking…" /> : busyLabel ? <BusyLabel label={busyLabel} /> : "Join the queue"}
+      {!state ? (
+        <BusyLabel label="Checking…" />
+      ) : busyLabel ? (
+        <BusyLabel label={busyLabel} />
+      ) : autoRequeue ? (
+        "Join & stay in queue"
+      ) : (
+        "Join the queue"
+      )}
     </button>
   );
 
@@ -158,12 +186,19 @@ export default function LadderQueuePanel({
   } else if (waiting) {
     icon = <Clock className="w-5 h-5" />;
     headline = `You're in the ${tierName} queue`;
-    subtext = `${waiting.waitingCount} of ${QUEUE_GROUP_SIZE} waiting · you're #${waiting.position} in line. We'll email you when you're matched.`;
+    subtext = `${waiting.waitingCount} of ${QUEUE_GROUP_SIZE} waiting · you're #${waiting.position} in line. We'll email you when you're matched.${
+      autoRequeue ? " Auto-requeue is on, so you'll rejoin after every match." : ""
+    }`;
     action = (
       <button
         type="button"
         disabled={busy}
-        onClick={() => act("/api/ladder/queue/leave", "Leaving…", () => "You've left the queue.")}
+        title={autoRequeue ? "Leaving also turns off auto-requeue" : undefined}
+        onClick={() =>
+          act("/api/ladder/queue/leave", "Leaving…", () =>
+            autoRequeue ? "You've left the queue and auto-requeue is off." : "You've left the queue.",
+          )
+        }
         className={SECONDARY_BUTTON}
       >
         {busyLabel ? <BusyLabel label={busyLabel} /> : "Leave the queue"}
@@ -209,6 +244,47 @@ export default function LadderQueuePanel({
                   Play by {formatPlayBy(open.playByAt)}
                 </p>
               )}
+              {open && autoRequeue && (
+                <p className="mt-1.5 inline-flex items-start gap-1.5 text-sm text-[#00C8DC]/90 leading-relaxed">
+                  <Repeat className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+                  Auto-requeue is on. You&apos;ll go back into the {tierName} queue as soon as this
+                  match is recorded.
+                </p>
+              )}
+              {state && (
+                <div className="mt-3 flex items-start gap-2.5">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={autoRequeue}
+                    aria-labelledby="ladder-auto-requeue-label"
+                    aria-describedby="ladder-auto-requeue-hint"
+                    disabled={busy}
+                    onClick={() => void toggleAutoRequeue()}
+                    className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00C8DC]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E1523] ${
+                      autoRequeue
+                        ? "bg-[#00C8DC] border-[#00C8DC]"
+                        : "bg-[#1a2540] border-[#687FA3]/30 hover:border-[#687FA3]/60"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 rounded-full bg-slate-100 transition-transform ${
+                        autoRequeue ? "translate-x-[18px]" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                  <div className="min-w-0">
+                    <p id="ladder-auto-requeue-label" className="text-sm font-semibold text-slate-200">
+                      Auto-requeue after each match
+                    </p>
+                    <p id="ladder-auto-requeue-hint" className="text-xs text-[#687FA3] leading-relaxed">
+                      {autoRequeue
+                        ? "On: you rejoin the queue as soon as each match is recorded. Turn off anytime."
+                        : "Off: you rejoin by hand after each match."}
+                    </p>
+                  </div>
+                </div>
+              )}
               {notice && <p className="mt-2 text-sm text-emerald-300">{notice}</p>}
               {error && <p className="mt-2 text-sm text-rose-300">{error}</p>}
             </div>
@@ -228,6 +304,7 @@ export default function LadderQueuePanel({
             <p className="text-sm font-bold text-rose-300">Backing out is subject to penalties.</p>
             <p className="mt-1 text-sm text-rose-200/80 leading-relaxed">
               It&apos;s recorded against you, and an admin may deduct a star.
+              {autoRequeue && " It also turns off auto-requeue."}
             </p>
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">

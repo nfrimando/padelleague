@@ -682,7 +682,7 @@ export async function sendLadderMatchAssignedEmails(
 
     const { data: playerDetails } = await supabase
       .from("players")
-      .select("player_id,name,nickname,email,is_notifications_subscribed")
+      .select("player_id,name,nickname,email,is_notifications_subscribed,ladder_auto_requeue")
       .in("player_id", playerIds);
 
     if (!playerDetails || playerDetails.length !== 4) return;
@@ -705,6 +705,9 @@ export async function sendLadderMatchAssignedEmails(
       team2Players: [findPlayer(team2[0]), findPlayer(team2[1])],
       source: params.source,
       playByAt: params.playByAt,
+      autoRequeuePlayerIds: playerDetails
+        .filter((p) => p.ladder_auto_requeue === true)
+        .map((p) => p.player_id as number),
     }).catch((err) => console.error("[email] notifyLadderMatchAssigned failed:", err));
   } catch (err) {
     console.error("[email] sendLadderMatchAssignedEmails failed:", err);

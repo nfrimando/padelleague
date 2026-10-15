@@ -34,6 +34,8 @@ type LadderMatchAssignedData = {
   // duo name. Defaults to solo.
   mode?: "solo" | "duo";
   duoNames?: [string, string];
+  // Solo only: recipients with auto-requeue on get a reminder that they'll rejoin the queue after this match.
+  autoRequeuePlayerIds?: number[];
 };
 
 export type NotifyResult = {
@@ -61,6 +63,7 @@ function buildAssignedEmailHtml({
   playByAt,
   mode,
   duoNames,
+  autoRequeue,
 }: {
   recipient: PlayerInfo;
   recipientTeam: 1 | 2;
@@ -77,6 +80,7 @@ function buildAssignedEmailHtml({
   playByAt: string | null;
   mode: "solo" | "duo";
   duoNames: [string, string] | null;
+  autoRequeue: boolean;
 }): string {
   const isDuo = mode === "duo";
   const t1Pair = `${displayName(team1Players[0])} & ${displayName(team1Players[1])}`;
@@ -156,7 +160,15 @@ function buildAssignedEmailHtml({
 
       ${promotionHtml}
       ${demotionHtml}
-
+${
+  autoRequeue
+    ? `
+      <p style="color: #555; font-size: 14px; border-left: 3px solid #0891b2; padding-left: 12px;">
+        <strong>Auto-requeue is on:</strong> you'll be put back in the queue as soon as this match is recorded. <a href="${dashboardUrl}" style="color: #0891b2;">Turn it off on the ladder page</a> anytime.
+      </p>
+`
+    : ""
+}
       <p style="color: #555; font-size: 14px;">
         Message ${opponentTeam} to agree on a time and book a court, then post the scheduled time in the <strong>Padel League PH WhatsApp group</strong> so everyone knows it's happening.
       </p>
@@ -249,6 +261,7 @@ export async function notifyLadderMatchAssigned(data: LadderMatchAssignedData): 
       playByAt: data.playByAt ?? null,
       mode: data.mode ?? "solo",
       duoNames: data.duoNames ?? null,
+      autoRequeue: data.autoRequeuePlayerIds?.includes(player.player_id) ?? false,
     });
 
     const result = await sendEmail({ to: player.email, subject, html });
