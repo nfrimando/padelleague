@@ -147,7 +147,7 @@ export function usePredictableMatches() {
 
       // Fetch latest ratings from the player_rating_events ledger (newest first per player)
       const { data: ledgerRows } = await supabase
-        .from("player_rating_events")
+        .from("player_rating_events_public")
         .select("player_id, rating_after, occurred_at, created_at")
         .in("player_id", allPlayerIds)
         .order("occurred_at", { ascending: false, nullsFirst: false })

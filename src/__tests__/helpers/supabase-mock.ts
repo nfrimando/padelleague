@@ -18,6 +18,7 @@ export function makeBuilder(result: MockResult = {}) {
   const self = () => b;
 
   b.select    = vi.fn().mockReturnValue(b);
+  b.is        = vi.fn().mockReturnValue(b);
   b.eq        = vi.fn().mockReturnValue(b);
   b.neq       = vi.fn().mockReturnValue(b);
   b.order     = vi.fn().mockReturnValue(b);

@@ -78,7 +78,7 @@ async function fetchLeaderboardData(eventId: number | "ALL", matchType: string):
     await Promise.all([
       db.from("match_teams").select("match_id, team_number, player_1_id, player_2_id, sets_won").in("match_id", matchIds),
       db
-        .from("player_rating_events")
+        .from("player_rating_events_public")
         .select("player_id, source_id, rating_after, rating_delta")
         .eq("source_type", "match")
         .in("source_id", matchIds.map(String)),

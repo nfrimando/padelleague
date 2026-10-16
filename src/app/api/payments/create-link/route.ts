@@ -92,12 +92,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Signup not found." }, { status: 404 });
   }
 
-  if (signup.status !== "pending_payment") {
-    return NextResponse.json(
-      { error: "Signup is not in pending_payment status." },
-      { status: 409 },
-    );
+  // Accepted/applied participants may still owe payment. Admission is not proof
+  // of payment, and an organizer may have imported the draw before collecting fees.
+  const { data: event, error: eventError } = await serviceClient
+    .from("events")
+    .select("event_id, name, registration_fee, requires_payment, payment_lock_enabled")
+    .eq("event_id", signup.event_id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (eventError || !event) {
+    return NextResponse.json({ error: "Event not found." }, { status: 404 });
   }
+  if (event.requires_payment === false) {
+    return NextResponse.json({ error: "This event does not require payment." }, { status: 409 });
+  }
+  const payableParticipant = event.payment_lock_enabled && event.requires_payment &&
+    ["applied", "accepted"].includes(signup.status);
+  if (signup.status !== "pending_payment" && !payableParticipant) {
+    return NextResponse.json({ error: "Signup is not awaiting payment." }, { status: 409 });
+  }
+  const { data: paidPayments, error: paidError } = await serviceClient
+    .from("payments").select("id").eq("signup_id", signupId).eq("status", "paid").limit(1);
+  if (paidError) return NextResponse.json({ error: "Unable to verify payment." }, { status: 500 });
+  if (paidPayments?.length) return NextResponse.json({ error: "Payment has already been confirmed." }, { status: 409 });
 
   // Check for an existing pending PayMongo link for this signup
   const { data: existingPayment } = await serviceClient
@@ -117,17 +134,6 @@ export async function POST(request: Request) {
     if (linkUrl) {
       return NextResponse.json({ link_url: linkUrl });
     }
-  }
-
-  // Fetch event fee
-  const { data: event, error: eventError } = await serviceClient
-    .from("events")
-    .select("event_id, name, registration_fee")
-    .eq("event_id", signup.event_id)
-    .maybeSingle();
-
-  if (eventError || !event) {
-    return NextResponse.json({ error: "Event not found." }, { status: 404 });
   }
 
   const fee = event.registration_fee ?? 1000;
