@@ -122,7 +122,7 @@ export function usePlayerProfileStats(playerId: string | null): PlayerProfileSta
           .select("match_id, team_number")
           .or(`player_1_id.eq.${playerId},player_2_id.eq.${playerId}`),
         supabase
-          .from("player_rating_events")
+          .from("player_rating_events_public")
           .select(RATING_EVENTS_SELECT)
           .eq("player_id", playerId)
           .order("occurred_at", { ascending: true, nullsFirst: true })

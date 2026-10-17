@@ -74,7 +74,7 @@ export function useSimilarPlayers(
       const [latestRatingByPlayer, { data: matchEventRows }] = await Promise.all([
         fetchLatestRatingsByPlayerIds(supabase, allIds),
         supabase
-          .from("player_rating_events")
+          .from("player_rating_events_public")
           .select("player_id, occurred_at")
           .eq("source_type", "match")
           .in("player_id", allIds)
