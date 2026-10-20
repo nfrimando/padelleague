@@ -40,7 +40,8 @@ async function adminFetch(path: string, init?: { method: "POST"; body: unknown }
 
 // Admin view of the self-serve ladder queue: who's waiting per tier, open queue matches and their
 // deadlines, backout (strike) counts, and the manual ±1★ tool for case-by-case penalties. Admins can
-// also act on a player's behalf — queue them, back them out of a match, or correct their strikes.
+// also act on a player's behalf — queue them, turn their auto-requeue on/off, back them out of a
+// match, or correct their strikes.
 export function LadderQueueTab({ enabled }: { enabled: boolean }) {
   const { players } = useAdminDataContext();
   const [overview, setOverview] = useState<AdminQueueOverview | null>(null);
@@ -58,6 +59,11 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
   const [queueSearch, setQueueSearch] = useState("");
   const [queuePlayer, setQueuePlayer] = useState<Player | null>(null);
   const queueSuggestions = usePlayerSearch(players, queueSearch);
+  const [queueWithAuto, setQueueWithAuto] = useState(false);
+
+  const [autoSearch, setAutoSearch] = useState("");
+  const [autoPlayer, setAutoPlayer] = useState<Player | null>(null);
+  const autoSuggestions = usePlayerSearch(players, autoSearch);
 
   const [backout, setBackout] = useState<{ matchId: number; playerId: number | null } | null>(null);
 
@@ -106,14 +112,29 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
   function addToQueue() {
     if (!queuePlayer) return;
     const name = queuePlayer.nickname || queuePlayer.name || `#${queuePlayer.player_id}`;
-    void run("/api/admin/ladder/queue/add", { playerId: Number(queuePlayer.player_id) }, (json) =>
-      json.matchId
-        ? `${name} queued and matched — match #${json.matchId as number} created.`
-        : `${name} added to the queue (${json.waitingCount as number}/4 waiting in their tier).`,
+    void run(
+      "/api/admin/ladder/queue/add",
+      { playerId: Number(queuePlayer.player_id), autoRequeue: queueWithAuto },
+      (json) =>
+        (json.matchId
+          ? `${name} queued and matched — match #${json.matchId as number} created.`
+          : `${name} added to the queue (${json.waitingCount as number}/4 waiting in their tier).`) +
+        (json.autoRequeue ? " Auto-requeue is on." : ""),
     ).then((ok) => {
       if (!ok) return;
       setQueuePlayer(null);
       setQueueSearch("");
+      setQueueWithAuto(false);
+    });
+  }
+
+  function setAutoRequeue(playerId: number, name: string, enabled: boolean): Promise<boolean> {
+    return run("/api/admin/ladder/queue/auto-requeue", { playerId, enabled }, (json) => {
+      if (!enabled) return `Auto-requeue turned off for ${name}.`;
+      if (json.joinWarning) return `Auto-requeue turned on for ${name}, but not queued: ${json.joinWarning as string}`;
+      if (json.matchId) return `Auto-requeue turned on for ${name}; queued and matched — match #${json.matchId as number}.`;
+      if (json.joined) return `Auto-requeue turned on for ${name} and added to the queue.`;
+      return `Auto-requeue turned on for ${name}.`;
     });
   }
 
@@ -195,15 +216,24 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
                                   {REQUEUE_LABEL[w.requeueReason] ?? "requeued"}
                                 </span>
                               )}
-                              {w.autoRequeue && (
-                                <span
-                                  className="ml-2 text-xs text-[#00C8DC]/70"
-                                  title="Auto-requeue is on: rejoins after every match"
-                                >
-                                  auto
-                                </span>
-                              )}
                             </span>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void setAutoRequeue(w.playerId, w.name, !w.autoRequeue)}
+                              title={
+                                w.autoRequeue
+                                  ? "Auto-requeue is on: rejoins after every match. Click to turn off."
+                                  : "Turn on auto-requeue: rejoin after every match"
+                              }
+                              className={`${buttonCls} ml-auto shrink-0 px-2 py-0.5 text-xs ${
+                                w.autoRequeue
+                                  ? "text-[#00C8DC]/80 hover:text-[#00C8DC]"
+                                  : "text-slate-500 hover:text-slate-300"
+                              }`}
+                            >
+                              {w.autoRequeue ? "auto" : "+auto"}
+                            </button>
                             <button
                               type="button"
                               disabled={busy}
@@ -247,6 +277,15 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
                 setQueuePlayer(null);
               }}
             />
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={queueWithAuto}
+                onChange={(e) => setQueueWithAuto(e.target.checked)}
+                className="h-4 w-4 cursor-pointer accent-[#00C8DC]"
+              />
+              Also turn on auto-requeue
+            </label>
             <button
               type="button"
               disabled={busy || !queuePlayer}
@@ -261,6 +300,77 @@ export function LadderQueueTab({ enabled }: { enabled: boolean }) {
               and all 4 are emailed.
             </p>
           </div>
+        </section>
+
+        <section className={sectionCls}>
+          <h3 className={headingCls}>Auto-requeue</h3>
+          {!overview || overview.autoRequeuePlayers.length === 0 ? (
+            <p className="text-sm text-slate-500">{overview ? "Nobody has auto-requeue on." : "Loading…"}</p>
+          ) : (
+            <ul className="space-y-1">
+              {overview.autoRequeuePlayers.map((p) => (
+                <li key={p.playerId} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="min-w-0 truncate text-slate-300">
+                    {p.name}
+                    <span className="ml-2 text-xs text-slate-500">
+                      {p.state === "waiting" ? "waiting" : p.state === "in_match" ? "in a match" : "not queued"}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void setAutoRequeue(p.playerId, p.name, false)}
+                    className={`${buttonCls} shrink-0 px-2 py-0.5 text-xs text-slate-400 hover:text-rose-300`}
+                  >
+                    Turn off
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <div className="min-w-0 flex-1">
+              <PlayerSearchBox
+                value={autoSearch}
+                suggestions={autoSuggestions}
+                maxSuggestions={7}
+                selectedPlayerName={autoPlayer?.name || null}
+                onValueChange={setAutoSearch}
+                onSelectPlayer={(p) => {
+                  setAutoPlayer(p);
+                  setAutoSearch(p.name || "");
+                }}
+                onClear={() => {
+                  setAutoSearch("");
+                  setAutoPlayer(null);
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              disabled={busy || !autoPlayer}
+              onClick={() => {
+                if (!autoPlayer) return;
+                void setAutoRequeue(
+                  Number(autoPlayer.player_id),
+                  autoPlayer.nickname || autoPlayer.name || `#${autoPlayer.player_id}`,
+                  true,
+                ).then((ok) => {
+                  if (!ok) return;
+                  setAutoPlayer(null);
+                  setAutoSearch("");
+                });
+              }}
+              className={`${buttonCls} shrink-0 border border-[#00C8DC]/40 text-[#00C8DC] hover:bg-[#00C8DC]/10`}
+            >
+              Turn on
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Players with auto-requeue rejoin the back of the queue as soon as each ladder match is
+            recorded. Turning it on also queues them now if they&apos;re not waiting or in a match.
+            Backing out or an expired match turns it off automatically.
+          </p>
         </section>
 
         <section className={sectionCls}>

@@ -1,4 +1,4 @@
-import { unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { fetchTiersForCycle } from "@/lib/ladder/ladderCycleTiers";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getLastNameKey } from "@/lib/utils";
@@ -591,6 +591,18 @@ async function fetchPendingLadderMatches(
 }
 
 export const LADDER_PAGE_CACHE_TAG = "ladder-page-data";
+
+// Drops /ladder's cached data (solo + duo share the tag) so a write shows up immediately. Next 16
+// deprecated the single-argument form, and updateTag is Server-Action-only, so expire outright.
+// Lib code that calls this can also run outside a request (tests, scripts), where revalidateTag
+// throws, so failures are swallowed: the 120s revalidate is the backstop.
+export function revalidateLadderPage(): void {
+  try {
+    revalidateTag(LADDER_PAGE_CACHE_TAG, { expire: 0 });
+  } catch (err) {
+    console.warn("[ladder] revalidateLadderPage skipped:", err instanceof Error ? err.message : err);
+  }
+}
 
 const getCachedLadderPageData = unstable_cache(
   fetchLadderPageDataUncached,

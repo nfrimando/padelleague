@@ -14,6 +14,7 @@ import {
 import { QUEUE_GROUP_SIZE, computePlayByAt } from "@/lib/ladder/ladderQueueShared";
 import { cancelDuoQueueMatchIfOpen } from "@/lib/ladder/ladderDuoQueue";
 import { addStrikeAdjustments } from "@/lib/ladder/ladderStrikes";
+import { revalidateLadderPage } from "@/lib/ladderData";
 
 // The self-serve ladder queue. See .claude/ladder.md → "Auto-queue" for the mechanic and
 // supabase/migrations/20261004000000..2 for the schema. The two writes that must be atomic
@@ -315,6 +316,9 @@ export async function runQueueMatchmaking(
     });
   }
 
+  // New assigned matches belong on /ladder's match strip right away, not after the cache expires.
+  if (created.length > 0) revalidateLadderPage();
+
   return created;
 }
 
@@ -334,6 +338,7 @@ export async function cancelQueueMatch(
   });
 
   if (error) return { ok: false, error: error.message };
+  revalidateLadderPage();
 
   // A no-show stops auto-requeue for whoever backed out.
   if (reason === "backout" && params.byPlayerId != null) {

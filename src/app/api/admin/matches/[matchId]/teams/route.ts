@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateLadderPage } from "@/lib/ladderData";
 import {
   getAuthorizedAdminClient,
   isRecord,
@@ -391,6 +392,8 @@ export async function PATCH(
       }
     }
   }
+
+  revalidateLadderPage();
 
   return NextResponse.json(
     {

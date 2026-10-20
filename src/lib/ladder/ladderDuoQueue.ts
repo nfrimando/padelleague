@@ -6,6 +6,8 @@ import { fetchActiveCycleId } from "@/lib/ladder/ladderQueue";
 import { isMissingTableError } from "@/lib/ladder/ladderSchema";
 import { addStrikeAdjustments } from "@/lib/ladder/ladderStrikes";
 import { notifyLadderMatchAssigned } from "@/lib/email/notifications/ladderMatchAssigned";
+import { notifyAdminLadderQueueMatchAssigned } from "@/lib/email/notifications/ladderQueueMatchAssignedAdmin";
+import { revalidateLadderPage } from "@/lib/ladderData";
 import {
   notifyLadderDuoPartnerBackedOut,
   notifyLadderQueueMatchExpired,
@@ -281,6 +283,9 @@ export async function runDuoQueueMatchmaking(
     });
   }
 
+  // New assigned matches belong on /ladder's match strip right away, not after the cache expires.
+  if (created.length > 0) revalidateLadderPage();
+
   return created;
 }
 
@@ -345,6 +350,11 @@ export async function sendDuoMatchAssignedEmails(
     const adjacent = (dir: 1 | -1) =>
       tier ? (allTiers.find((t) => t.rank === tier.rank + dir)?.name ?? null) : null;
 
+    const duoNames: [string, string] = [
+      duoDisplayName(duo1.name, [find(duo1.player_low_id), find(duo1.player_high_id)]),
+      duoDisplayName(duo2.name, [find(duo2.player_low_id), find(duo2.player_high_id)]),
+    ];
+
     await notifyLadderMatchAssigned({
       matchId: params.matchId,
       tierName: tier?.name ?? "Ladder",
@@ -356,11 +366,19 @@ export async function sendDuoMatchAssignedEmails(
       source: params.source === "queue" ? "queue" : "roulette",
       playByAt: params.playByAt,
       mode: "duo",
-      duoNames: [
-        duoDisplayName(duo1.name, [find(duo1.player_low_id), find(duo1.player_high_id)]),
-        duoDisplayName(duo2.name, [find(duo2.player_low_id), find(duo2.player_high_id)]),
-      ],
+      duoNames,
     }).catch((err) => console.error("[email] notifyLadderMatchAssigned (duo) failed:", err));
+
+    if (params.source === "queue") {
+      await notifyAdminLadderQueueMatchAssigned({
+        mode: "duo",
+        matchId: params.matchId,
+        tierName: tier?.name ?? "Ladder",
+        team1Label: duoNames[0],
+        team2Label: duoNames[1],
+        playByAt: params.playByAt,
+      }).catch((err) => console.error("[email] notifyAdminLadderQueueMatchAssigned (duo) failed:", err));
+    }
   } catch (err) {
     console.error("[email] sendDuoMatchAssignedEmails failed:", err);
   }
@@ -394,6 +412,7 @@ export async function cancelDuoQueueMatch(
     p_by_player_id: params.byPlayerId ?? null,
   });
   if (error) return { ok: false, error: error.message };
+  revalidateLadderPage();
 
   const requeued = ((data ?? []) as Array<{ requeued_duo_id: number; requeued_tier_id: number }>).map(
     (r) => ({ duoId: Number(r.requeued_duo_id), tierId: Number(r.requeued_tier_id) }),

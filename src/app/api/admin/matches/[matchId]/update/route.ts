@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateLadderPage } from "@/lib/ladderData";
 import {
   type AdminSupabaseClient,
   getAuthorizedAdminClient,
@@ -345,6 +346,8 @@ export async function PATCH(
           { status: 500 },
         );
       }
+
+      revalidateLadderPage();
 
       return NextResponse.json(
         { matchId, message: "Match updated successfully." },
@@ -793,6 +796,8 @@ export async function PATCH(
     // After the standings sync, so promoted/demoted players are queued in their new tier. Never throws.
     if (wasOpen) await requeueAfterMatch(supabase, matchId);
 
+    revalidateLadderPage();
+
     return NextResponse.json(
       {
         matchId,
@@ -898,6 +903,8 @@ export async function PATCH(
     // A forfeit moves no stars but still ends the match. Never throws.
     if (wasOpen) await requeueAfterMatch(supabase, matchId);
 
+    revalidateLadderPage();
+
     return NextResponse.json(
       {
         matchId,
@@ -923,6 +930,8 @@ export async function PATCH(
   }
 
   const genericEmailResult = await buildAndSendUpdatedEmail(supabase, matchId, matchRow, team1, team2, validation.value);
+
+  revalidateLadderPage();
 
   return NextResponse.json(
     {

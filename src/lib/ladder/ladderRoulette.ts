@@ -2,6 +2,7 @@ import type { AdminSupabaseClient } from "@/app/api/admin/_lib/auth";
 import { fetchLatestLadderStandings } from "@/lib/ladder/ladderStandingLedger";
 import { fetchLatestRatingsByPlayerIds } from "@/lib/ratingLedger";
 import { notifyLadderMatchAssigned } from "@/lib/email/notifications/ladderMatchAssigned";
+import { notifyAdminLadderQueueMatchAssigned } from "@/lib/email/notifications/ladderQueueMatchAssignedAdmin";
 
 type TierRow = { id: number; name: string; rank: number };
 
@@ -709,6 +710,20 @@ export async function sendLadderMatchAssignedEmails(
         .filter((p) => p.ladder_auto_requeue === true)
         .map((p) => p.player_id as number),
     }).catch((err) => console.error("[email] notifyLadderMatchAssigned failed:", err));
+
+    if (params.source === "queue") {
+      const label = (p: PlayerInfo) => p.nickname || p.name || `#${p.player_id}`;
+      const teamLabel = (team: [number, number]) =>
+        `${label(findPlayer(team[0]))} & ${label(findPlayer(team[1]))}`;
+      await notifyAdminLadderQueueMatchAssigned({
+        mode: "solo",
+        matchId,
+        tierName: tier?.name ?? "Ladder",
+        team1Label: teamLabel(team1),
+        team2Label: teamLabel(team2),
+        playByAt: params.playByAt,
+      }).catch((err) => console.error("[email] notifyAdminLadderQueueMatchAssigned failed:", err));
+    }
   } catch (err) {
     console.error("[email] sendLadderMatchAssignedEmails failed:", err);
   }

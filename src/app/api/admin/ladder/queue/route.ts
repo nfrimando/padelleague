@@ -15,20 +15,30 @@ export type AdminQueueOverview = {
     participants: Array<{ playerId: number; name: string }>;
   }>;
   strikes: Array<{ playerId: number; name: string; backouts: number }>;
+  // Everyone with auto-requeue on, including players not currently waiting (e.g. mid-match), so an
+  // admin can turn it off for them. `idle` = neither waiting nor in an open queue match.
+  autoRequeuePlayers: Array<{ playerId: number; name: string; state: "waiting" | "in_match" | "idle" }>;
 };
 
 // Admin view of the ladder queue: who's waiting per tier, open queue matches with deadlines, and
-// derived strike (backout) counts.
+// derived strike (backout) counts, and who has auto-requeue on.
 export async function GET(request: Request) {
   const auth = await getAuthorizedAdminClient(request);
   if (!auth.ok) return auth.response;
   const { supabase } = auth;
 
-  const empty: AdminQueueOverview = { cycleId: null, tiers: [], waiting: [], openMatches: [], strikes: [] };
+  const empty: AdminQueueOverview = {
+    cycleId: null,
+    tiers: [],
+    waiting: [],
+    openMatches: [],
+    strikes: [],
+    autoRequeuePlayers: [],
+  };
   const cycleId = await fetchActiveCycleId(supabase);
   if (!cycleId) return NextResponse.json(empty, { status: 200 });
 
-  const [{ data: tiers }, { data: waitingRows }, { data: openRows }, backouts] = await Promise.all([
+  const [{ data: tiers }, { data: waitingRows }, { data: openRows }, backouts, { data: autoRows }] = await Promise.all([
     supabase.from("ladder_tiers").select("id, name, rank").order("rank", { ascending: false }),
     supabase
       .from("ladder_queue_entries")
@@ -44,6 +54,7 @@ export async function GET(request: Request) {
       .is("cancelled_at", null)
       .order("play_by_at", { ascending: true }),
     fetchBackoutCounts(supabase, cycleId),
+    supabase.from("players").select("player_id").eq("ladder_auto_requeue", true),
   ]);
 
   type MatchEmbed = { status?: string | null; date_local?: string | null };
@@ -71,6 +82,7 @@ export async function GET(request: Request) {
     ...(waitingRows ?? []).map((w) => w.player_id as number),
     ...backouts.keys(),
     ...(teams ?? []).flatMap((t) => [t.player_1_id as number, t.player_2_id as number]),
+    ...(autoRows ?? []).map((r) => r.player_id as number),
   ]);
   const { data: players } = playerIds.size
     ? await supabase.from("players").select("player_id, name, nickname, ladder_auto_requeue").in("player_id", [...playerIds])
@@ -107,6 +119,17 @@ export async function GET(request: Request) {
     strikes: [...backouts.entries()]
       .map(([playerId, count]) => ({ playerId, name: nameOf(playerId), backouts: count }))
       .sort((a, b) => b.backouts - a.backouts || a.name.localeCompare(b.name)),
+    autoRequeuePlayers: (autoRows ?? [])
+      .map((r) => {
+        const playerId = r.player_id as number;
+        const state: "waiting" | "in_match" | "idle" = (waitingRows ?? []).some((w) => w.player_id === playerId)
+          ? "waiting"
+          : (teams ?? []).some((t) => t.player_1_id === playerId || t.player_2_id === playerId)
+            ? "in_match"
+            : "idle";
+        return { playerId, name: nameOf(playerId), state };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name)),
   };
 
   return NextResponse.json(overview, { status: 200 });

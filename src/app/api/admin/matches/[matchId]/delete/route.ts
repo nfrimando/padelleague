@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateLadderPage } from "@/lib/ladderData";
 import {
   getAuthorizedAdminClient,
   normalizeRequiredPositiveInteger,
@@ -178,6 +179,8 @@ export async function DELETE(
       "Match deleted, but failed to re-anchor the players' rating chains.",
     ];
   }
+
+  revalidateLadderPage();
 
   return NextResponse.json(
     {

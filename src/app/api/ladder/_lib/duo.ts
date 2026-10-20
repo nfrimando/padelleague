@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeRequiredPositiveInteger } from "@/app/api/admin/_lib/auth";
 import { getAuthorizedPlayer } from "@/app/api/ladder/_lib/currentPlayer";
 import { DUO_LADDER_UNAVAILABLE, isDuoLadderAvailable } from "@/lib/ladder/ladderSchema";
-import { LADDER_PAGE_CACHE_TAG } from "@/lib/ladderData";
+export { revalidateLadderPage } from "@/lib/ladderData";
 
 // Shared plumbing for the player-facing duo ladder routes: auth, "is the duo ladder enabled yet",
 // a forgiving JSON body read, and the /ladder cache bust after a write.
@@ -38,7 +37,3 @@ export async function duoIdFromParams(params: Promise<{ duoId: string }>): Promi
   return normalizeRequiredPositiveInteger(duoId);
 }
 
-// /ladder's duo standings are cached under the same tag as the solo ones.
-export function revalidateLadderPage(): void {
-  revalidateTag(LADDER_PAGE_CACHE_TAG, { expire: 0 });
-}

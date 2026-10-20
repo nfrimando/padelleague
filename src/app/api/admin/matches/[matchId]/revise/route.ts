@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateLadderPage } from "@/lib/ladderData";
 import {
   getAuthorizedAdminClient,
   isRecord,
@@ -693,6 +694,8 @@ export async function PATCH(
       ladder: ladderEvents.length > 0 ? { tiers: ladderTiers, events: ladderEvents } : undefined,
     }).catch((err) => console.error("[email] notifyMatchCompleted (revise) failed:", err));
   }
+
+  revalidateLadderPage();
 
   return NextResponse.json(
     {

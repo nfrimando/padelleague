@@ -4,7 +4,7 @@ import {
   isRecord,
   normalizeRequiredPositiveInteger,
 } from "@/app/api/admin/_lib/auth";
-import { joinLadderQueue } from "@/lib/ladder/ladderQueue";
+import { joinLadderQueue, setLadderAutoRequeue } from "@/lib/ladder/ladderQueue";
 
 const STATUS_BY_CODE: Record<string, number> = {
   no_active_cycle: 409,
@@ -15,7 +15,8 @@ const STATUS_BY_CODE: Record<string, number> = {
 };
 
 // Queues a player on their behalf (same rules as the self-serve join), for members who can't do it
-// themselves. Matchmaking runs immediately, so this can form a match.
+// themselves. Matchmaking runs immediately, so this can form a match. `autoRequeue: true` also turns
+// on their auto-requeue (set first, so the assigned email already carries the reminder).
 export async function POST(request: Request) {
   let payload: unknown;
   try {
@@ -28,8 +29,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "playerId is required." }, { status: 400 });
   }
 
+  const autoRequeue = isRecord(payload) && payload.autoRequeue === true;
+
   const auth = await getAuthorizedAdminClient(request);
   if (!auth.ok) return auth.response;
+
+  if (autoRequeue) {
+    const saved = await setLadderAutoRequeue(auth.supabase, [playerId], true);
+    if (!saved.ok) {
+      return NextResponse.json({ error: saved.error ?? "Failed to turn on auto-requeue." }, { status: 500 });
+    }
+  }
 
   const result = await joinLadderQueue(auth.supabase, playerId);
   if (!result.ok) {
@@ -40,7 +50,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(
-    { matchId: result.matchId, waitingCount: result.waitingCount, tierId: result.tierId },
+    { matchId: result.matchId, waitingCount: result.waitingCount, tierId: result.tierId, autoRequeue },
     { status: 200 },
   );
 }
