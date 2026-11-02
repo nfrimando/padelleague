@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Duo Cup Standings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: navy header band with progress, upcoming ribbon, then one card per division: standings table, 5x5 result matrix, fixture list. */
+:root{
+  --bg:#eef2f4; --surface:#ffffff; --fg:#14232c; --muted:#5b6b75; --line:#d5dee3; --faint:#f4f7f8;
+  --court:#1f5f8b; --ball:#d7e84a; --ball-ink:#1d2a05; --hit:#fff6b8;
+  --win:#1f8a5b; --win-soft:#e3f4ec; --loss:#b4535a; --loss-soft:#f8e9ea;
+  --band:#10151f; --band-ink:#f3f5fa; --band-muted:#8a94b4; --band-line:#263046; --cyan:#5bc6da; --cyan-soft:#16303a;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d171d; --surface:#15232b; --fg:#e7eef2; --muted:#93a4ae; --line:#26363f; --faint:#111d24;
+  --court:#173f5c; --ball:#c9da3e; --hit:#3a3d14;
+  --win:#4fc48d; --win-soft:#143428; --loss:#e0868c; --loss-soft:#3a1d21; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d171d; --surface:#15232b; --fg:#e7eef2; --muted:#93a4ae; --line:#26363f; --faint:#111d24;
+  --court:#173f5c; --ball:#c9da3e; --hit:#3a3d14;
+  --win:#4fc48d; --win-soft:#143428; --loss:#e0868c; --loss-soft:#3a1d21; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
+.band{background:var(--band);color:var(--band-ink);border-bottom:1px solid var(--band-line)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header .wrap{padding-block:max(32px,env(safe-area-inset-top,0px)) 28px;display:grid;gap:14px}
+.eyebrow{justify-self:start;font-family:var(--display);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:14px;color:var(--cyan);background:var(--cyan-soft);border-radius:999px;padding:4px 14px}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(40px,7vw,68px);line-height:.95;margin:0;text-wrap:balance;letter-spacing:.01em}
+h1 span{color:var(--cyan)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;color:var(--band-muted)}
+.meta b{font-weight:600;color:var(--band-ink)}
+.prog{display:grid;gap:10px;margin-top:6px}
+.bar{height:10px;border-radius:999px;background:var(--band-line);overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.bar .done{background:var(--ball)}
+.bar .sched{background:repeating-linear-gradient(45deg,var(--cyan) 0 4px,transparent 4px 8px)}
+.divbars{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px 14px}
+.divbars div{display:grid;gap:4px;font-size:12.5px;color:var(--band-muted)}
+.divbars .bar{height:6px}
+.divbars b{color:var(--band-ink);font-weight:600}
+main .wrap{padding-block:22px max(48px,env(safe-area-inset-bottom,0px));display:grid;gap:20px}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.sec-head h2{font-family:var(--display);font-weight:800;font-size:30px;margin:0;letter-spacing:.02em}
+.note{color:var(--muted);font-size:13.5px}
+.upcoming{display:grid;gap:10px}
+.up-list{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x mandatory}
+.up{scroll-snap-align:start;flex:0 0 auto;min-width:260px;background:var(--surface);border:1px dashed var(--cyan);border-radius:12px;padding:12px 14px;display:grid;gap:6px}
+.up .when{font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:.03em}
+.up .who{display:grid;gap:2px;font-weight:600}
+.up .who span{color:var(--muted);font-weight:500;font-size:12px;font-family:var(--display);letter-spacing:.1em}
+.up .where{color:var(--muted);font-size:13.5px}
+.tools{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:0 12px;flex:1 1 260px;max-width:420px}
+.search input{border:0;background:transparent;color:var(--fg);font:inherit;padding:11px 0;width:100%;outline:none}
+.search:focus-within{border-color:var(--court);box-shadow:0 0 0 3px color-mix(in srgb,var(--court) 25%,transparent)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:14px;border-radius:4px;display:inline-block}
+.sw.w{background:var(--win-soft);border:1px solid var(--win)}
+.sw.l{background:var(--loss-soft);border:1px solid var(--loss)}
+.sw.s{border:1px dashed var(--cyan)}
+.sw.t{background:var(--faint);border:1px solid var(--line)}
+.divs{display:grid;gap:20px}
+.div{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:0}
+.div-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 10px;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.div-head h2{font-family:var(--display);font-weight:800;font-size:26px;margin:0;letter-spacing:.02em}
+.div-head .em{margin-right:6px}
+.div-head .count{font-family:var(--display);font-weight:600;font-size:15px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-variant-numeric:tabular-nums}
+.div-body{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
+@media (min-width:980px){.div-body{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}.div-body .stand{border-right:1px solid var(--line)}}
+.blk{padding:12px 16px 16px;min-width:0}
+.blk h3{margin:0 0 8px;font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stand{border-bottom:1px solid var(--line)}
+@media (min-width:980px){.stand{border-bottom:0}}
+.st{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14.5px}
+.st th{font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:4px 6px;border-bottom:1px solid var(--line)}
+.st th:nth-child(2),.st td:nth-child(2){text-align:left}
+.st td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right}
+.st tr:last-child td{border-bottom:0}
+.st .pos{font-family:var(--display);font-weight:800;font-size:18px;width:30px;text-align:center}
+.st tr.lead .pos{color:var(--ball-ink);background:var(--ball);border-radius:6px}
+.st .nm{font-weight:600}
+.st .sd{font-size:12px;color:var(--muted);font-family:var(--display);letter-spacing:.06em;margin-left:6px}
+.st .pos-d{color:var(--win)}.st .neg-d{color:var(--loss)}
+.mx-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.mx{border-collapse:separate;border-spacing:0;width:100%;min-width:620px;table-layout:fixed;font-size:13px}
+.mx th{font-family:var(--display);font-weight:700;letter-spacing:.04em;font-size:13.5px;padding:8px 6px;background:var(--faint);color:var(--fg);text-align:center;line-height:1.15;border-bottom:1px solid var(--line)}
+.mx thead th:first-child{width:118px}
+.mx tbody th{text-align:left;border-right:1px solid var(--line);font-size:14px}
+.mx th small{display:block;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.1em}
+.mx td{padding:5px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);vertical-align:middle;height:76px}
+.mx td:last-child{border-right:0}
+.mx tbody tr:last-child td,.mx tbody tr:last-child th{border-bottom:0}
+.cell{height:100%;border-radius:8px;display:grid;align-content:center;justify-items:center;gap:2px;text-align:center;padding:4px;font-variant-numeric:tabular-nums}
+.cell.self{background:repeating-linear-gradient(135deg,var(--faint) 0 6px,transparent 6px 12px)}
+.cell.tbd{color:var(--muted);opacity:.55;font-family:var(--display);font-size:18px}
+.cell.w{background:var(--win-soft);box-shadow:inset 3px 0 0 var(--win)}
+.cell.l{background:var(--loss-soft);box-shadow:inset 3px 0 0 var(--loss)}
+.cell.s{border:1.5px dashed var(--cyan);color:var(--fg)}
+.chip{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.08em;border-radius:999px;padding:0 8px;line-height:18px}
+.cell.w .chip{background:var(--win);color:#fff}
+.cell.l .chip{background:var(--loss);color:#fff}
+.cell.s .chip{background:var(--band);color:var(--cyan)}
+.score{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.03em}
+.dt{font-size:11.5px;color:var(--muted)}
+.fx{display:grid;gap:6px;margin-top:14px}
+.fxr{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:4px 10px;align-items:center;font-size:14px;padding:8px 10px;border-radius:8px;background:var(--faint)}
+.fxr .a{text-align:right}
+.fxr .won{font-weight:700}
+.fxr .won::after{content:" 🏆";font-size:12px}
+.fxr .a.won::after{content:""}.fxr .a.won::before{content:"🏆 ";font-size:12px}
+.fxr .mid{font-family:var(--display);font-weight:700;font-size:14px;text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fxr .info{grid-column:1/-1;text-align:center;font-size:12px;color:var(--muted)}
+.pill{display:inline-block;font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;border-radius:999px;padding:1px 8px;margin-right:6px}
+.pill.c{background:var(--win-soft);color:var(--win)}
+.pill.s{background:var(--cyan-soft);color:var(--cyan)}
+.pill.t{background:var(--line);color:var(--muted)}
+.vs{font-family:var(--display);font-weight:700;font-size:12px;background:var(--band);color:var(--cyan);border-radius:999px;padding:1px 7px;letter-spacing:.06em}
+.hl{background:var(--hit);border-radius:4px;padding:0 3px}
+.empty{color:var(--muted);padding:24px 0}
+footer{color:var(--muted);font-size:13px;display:grid;gap:4px}
+footer a{color:inherit}
+@media (max-width:520px){.fxr{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);font-size:13.5px}}
+@media (prefers-reduced-motion:no-preference){.search{transition:box-shadow .15s}.bar i{transition:width .6s ease}}
+</style>
+</head>
+<body>
+
+<div class="band"><header><div class="wrap">
+  <div class="eyebrow">Men's Padel League</div>
+  <h1>Duo Cup <span>Standings</span></h1>
+  <div class="meta" id="meta"></div>
+  <div class="prog">
+    <div class="bar" id="allbar" role="img"></div>
+    <div class="divbars" id="divbars"></div>
+  </div>
+</div></header></div>
+
+<main><div class="wrap">
+  <section class="upcoming" id="upcoming"></section>
+
+  <div class="sec-head"><h2>Division Tables</h2><span class="note">Rows read left to right: each cell is the row pair's result against the column pair.</span></div>
+  <div class="tools">
+    <label class="search" for="q"><span aria-hidden="true">🔎</span><input id="q" type="search" placeholder="Find your pair, e.g. Nori" autocomplete="off"></label>
+    <div class="legend"><span><i class="sw w"></i>Won</span><span><i class="sw l"></i>Lost</span><span><i class="sw s"></i>Scheduled</span><span><i class="sw t"></i>To be scheduled</span></div>
+  </div>
+  <div class="divs" id="divs"></div>
+  <p class="empty" id="empty" hidden>No pair matches that name.</p>
+
+  <footer>
+    <span>Standings order: wins, then head-to-head, set difference, game difference. Ties beyond that are settled by coin toss.</span>
+    <span>Full seedings and fixtures: <a href="duo.html">Duo Cup Matchups</a>.</span>
+  </footer>
+</div></main>
+
+<script>
+const UPDATED="Nov 2, 2026";
+const PAIRS=["Pancho & Derrick","Jonah & Justin","Duane & Mikael","JM L & Janjan","Amaury & Josh K","Nori & Woody","Armand & Kyle","Pedro & Juan","Juancho & Gio M","Mark & Vinz","Sol & Josh C","Misagh & Antoine","Tiger & Wesley","Jerry & Geoff","Luca & Ben","Robin & George","Kino & Rave","Alberto & Hamit","Ron & Hein","Alexis & Shogo","Ernie & Chut","Erwin & Butch","Alan & Elliot","Terry & Vic","Rafa & Gio R","Colin & Sri","BJ & JM T","Coco & Jopet","Fonso & Carvin","Miguel M & Austin","Karlo & Jose","Miggy Sil & Alvin","Justine & Jack","Joe & Nikko","Perkin & Klentz"];
+const EMOJI=["👑","💎","💠","🌟","🥇","🥈","🥉"];
+// Snapshot of event 17 matches. sets are [a games, b games]; winner is "a" or "b".
+const RESULTS=[
+  {a:"Alberto & Hamit",b:"Robin & George",status:"completed",sets:[[2,6],[6,3],[6,4]],winner:"a",date:"2026-10-27",time:"20:00",venue:"Padel 300"},
+  {a:"Erwin & Butch",b:"Terry & Vic",status:"completed",sets:[[7,5],[7,5]],winner:"a",date:"2026-11-02",time:"17:00",venue:"Prosmash"},
+  {a:"Erwin & Butch",b:"Alan & Elliot",status:"scheduled",date:"2026-11-03",time:"20:00",venue:"Play Padel"},
+];
+
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function fmtDate(d,withDow){const[y,m,dd]=d.split("-").map(Number);const s=`${MON[m-1]} ${dd}`;return withDow?`${DOW[new Date(y,m-1,dd).getDay()]}, ${s}`:s}
+function fmtTime(t){if(!t)return"";let[h,m]=t.split(":").map(Number);const ap=h>=12?"PM":"AM";h=h%12||12;return m?`${h}:${String(m).padStart(2,"0")} ${ap}`:`${h} ${ap}`}
+const GAMES=[];for(let a=0;a<5;a++)for(let b=a+1;b<5;b++)GAMES.push([a,b]);
+
+// Look up a fixture from one pair's point of view: sets and winner flipped when they're "b".
+function lookup(x,y){
+  const r=RESULTS.find(r=>(r.a===x&&r.b===y)||(r.a===y&&r.b===x));
+  if(!r)return null;
+  const flip=r.a!==x;
+  return{...r,sets:(r.sets||[]).map(([p,q])=>flip?[q,p]:[p,q]),won:r.status==="completed"?(r.winner==="a")!==flip:null};
+}
+
+function standings(team){
+  const rows=team.map((n,i)=>{
+    const s={name:n,seed:i,w:0,l:0,sf:0,sa:0,gf:0,ga:0};
+    team.forEach(o=>{if(o===n)return;const r=lookup(n,o);if(!r||r.status!=="completed")return;
+      r.won?s.w++:s.l++;r.sets.forEach(([p,q])=>{s.gf+=p;s.ga+=q;p>q?s.sf++:s.sa++})});
+    return s;
+  });
+  const h2h=(s,group)=>group.reduce((t,o)=>{if(o===s)return t;const r=lookup(s.name,o.name);return t+(r&&r.won?1:0)},0);
+  const byWins={};rows.forEach(r=>(byWins[r.w]??=[]).push(r));
+  rows.forEach(r=>r.h=h2h(r,byWins[r.w]));
+  return rows.sort((x,y)=>y.w-x.w||y.h-x.h||(y.sf-y.sa)-(x.sf-x.sa)||(y.gf-y.ga)-(x.gf-x.ga)||x.seed-y.seed);
+}
+
+function bar(done,sched,total){return`<i class="done" style="width:${done/total*100}%"></i><i class="sched" style="width:${sched/total*100}%"></i>`}
+
+function header(){
+  let done=0,sched=0,html="";
+  for(let d=0;d<7;d++){
+    const team=PAIRS.slice(d*5,d*5+5);let dn=0,sc=0;
+    GAMES.forEach(([a,b])=>{const r=lookup(team[a],team[b]);if(r?.status==="completed")dn++;else if(r?.status==="scheduled")sc++});
+    done+=dn;sched+=sc;
+    html+=`<div><span>${EMOJI[d]} Div ${d+1} · <b>${dn}/10</b></span><div class="bar">${bar(dn,sc,10)}</div></div>`;
+  }
+  document.getElementById("divbars").innerHTML=html;
+  const all=document.getElementById("allbar");all.innerHTML=bar(done,sched,70);all.setAttribute("aria-label",`${done} of 70 matches played, ${sched} scheduled`);
+  document.getElementById("meta").innerHTML=`<span><b>${done} of 70</b> matches played</span><span><b>${sched}</b> scheduled</span><span>Season ends <b>Dec 11</b></span><span>Updated <b>${UPDATED}</b></span>`;
+}
+
+function upcoming(){
+  const ups=RESULTS.filter(r=>r.status==="scheduled").sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+  const el=document.getElementById("upcoming");
+  if(!ups.length){el.hidden=true;return}
+  const div=n=>Math.floor(PAIRS.indexOf(n)/5);
+  el.innerHTML=`<div class="sec-head"><h2>Up Next</h2><span class="note">${ups.length} match${ups.length>1?"es":""} on the calendar</span></div><div class="up-list">${ups.map(r=>`<article class="up"><span class="when">📅 ${fmtDate(r.date,true)} · ${fmtTime(r.time)}</span><div class="who">${esc(r.a)}<span>VS</span>${esc(r.b)}</div><span class="where">${EMOJI[div(r.a)]} Division ${div(r.a)+1}${r.venue?` · 📍 ${esc(r.venue)}`:""}</span></article>`).join("")}</div>`;
+}
+
+function render(q){
+  q=(q||"").trim().toLowerCase();
+  const mark=n=>q&&n.toLowerCase().includes(q)?`<span class="hl">${esc(n)}</span>`:esc(n);
+  let shown=0,html="";
+  for(let d=0;d<7;d++){
+    const team=PAIRS.slice(d*5,d*5+5);
+    const hit=!q||team.some(n=>n.toLowerCase().includes(q));
+    if(hit)shown++;
+    const seedOf=n=>PAIRS.indexOf(n)+1;
+    let dn=0;GAMES.forEach(([a,b])=>{if(lookup(team[a],team[b])?.status==="completed")dn++});
+
+    const st=standings(team).map((s,i)=>{const sd=s.sf-s.sa,gd=s.gf-s.ga,cls=v=>v>0?"pos-d":v<0?"neg-d":"";const sg=v=>v>0?`+${v}`:v;
+      return`<tr class="${i===0&&s.w>0?"lead":""}"><td class="pos">${i+1}</td><td><span class="nm">${mark(s.name)}</span><span class="sd">#${seedOf(s.name)}</span></td><td>${s.w}–${s.l}</td><td class="${cls(sd)}">${sg(sd)}</td><td class="${cls(gd)}">${sg(gd)}</td></tr>`}).join("");
+
+    const head=team.map(n=>`<th scope="col" title="${esc(n)}"><small>#${seedOf(n)}</small>${mark(n)}</th>`).join("");
+    const body=team.map(x=>`<tr><th scope="row"><small>#${seedOf(x)}</small>${mark(x)}</th>${team.map(y=>{
+      if(x===y)return`<td><div class="cell self" aria-label="Same pair"></div></td>`;
+      const r=lookup(x,y);
+      if(!r)return`<td><div class="cell tbd" title="To be scheduled">—</div></td>`;
+      if(r.status==="scheduled")return`<td><div class="cell s"><span class="chip">SET</span><span class="score">${fmtDate(r.date)}</span><span class="dt">${fmtTime(r.time)}${r.venue?` · ${esc(r.venue)}`:""}</span></div></td>`;
+      return`<td><div class="cell ${r.won?"w":"l"}"><span class="chip">${r.won?"WON":"LOST"}</span><span class="score">${r.sets.map(([p,q])=>`${p}-${q}`).join(" ")}</span><span class="dt">${fmtDate(r.date)} · ${fmtTime(r.time)}</span></div></td>`;
+    }).join("")}</tr>`).join("");
+
+    const fx=GAMES.map(([a,b])=>{const A=team[a],B=team[b],r=lookup(A,B);
+      let mid=`<span class="vs">VS</span>`,info=`<span class="pill t">To be scheduled</span>`,wa="",wb="";
+      if(r?.status==="completed"){mid=r.sets.map(([p,q])=>`${p}-${q}`).join(" ");wa=r.won?" won":"";wb=r.won?"":" won";info=`<span class="pill c">Final</span>${fmtDate(r.date,true)} · ${fmtTime(r.time)}${r.venue?` · ${esc(r.venue)}`:""}`}
+      else if(r?.status==="scheduled"){info=`<span class="pill s">Scheduled</span>${fmtDate(r.date,true)} · ${fmtTime(r.time)}${r.venue?` · ${esc(r.venue)}`:""}`}
+      return`<div class="fxr"><span class="a${wa}">${mark(A)}</span><span class="mid">${mid}</span><span class="b${wb}">${mark(B)}</span><span class="info">${info}</span></div>`}).join("");
+
+    html+=`<section class="div"${hit?"":" hidden"}><div class="div-head"><h2><span class="em" aria-hidden="true">${EMOJI[d]}</span>Division ${d+1}</h2><span class="count">${dn} of 10 played</span></div>
+      <div class="div-body">
+        <div class="blk stand"><h3>Standings</h3><table class="st"><thead><tr><th>#</th><th>Pair</th><th>W–L</th><th title="Set difference">Sets</th><th title="Game difference">Games</th></tr></thead><tbody>${st}</tbody></table>
+          <div class="fx">${fx}</div></div>
+        <div class="blk"><h3>Results Matrix</h3><div class="mx-wrap"><table class="mx"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div></div>
+      </div></section>`;
+  }
+  document.getElementById("divs").innerHTML=html;
+  document.getElementById("empty").hidden=shown>0;
+}
+
+header();upcoming();
+const q=document.getElementById("q");
+q.addEventListener("input",()=>render(q.value));
+render("");
+</script>
+</body>
+</html>
