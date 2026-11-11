@@ -159,17 +159,25 @@ footer a{color:inherit}
 </div></main>
 
 <script>
-const UPDATED="Nov 7, 2026";
-const PAIRS=["Pancho & Derrick","Jonah & Justin","Duane & Mikael","JM L & Janjan","Amaury & Josh K","Nori & Woody","Armand & Kyle","Pedro & Juan","Juancho & Gio M","Mark & Vinz","Sol & Josh C","Misagh & Antoine","Tiger & Wesley","Jerry & Geoff","Luca & Ben","Robin & George","Kino & Rave","Alberto & Hamit","Ron & Hein","Alexis & Shogo","Ernie & Chut","Erwin & Butch","Alan & Elliot","Terry & Vic","Rafa & Gio R","Colin & Sri","BJ & JM T","Coco & Jopet","Fonso & Carvin","Miguel M & Austin","Karlo & Jose","Miggy Sil & Alvin","Justine & Jack","Joe & Nikko","Perkin & Klentz"];
+const UPDATED="Nov 11, 2026";
+const PAIRS=["Pancho & Derrick","Jonah & Justin","Duane & Mikael","JM L & JanJan","Amaury & Josh K","Nori & Mike W","Armand & Kyle","Pedro & Juan","Juancho & Gio","Mark Ja & Vinz","Sol & Josh C","Misagh & Antoine","Tiger & Wes","Jerry C & Geoffrey","Luca & Ben","Robin & George","Kino & Rave","Alberto & Hamit","Ron & Hein","Alex O & Shogo","Ernie & Chut","Erwin & Butch","Alan & Elmo","Terry L & Vic B","Rafa & Gio","Colin & Sri","BJ & JM T","Coco & Jopet","Alfonso & Carvin","Miggy & Austin","KL & Jose","Miggy SIL & Alvin","Ralph & Jack","Joe & Nikko A","Perkin & Klentz"];
 const EMOJI=["👑","💎","💠","🌟","🥇","🥈","🥉"];
 // Snapshot of event 17 matches. sets are [a games, b games]; winner is "a" or "b".
 const RESULTS=[
-  {a:"Alberto & Hamit",b:"Robin & George",status:"completed",sets:[[2,6],[6,3],[6,4]],winner:"a",date:"2026-10-27",time:"20:00",venue:"Padel 300"},
-  {a:"Erwin & Butch",b:"Terry & Vic",status:"completed",sets:[[7,5],[7,5]],winner:"a",date:"2026-11-02",time:"17:00",venue:"Prosmash"},
-  {a:"Erwin & Butch",b:"Alan & Elliot",status:"completed",sets:[[6,1],[6,2]],winner:"a",date:"2026-11-03",time:"20:00",venue:"Play Padel"},
-  {a:"Ernie & Chut",b:"Terry & Vic",status:"scheduled",date:"2026-11-06",time:"15:00",venue:"Manila Polo Club"},
-  {a:"Terry & Vic",b:"Alan & Elliot",status:"scheduled",date:"2026-11-08",time:"09:30",venue:"Play Padel Mckinley"},
-  {a:"Miggy Sil & Alvin",b:"Perkin & Klentz",status:"scheduled",date:"2026-11-11",time:"17:00",venue:"Prosmash Makati"},
+  {a:"Alberto & Hamit",b:"Robin & George",status:"completed",sets:[[2, 6], [6, 3], [6, 4]],winner:"a",date:"2026-10-27",time:"20:00",venue:"Padel 300"},
+  {a:"Erwin & Butch",b:"Terry L & Vic B",status:"completed",sets:[[7, 5], [7, 5]],winner:"a",date:"2026-11-02",time:"17:00",venue:"Prosmash"},
+  {a:"Erwin & Butch",b:"Alan & Elmo",status:"completed",sets:[[6, 1], [6, 2]],winner:"a",date:"2026-11-03",time:"20:00",venue:"Play Padel"},
+  {a:"KL & Jose",b:"Ralph & Jack",status:"completed",sets:[[6, 3], [6, 4]],winner:"a",date:"2026-11-05",time:"17:30",venue:"Play Padel"},
+  {a:"Terry L & Vic B",b:"Alan & Elmo",status:"completed",sets:[[4, 6], [6, 4], [5, 7]],winner:"b",date:"2026-11-08",time:"09:30",venue:"Play Padel Mckinley"},
+  {a:"Miggy SIL & Alvin",b:"Perkin & Klentz",status:"completed",sets:[[6, 3], [7, 5]],winner:"a",date:"2026-11-11",time:"17:00",venue:"Prosmash Makati"},
+  {a:"Ernie & Chut",b:"Terry L & Vic B",status:"scheduled",date:"2026-11-12",time:"16:00",venue:"Play Padel Mckinley"},
+  {a:"Coco & Jopet",b:"Colin & Sri",status:"scheduled",date:"2026-11-13",time:"08:00",venue:"Play Padel"},
+  {a:"Juancho & Gio",b:"Mark Ja & Vinz",status:"scheduled",date:"2026-11-13",time:"17:00",venue:"Play Padel Mckinley"},
+  {a:"Alex O & Shogo",b:"Alberto & Hamit",status:"scheduled",date:"2026-11-13",time:"20:00",venue:"Prosmash Makati"},
+  {a:"Alfonso & Carvin",b:"Coco & Jopet",status:"scheduled",date:"2026-11-15",time:"13:30",venue:"Play Padel"},
+  {a:"Ernie & Chut",b:"Alan & Elmo",status:"scheduled",date:"2026-11-16",time:"16:00",venue:"Play Padel Mckinley"},
+  {a:"Alfonso & Carvin",b:"Colin & Sri",status:"scheduled",date:"2026-11-17",time:"20:30",venue:"Prosmash Makati"},
+  {a:"Ernie & Chut",b:"Erwin & Butch",status:"scheduled",date:"2026-11-27",time:"17:30",venue:"Play Padel Mckinley"},
 ];
 
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
