@@ -35,3 +35,10 @@ update admin_users set revoked_at = null, updated_at = now() where email = 'pers
 ```
 
 All admin checks across the app filter on `revoked_at is null` via the shared helpers `src/app/api/_lib/admin-check.ts` (server) and `src/lib/adminCheck.ts` (client) — never query `admin_users` directly elsewhere.
+
+## Event participant access
+
+Registered players can see general rules and participants before payment. Confirmed
+payment unlocks matchups and inside event information for each player separately.
+See [owner setup and testing instructions](docs/event-participant-access.md) for
+required database migrations, the Duo Cup draw and acceptance checks.

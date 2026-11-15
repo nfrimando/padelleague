@@ -6,13 +6,23 @@ A Next.js web app for a competitive padel league in the Philippines. Members can
 
 ## Data Model
 
-Core tables: `players`, `matches`, `match_teams`, `match_sets`, `match_player_ratings`, `player_rating_events`, `events`, `signups_events`, `signups_players`, `player_claims`, `payments`, `payments_paymongo`, `webhook_events`, `admin_users`.
+Core tables: `event_private_details`, `event_division_teams`, `players`, `matches`, `match_teams`, `match_sets`, `match_player_ratings`, `player_rating_events`, `events`, `signups_events`, `signups_players`, `player_claims`, `payments`, `payments_paymongo`, `webhook_events`, `admin_users`.
 
 - Players link to auth via `players.email = auth.user.email`
 - Match structure: `matches` → `match_teams` (team 1 & 2) → each team has `player_1_id` + `player_2_id`
 - Per-match rating calc is stored in `match_player_ratings` with `formula_name` (prefer `v3` > `v2` when multiple exist). This is the historical record of *each match's* `rating_pre`/`rating_post`.
 - Events are stored in `events` table. "Seasons" are main events, but other types exist.
 - Admin access is checked against the `admin_users` table
+
+## Event Participant Access
+
+See `docs/event-participant-access.md`. `get_event_access` is the shared API/RLS
+access decision; `accepted` is not proof of payment. Store inside information in
+`event_private_details`, never the public event description. Division teams link
+to actual players in `event_division_teams`. Public rating readers must use the
+`player_rating_events_public` projection to preserve effective ratings without
+leaking locked match IDs; server-side ledger writers and pre-match resolution
+continue using `player_rating_events`.
 
 ## Player Rating Events Ledger
 

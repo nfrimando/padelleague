@@ -138,11 +138,17 @@ export async function POST(request: Request) {
     );
   }
 
-  // Transition the signup to accepted
-  await serviceClient
+  // A delayed payment must not reinstate a cancelled or waitlisted participant.
+  const { data: confirmedSignup, error: confirmationError } = await serviceClient
     .from("signups_events")
     .update({ status: "accepted" })
-    .eq("id", payment.signup_id);
+    .eq("id", payment.signup_id)
+    .in("status", ["applied", "pending_payment", "accepted"])
+    .select("id")
+    .maybeSingle();
+  if (confirmationError) {
+    return NextResponse.json({ error: "Unable to confirm registration." }, { status: 500 });
+  }
 
   // Fire notification (non-blocking)
   const [{ data: player }, { data: eventRecord }] = await Promise.all([
@@ -158,7 +164,7 @@ export async function POST(request: Request) {
     source: "webhook",
   }).catch((err) => console.error("[email] notifyPaymentCompleted failed:", err));
 
-  if (player?.email) {
+  if (player?.email && confirmedSignup) {
     await notifySignupPaidConfirmed({
       playerId: payment.player_id,
       playerEmail: player.email,

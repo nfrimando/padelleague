@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Gauge, X } from "lucide-react";
 import SiteHeader from "@/components/SiteHeader";
 import PlayerCard from "@/components/PlayerCard";
+import EventInsidePanel from "@/components/EventInsidePanel";
 import Toggle from "@/components/Toggle";
 import EventSignupConfirmModal from "@/components/EventSignupConfirmModal";
 import EventPairSignupModal from "@/components/EventPairSignupModal";
@@ -168,7 +169,8 @@ export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
   const eventId = params.event_id as string;
-  const { player, isLinked } = useCurrentPlayer();
+  const currentPlayer = useCurrentPlayer();
+  const { player, isLinked } = currentPlayer;
 
   const [event, setEvent] = useState<EventWithCreator | null>(null);
   const [loading, setLoading] = useState(true);
@@ -287,6 +289,10 @@ export default function EventDetailPage() {
       await loadSignups();
     }
     void run();
+  }, [loadSignups, currentPlayer.user?.id]);
+
+  const handlePaymentConfirmed = useCallback(() => {
+    void loadSignups({ showSpinner: false });
   }, [loadSignups]);
 
   const isCreator =
@@ -722,10 +728,10 @@ export default function EventDetailPage() {
               <div className="rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-4 py-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-emerald-300">
-                    Payment Received
+                    Confirming Payment
                   </p>
                   <p className="text-xs text-emerald-400/80 mt-0.5">
-                    Your registration is being confirmed.
+                    Your matchups unlock once your payment is confirmed.
                   </p>
                 </div>
                 <button
@@ -967,7 +973,7 @@ export default function EventDetailPage() {
             {event.description && (
               <div>
                 <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
-                  About
+                  About & Rules
                 </h2>
                 <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
                   {event.description}
@@ -995,6 +1001,8 @@ export default function EventDetailPage() {
                   : "This event is unrated — results don't affect player ratings."}
               </p>
             </div>
+
+            <EventInsidePanel key={event.event_id} event={event} refreshKey={signupsData} viewer={currentPlayer} onPaymentConfirmed={handlePaymentConfirmed} />
 
             {/* Players */}
             {signupsLoading ? (
@@ -1224,7 +1232,7 @@ export default function EventDetailPage() {
             ) : signupsData?.signupListVisible && signupsData.roster.length > 0 ? (
               <div className="space-y-3">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                  Accepted Players ({signupsData.roster.length})
+                  Participants ({signupsData.roster.length})
                 </h2>
                 <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
                   {/* Teams first, so a paired roster reads as pairs rather than a list. */}

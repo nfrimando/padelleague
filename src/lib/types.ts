@@ -83,6 +83,7 @@ export type Event = {
   event_url?: string | null;
   restrictions?: EventRestrictions | null;
   requires_payment?: boolean;
+  payment_lock_enabled?: boolean;
   signup_list_visible?: boolean;
   is_rated?: boolean;
   rating_details?: string | null;

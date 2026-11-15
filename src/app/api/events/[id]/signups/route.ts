@@ -265,7 +265,8 @@ export async function GET(
     });
   }
 
-  if (!event.signup_list_visible) {
+  const registered = viewerSignup !== null && viewerSignup.status !== "cancelled";
+  if (!event.signup_list_visible && !registered) {
     return NextResponse.json({
       signupMode,
       signupListVisible: false,
@@ -281,7 +282,7 @@ export async function GET(
     .from("signups_events")
     .select("player_id,pair_id,player:player_id(player_id,name,nickname,image_link)")
     .eq("event_id", eventId)
-    .eq("status", "accepted");
+    .in("status", registered ? ["applied", "pending_payment", "accepted", "waitlisted"] : ["accepted"]);
 
   if (acceptedError) {
     return NextResponse.json({ error: acceptedError.message }, { status: 500 });
@@ -302,7 +303,7 @@ export async function GET(
       row.player_id != null
         ? latestRatingByPlayer.get(String(row.player_id)) ?? null
         : null,
-    pair_id: row.pair_id && acceptedPairIds.has(row.pair_id) ? row.pair_id : null,
+    pair_id: null,
   }));
 
   return NextResponse.json({

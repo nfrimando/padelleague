@@ -65,3 +65,7 @@ season11-standings.png
 season11-standings.svg
 season11-group*.png
 season11-group*.svg
+
+# browser test artifacts
+/test-results/
+/playwright-report/

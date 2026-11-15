@@ -8,7 +8,8 @@ type LatestRatingRow = {
 // Canonical "current rating" lookup for a set of players: the most recent
 // player_rating_events row per player (occurred_at desc, then created_at desc — the
 // first row seen for a player is their latest). Works with any Supabase client
-// (anon or service-role) since player_rating_events grants public SELECT. Use this
+// (anon or service-role) through the ledger projection, which hides locked match
+// identities without omitting rating changes. Use this
 // instead of trusting a "latest_rating" field from an RPC, so every call site stays
 // in sync with the ledger (including non-match events like recalibration).
 export async function fetchLatestRatingsByPlayerIds(
@@ -27,7 +28,7 @@ export async function fetchLatestRatingsByPlayerIds(
   if (numericIds.length === 0) return result;
 
   const { data, error } = await client
-    .from("player_rating_events")
+    .from("player_rating_events_public")
     .select("player_id, rating_after")
     .in("player_id", numericIds)
     .order("occurred_at", { ascending: false, nullsFirst: false })

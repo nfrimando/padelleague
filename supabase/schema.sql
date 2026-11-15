@@ -118,6 +118,7 @@ CREATE TABLE public.events (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   deleted_at timestamp with time zone,
   requires_payment boolean NOT NULL DEFAULT true,
+  payment_lock_enabled boolean NOT NULL DEFAULT true,
   image_url text,
   description text,
   payment_instructions text,
@@ -429,4 +430,24 @@ CREATE TABLE public.ladder_cycle_results (
     (badge_eligible AND overall_rank IS NOT NULL AND tier_position IS NOT NULL) OR
     (NOT badge_eligible AND overall_rank IS NULL AND tier_position IS NULL)
   )
+);
+
+-- Access functions and policies: migrations/20261016000000_event_participant_access.sql.
+CREATE TABLE public.event_private_details (
+  event_id bigint PRIMARY KEY REFERENCES public.events(event_id) ON DELETE CASCADE,
+  information text,
+  event_url text,
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+CREATE TABLE public.event_division_teams (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id bigint NOT NULL REFERENCES public.events(event_id) ON DELETE CASCADE,
+  division integer NOT NULL CHECK (division > 0),
+  team_number integer NOT NULL CHECK (team_number > 0),
+  player_1_id bigint NOT NULL REFERENCES public.players(player_id),
+  player_2_id bigint NOT NULL REFERENCES public.players(player_id),
+  CHECK (player_1_id <> player_2_id),
+  UNIQUE (event_id, team_number),
+  UNIQUE (event_id, player_1_id),
+  UNIQUE (event_id, player_2_id)
 );
