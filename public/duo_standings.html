@@ -159,24 +159,30 @@ footer a{color:inherit}
 </div></main>
 
 <script>
-const UPDATED="Nov 11, 2026";
-const PAIRS=["Pancho & Derrick","Jonah & Justin","Duane & Mikael","JM L & JanJan","Amaury & Josh K","Nori & Mike W","Armand & Kyle","Pedro & Juan","Juancho & Gio","Mark Ja & Vinz","Sol & Josh C","Misagh & Antoine","Tiger & Wes","Jerry C & Geoffrey","Luca & Ben","Robin & George","Kino & Rave","Alberto & Hamit","Ron & Hein","Alex O & Shogo","Ernie & Chut","Erwin & Butch","Alan & Elmo","Terry L & Vic B","Rafa & Gio","Colin & Sri","BJ & JM T","Coco & Jopet","Alfonso & Carvin","Miggy & Austin","KL & Jose","Miggy SIL & Alvin","Ralph & Jack","Joe & Nikko A","Perkin & Klentz"];
+const UPDATED="Nov 19, 2026";
+const PAIRS=["Pancho & Derrick","Jonah & Justin","Duane & Mikael","JM L & JanJan","Amaury & Josh K","Nori & Mike W","Armand & Kyle","Pedro & Juan","Juancho & Gio","Mark Ja & Vinz","Sol & Josh C","Misagh & Antoine","Tiger & Wes","Jerry C & Geoffrey","Luca & Ben","Robin & George","Kino & Rave","Alberto & Hamit","Ron & Hein","Alex O & Shogo","Ernie & Chut","Erwin & Butch","Alan & Elmo","Terry L & Vic B","Rafa & Gio","Colin & Sri","BJ & JM T","Coco & Jopet","Fonso & Carvin","Miggy & Austin","KL & Jose","Miggy SIL & Alvin","Ralph & Jack","Joe & Nikko A","Perkin & Klentz"];
 const EMOJI=["👑","💎","💠","🌟","🥇","🥈","🥉"];
 // Snapshot of event 17 matches. sets are [a games, b games]; winner is "a" or "b".
 const RESULTS=[
-  {a:"Alberto & Hamit",b:"Robin & George",status:"completed",sets:[[2, 6], [6, 3], [6, 4]],winner:"a",date:"2026-10-27",time:"20:00",venue:"Padel 300"},
-  {a:"Erwin & Butch",b:"Terry L & Vic B",status:"completed",sets:[[7, 5], [7, 5]],winner:"a",date:"2026-11-02",time:"17:00",venue:"Prosmash"},
-  {a:"Erwin & Butch",b:"Alan & Elmo",status:"completed",sets:[[6, 1], [6, 2]],winner:"a",date:"2026-11-03",time:"20:00",venue:"Play Padel"},
-  {a:"KL & Jose",b:"Ralph & Jack",status:"completed",sets:[[6, 3], [6, 4]],winner:"a",date:"2026-11-05",time:"17:30",venue:"Play Padel"},
-  {a:"Terry L & Vic B",b:"Alan & Elmo",status:"completed",sets:[[4, 6], [6, 4], [5, 7]],winner:"b",date:"2026-11-08",time:"09:30",venue:"Play Padel Mckinley"},
-  {a:"Miggy SIL & Alvin",b:"Perkin & Klentz",status:"completed",sets:[[6, 3], [7, 5]],winner:"a",date:"2026-11-11",time:"17:00",venue:"Prosmash Makati"},
-  {a:"Ernie & Chut",b:"Terry L & Vic B",status:"scheduled",date:"2026-11-12",time:"16:00",venue:"Play Padel Mckinley"},
-  {a:"Coco & Jopet",b:"Colin & Sri",status:"scheduled",date:"2026-11-13",time:"08:00",venue:"Play Padel"},
-  {a:"Juancho & Gio",b:"Mark Ja & Vinz",status:"scheduled",date:"2026-11-13",time:"17:00",venue:"Play Padel Mckinley"},
-  {a:"Alex O & Shogo",b:"Alberto & Hamit",status:"scheduled",date:"2026-11-13",time:"20:00",venue:"Prosmash Makati"},
-  {a:"Alfonso & Carvin",b:"Coco & Jopet",status:"scheduled",date:"2026-11-15",time:"13:30",venue:"Play Padel"},
-  {a:"Ernie & Chut",b:"Alan & Elmo",status:"scheduled",date:"2026-11-16",time:"16:00",venue:"Play Padel Mckinley"},
-  {a:"Alfonso & Carvin",b:"Colin & Sri",status:"scheduled",date:"2026-11-17",time:"20:30",venue:"Prosmash Makati"},
+  {a:"Alberto & Hamit",b:"Robin & George",status:"completed",sets:[[2,6],[6,3],[6,4]],winner:"a",date:"2026-10-27",time:"20:00",venue:"Padel 300"},
+  {a:"Erwin & Butch",b:"Terry L & Vic B",status:"completed",sets:[[7,5],[7,5]],winner:"a",date:"2026-11-02",time:"17:00",venue:"Prosmash"},
+  {a:"Erwin & Butch",b:"Alan & Elmo",status:"completed",sets:[[6,1],[6,2]],winner:"a",date:"2026-11-03",time:"20:00",venue:"Play Padel"},
+  {a:"KL & Jose",b:"Ralph & Jack",status:"completed",sets:[[6,3],[6,4]],winner:"a",date:"2026-11-05",time:"17:30",venue:"Play Padel"},
+  {a:"Terry L & Vic B",b:"Alan & Elmo",status:"completed",sets:[[4,6],[6,4],[5,7]],winner:"b",date:"2026-11-08",time:"09:30",venue:"Play Padel Mckinley"},
+  {a:"Miggy SIL & Alvin",b:"Perkin & Klentz",status:"completed",sets:[[6,3],[7,5]],winner:"a",date:"2026-11-11",time:"17:00",venue:"Prosmash Makati"},
+  {a:"Ernie & Chut",b:"Terry L & Vic B",status:"completed",sets:[[6,4],[5,7],[7,6]],winner:"a",date:"2026-11-12",time:"16:00",venue:"Play Padel Mckinley"},
+  {a:"Coco & Jopet",b:"Colin & Sri",status:"completed",sets:[[3,6],[3,6]],winner:"b",date:"2026-11-13",time:"08:00",venue:"Play Padel"},
+  {a:"Juancho & Gio",b:"Mark Ja & Vinz",status:"completed",sets:[[7,6],[6,3]],winner:"a",date:"2026-11-13",time:"17:00",venue:"Play Padel Mckinley"},
+  {a:"Alex O & Shogo",b:"Alberto & Hamit",status:"completed",sets:[[7,5],[6,1]],winner:"a",date:"2026-11-13",time:"20:00",venue:"Prosmash Makati"},
+  {a:"Fonso & Carvin",b:"Coco & Jopet",status:"completed",sets:[[6,7],[6,3],[7,6]],winner:"a",date:"2026-11-15",time:"13:30",venue:"Play Padel"},
+  {a:"Ernie & Chut",b:"Alan & Elmo",status:"completed",sets:[[3,6],[4,6]],winner:"b",date:"2026-11-16",time:"16:00",venue:"Play Padel Mckinley"},
+  {a:"Fonso & Carvin",b:"Colin & Sri",status:"completed",sets:[[1,6],[6,7]],winner:"b",date:"2026-11-17",time:"20:30",venue:"Prosmash Makati"},
+  {a:"Perkin & Klentz",b:"Ralph & Jack",status:"completed",sets:[[6,1],[6,3]],winner:"a",date:"2026-11-18",time:"10:00",venue:"Prosmash Makati"},
+  {a:"Rafa & Gio",b:"Alan & Elmo",status:"completed",sets:[[3,6],[2,6]],winner:"b",date:"2026-11-19",time:"17:00",venue:"Play Padel Mckinley"},
+  {a:"Ernie & Chut",b:"Rafa & Gio",status:"scheduled",date:"2026-11-19",time:"19:00",venue:"Manila Polo Club"},
+  {a:"Kino & Rave",b:"Alex O & Shogo",status:"scheduled",date:"2026-11-19",time:"20:00",venue:"Prosmash Makati"},
+  {a:"Miggy SIL & Alvin",b:"Ralph & Jack",status:"scheduled",date:"2026-11-25",time:"17:00",venue:"Prosmash Makati"},
+  {a:"Robin & George",b:"Alex O & Shogo",status:"scheduled",date:"2026-11-26",time:"20:00",venue:"Prosmash Makati"},
   {a:"Ernie & Chut",b:"Erwin & Butch",status:"scheduled",date:"2026-11-27",time:"17:30",venue:"Play Padel Mckinley"},
 ];
 
