@@ -159,7 +159,7 @@ footer a{color:inherit}
 </div></main>
 
 <script>
-const UPDATED="Nov 19, 2026";
+const UPDATED="Nov 23, 2026";
 const PAIRS=["Pancho & Derrick","Jonah & Justin","Duane & Mikael","JM L & JanJan","Amaury & Josh K","Nori & Mike W","Armand & Kyle","Pedro & Juan","Juancho & Gio","Mark Ja & Vinz","Sol & Josh C","Misagh & Antoine","Tiger & Wes","Jerry C & Geoffrey","Luca & Ben","Robin & George","Kino & Rave","Alberto & Hamit","Ron & Hein","Alex O & Shogo","Ernie & Chut","Erwin & Butch","Alan & Elmo","Terry L & Vic B","Rafa & Gio","Colin & Sri","BJ & JM T","Coco & Jopet","Fonso & Carvin","Miggy & Austin","KL & Jose","Miggy SIL & Alvin","Ralph & Jack","Joe & Nikko A","Perkin & Klentz"];
 const EMOJI=["👑","💎","💠","🌟","🥇","🥈","🥉"];
 // Snapshot of event 17 matches. sets are [a games, b games]; winner is "a" or "b".
@@ -180,10 +180,12 @@ const RESULTS=[
   {a:"Perkin & Klentz",b:"Ralph & Jack",status:"completed",sets:[[6,1],[6,3]],winner:"a",date:"2026-11-18",time:"10:00",venue:"Prosmash Makati"},
   {a:"Rafa & Gio",b:"Alan & Elmo",status:"completed",sets:[[3,6],[2,6]],winner:"b",date:"2026-11-19",time:"17:00",venue:"Play Padel Mckinley"},
   {a:"Ernie & Chut",b:"Rafa & Gio",status:"scheduled",date:"2026-11-19",time:"19:00",venue:"Manila Polo Club"},
-  {a:"Kino & Rave",b:"Alex O & Shogo",status:"scheduled",date:"2026-11-19",time:"20:00",venue:"Prosmash Makati"},
+  {a:"Kino & Rave",b:"Alex O & Shogo",status:"completed",sets:[[3,6],[4,6]],winner:"b",date:"2026-11-19",time:"20:00",venue:"Prosmash Makati"},
+  {a:"Ron & Hein",b:"Alex O & Shogo",status:"completed",sets:[[6,3],[6,4]],winner:"a",date:"2026-11-23",time:"19:00",venue:"Prosmash Makati"},
   {a:"Miggy SIL & Alvin",b:"Ralph & Jack",status:"scheduled",date:"2026-11-25",time:"17:00",venue:"Prosmash Makati"},
   {a:"Robin & George",b:"Alex O & Shogo",status:"scheduled",date:"2026-11-26",time:"20:00",venue:"Prosmash Makati"},
   {a:"Ernie & Chut",b:"Erwin & Butch",status:"scheduled",date:"2026-11-27",time:"17:30",venue:"Play Padel Mckinley"},
+  {a:"Miggy SIL & Alvin",b:"Joe & Nikko A",status:"scheduled",date:"2026-12-01",time:"20:00",venue:"Prosmash Makati"},
 ];
 
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
